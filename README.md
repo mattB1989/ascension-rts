@@ -4,7 +4,7 @@ A browser real-time strategy game inspired by the late ages of Empire Earth: mod
 armies, nuclear submarines and aircraft carriers, giant mechs, then orbital warfare.
 Single player against an AI (Easy / Normal / Hard). Desktop and mobile.
 
-Plain JavaScript ES modules + three.js. No build step.
+TypeScript + three.js + Vite. Static site, installable PWA, plays offline. A single-file HTML build is also available.
 
 ## Status
 
@@ -15,6 +15,10 @@ Planning. See:
 ## Run locally (once code exists)
 
 ```sh
-python3 -m http.server
-# open http://localhost:8000
+npm install
+npm run dev            # add `-- --host` to open it from your phone on the same Wi-Fi
+npm run typecheck
+npm test
+npm run build          # static site in dist/
+npm run build:single   # one self-contained HTML file in dist-single/
 ```

@@ -13,54 +13,57 @@ and counters.
 
 ## 1. Technical approach
 
-### No compile step
+### Stack
 
-- **Plain JavaScript, native ES modules.** No TypeScript, no bundler, no `npm install`
-  needed to play or develop. Files are served as-is.
-- **three.js vendored** into `vendor/` (pinned version) and mapped with an `<script type="importmap">`.
-  No CDN dependency, so the game works offline.
-- **Editor type checking without compiling:** `// @ts-check` + JSDoc annotations. VS Code
-  flags errors; the browser runs the same file untouched.
-- **Run locally:** `python3 -m http.server` in the repo root, open `http://localhost:8000`.
-- **Deploy:** GitHub Pages straight from `main`. Nothing to build.
+- **TypeScript (strict)** for compile-time feedback on a large codebase, **Vite** as the
+  dev server and build tool, **three.js** from npm (pinned).
+- **Dev:** `npm install`, `npm run dev`, open the printed URL (also on your phone over the
+  LAN with `npm run dev -- --host`). Hot reload on save.
+- **Checks:** `npm run typecheck` (tsc, no emit) and `npm test` (Vitest, sim unit tests).
+  Both run in CI on every push.
+- **Deploy:** a GitHub Actions workflow builds and publishes to **GitHub Pages** on every
+  push to `main`. The output is static files only; no server.
 
-### Why not literally one HTML page
+### Hard requirements: offline, mobile, desktop
 
-Native modules don't load from `file://`, and a full RTS will reach 15–30k lines. One giant
-file is hard to navigate, slow for an agent to edit, and prone to conflicts. So:
-
-- **Source** is many small `.js` modules (still no compilation).
-- **`tools/inline.mjs`** (plain Node, zero dependencies) concatenates everything into
-  **one self-contained `dist/ascension.html`** when we want a single file: to double-click
-  open, play offline, or share as a link. This is copying text, not compiling.
+- **Offline:** the game is a **PWA**. A service worker precaches every asset, so after the
+  first visit it plays with no connection, and it can be installed to the home screen.
+  There are no external fetches at runtime: models, textures, sounds and music are all
+  generated in code.
+- **Single file too:** `npm run build:single` produces **one self-contained
+  `dist-single/ascension.html`** (all JS and CSS inlined). It opens by double-click from
+  disk, can be sent to someone, or published as a link.
+- **Mobile and desktop:** touch and mouse/keyboard are both first-class (see §3). Every
+  milestone is checked on a phone and a desktop browser before it's called done.
 
 ### Architecture
 
 ```
-index.html              entry page, importmap, canvas, UI root
-vendor/three.module.js  pinned three.js
+index.html              entry page, canvas, UI root
+vite.config.ts          dev server, PWA plugin, single-file build mode
 src/
   data/                 SINGLE SOURCE OF TRUTH: ages, resources, buildings, units, techs, counters
   sim/                  deterministic simulation — no three.js, no DOM, runs in Node too
-    world.js            entities, components, fixed tick (15 Hz)
-    rng.js fmath.js     seeded RNG, deterministic math
-    commands.js         every action is a command (player, AI and future network alike)
-    pathfinding.js      grid A* + flow fields, three nav layers: land / water / air
-    combat.js economy.js production.js research.js fog.js
+    world.ts            entities, components, fixed tick (15 Hz)
+    rng.ts fmath.ts     seeded RNG, deterministic math
+    commands.ts         every action is a command (player, AI and future network alike)
+    pathfinding.ts      grid A* + flow fields, three nav layers: land / water / air
+    combat.ts economy.ts production.ts research.ts fog.ts
   ai/                   strategic planner, build orders, squad tactics, difficulty profiles
   render/               three.js: terrain, water, procedural models, effects, interpolation
   ui/                   HUD, command card, minimap, tech tree screen, codex, touch controls
   audio/                procedural SFX + adaptive music (WebAudio, no files)
 tools/
-  inline.mjs            build single-file dist/ascension.html
-  headless.mjs          run AI-vs-AI matches in Node, output stats as JSON
-  gen-docs.mjs          regenerate TECH_TREE tables from src/data so docs never drift
+  headless.ts           run AI-vs-AI matches in Node, output stats as JSON
+  gen-docs.ts           regenerate TECH_TREE tables from src/data so docs never drift
+tests/                  Vitest: sim determinism, pathfinding, combat math, data integrity
+.github/workflows/      typecheck + tests + build + deploy to Pages
 ```
 
 Key rules:
 1. **The sim never imports three.js or touches the DOM.** It can run headless at 100× speed.
 2. **Everything is a command.** Player clicks, AI decisions and (later) network packets all
-   go through `commands.js`. This gives us replays, AI-vs-AI, and lockstep multiplayer later.
+   go through `commands.ts`. This gives us replays, AI-vs-AI, and lockstep multiplayer later.
 3. **Determinism:** seeded RNG, fixed tick, custom trig. A seed + command list reproduces a match.
 4. **Data-driven:** units, buildings and techs are plain objects in `src/data/`. The game, the
    AI, the in-game tech tree and the docs all read from them.
@@ -143,7 +146,7 @@ at any level). Three layers:
 | Micro | none | basic focus fire | focus fire, retreat damaged units, kite |
 | Special units | rarely | uses subs, carriers, mechs | combined arms, superweapon timing |
 
-**Balance harness:** `tools/headless.mjs` runs hundreds of AI-vs-AI matches in Node.
+**Balance harness:** `tools/headless.ts` runs hundreds of AI-vs-AI matches in Node.
 Targets: Hard beats Normal ~80%, Normal beats Easy ~90%, average game 20–35 min, no unit
 type dominating usage. Later this also powers an AI-vs-AI spectator mode.
 
@@ -156,7 +159,7 @@ Each milestone ends with a playable build on GitHub Pages and a short release no
 | # | Milestone | Done when |
 |---|---|---|
 | **M0** | Repo, plan, data files | This plan committed; `src/data` holds the full catalog; docs generated from it |
-| **M1** | Skeleton | Twin Shores terrain with water, RTS camera (mouse + touch), selection, move orders, land/water/air pathfinding |
+| **M1** | Skeleton | Vite + TS project, CI, Pages deploy, PWA offline, single-file build; Twin Shores terrain with water, RTS camera (mouse + touch), selection, move orders, land/water/air pathfinding |
 | **M2** | Economy & base | Engineers gather Ore/Energy, build with placement rules, housing/pop, production queues, fog, minimap, top bar |
 | **M3** | Modern-age combat & defense | Full Modern roster on land/sea/air, damage types and counters, transports; walls, gates, garrisonable Watchtowers/Bunkers, turrets, SAM, coastal batteries |
 | **M4** | AI v1 + harness | All three difficulty levels play Modern age; headless runner works; you can win and lose |

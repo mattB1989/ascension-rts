@@ -2,7 +2,7 @@
 
 Everything a player can build, train and research, by age. All numbers are **starting
 values** for the balance harness to tune. Once `src/data/` exists, the tables in this file
-are generated from it by `tools/gen-docs.mjs`, so the docs and the game never disagree.
+are generated from it by `tools/gen-docs.ts`, so the docs and the game never disagree.
 
 Costs are written `Ore / Energy`. Times are in seconds at normal game speed.
 

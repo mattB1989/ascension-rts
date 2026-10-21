@@ -1,0 +1,29 @@
+{
+  "name": "ascension-rts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser RTS inspired by the late ages of Empire Earth",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json",
+    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\""
+  },
+  "dependencies": {
+    "three": "^0.185.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.185.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.0",
+    "vite-plugin-pwa": "^1.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

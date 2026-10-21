@@ -1,0 +1,9 @@
+{
+  // Tests and Node tools. They import the sim directly; Node runs the .ts files as-is.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["tests", "tools", "src/sim", "src/data", "src/ai"]
+}

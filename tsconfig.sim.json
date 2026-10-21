@@ -1,0 +1,10 @@
+{
+  // Enforces that the simulation, data and AI never touch the DOM or three.js:
+  // no DOM lib here, so any DOM use is a type error.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/sim", "src/data", "src/ai"]
+}

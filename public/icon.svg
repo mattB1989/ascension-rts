@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2a3c"/>
+      <stop offset="1" stop-color="#0f161f"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fb6b0"/>
+      <stop offset="1" stop-color="#0f3d5c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#sky)"/>
+  <!-- rising chevrons: ages ascending -->
+  <path d="M96 300 L256 180 L416 300 L416 340 L256 220 L96 340 Z" fill="#6fd3ff"/>
+  <path d="M136 228 L256 138 L376 228 L376 262 L256 172 L136 262 Z" fill="#9fe3ff" opacity="0.85"/>
+  <path d="M176 156 L256 96 L336 156 L336 184 L256 124 L176 184 Z" fill="#d8f4ff" opacity="0.8"/>
+  <!-- sea band -->
+  <path d="M64 380 Q160 356 256 380 T448 380 L448 420 Q352 444 256 420 T64 420 Z" fill="url(#sea)"/>
+</svg>

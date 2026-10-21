@@ -19,9 +19,10 @@ export function layerForDomain(domain: Domain): NavLayerId {
 export function terrainPassable(layer: NavLayerId, t: TerrainId): boolean {
   switch (layer) {
     case NavLayer.Land:
-      return t === Terrain.Grass || t === Terrain.Beach || t === Terrain.Forest;
+      return t === Terrain.Grass || t === Terrain.Beach || t === Terrain.Forest || t === Terrain.Bridge;
     case NavLayer.Water:
-      return t === Terrain.Shallow || t === Terrain.Deep;
+      // Ships pass under bridges.
+      return t === Terrain.Shallow || t === Terrain.Deep || t === Terrain.Bridge;
     case NavLayer.Air:
       return true;
   }

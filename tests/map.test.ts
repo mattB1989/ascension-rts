@@ -63,6 +63,23 @@ test('both home coasts are connected by sea', () => {
   assert.equal(Math.floor(ey), b[1]);
 });
 
+test('bridges carry land units over the sea without blocking ships', () => {
+  const bridges = map.terrain.filter((t) => t === Terrain.Bridge).length;
+  assert.ok(bridges > 50, `bridge tiles: ${bridges}`);
+  // The whole sea is one body: the two far ends of the channel connect by water.
+  const pf = new Pathfinder(new NavGrid(map));
+  const w = map.width;
+  const a = pf.nearestPassable(NavLayer.Water, 2, w - 3, 10)!;
+  const b = pf.nearestPassable(NavLayer.Water, w - 3, 2, 10)!;
+  const path = pf.findPath(NavLayer.Water, a[0] + 0.5, a[1] + 0.5, b[0] + 0.5, b[1] + 0.5)!;
+  assert.equal(Math.floor(path[path.length - 2]!), b[0]);
+  assert.equal(Math.floor(path[path.length - 1]!), b[1]);
+  // Decks rise above the water and never sit below sea level.
+  for (let i = 0; i < map.deck.length; i++) {
+    if (map.terrain[i] === Terrain.Bridge) assert.ok(map.deck[i]! >= 0.5, 'deck above water');
+  }
+});
+
 test('resources: symmetric, on the right terrain, offshore oil exists', () => {
   assert.ok(map.resources.length >= 20);
   for (const r of map.resources) {

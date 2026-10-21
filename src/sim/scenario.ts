@@ -45,6 +45,13 @@ export function createMatch(opts: MatchOptions): World {
     const sgn = mirror ? -1 : 1;
     const facing = mirror ? -2.356 : 0.785;
 
+    // The HQ blocks the ground it stands on (buildings proper arrive in M2).
+    for (let ty = Math.floor(start.y) - 3; ty <= Math.floor(start.y) + 3; ty++) {
+      for (let tx = Math.floor(start.x) - 3; tx <= Math.floor(start.x) + 3; tx++) {
+        if (Math.hypot(tx + 0.5 - start.x, ty + 0.5 - start.y) < 2.8) world.nav.setBlocked(tx, ty, true, map);
+      }
+    }
+
     // Land army in a block in front of the HQ.
     let i = 0;
     for (const [type, count] of LAND_ARMY) {

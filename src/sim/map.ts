@@ -1,6 +1,8 @@
 // Game map: terrain grid, elevations, start positions and resource spots.
 // "Twin Shores": two continents facing each other across a sea channel that
-// runs from corner to corner, two land bridges, a chain of islands.
+// runs from corner to corner, two bridges across it, a chain of islands.
+// Bridges are their own terrain type: land units drive over them and ships pass
+// underneath, so they never cut the sea in two.
 // The map is rotationally symmetric (180 degrees) so both sides are equal.
 
 import { fbm, hash2 } from './rng.ts';
@@ -12,6 +14,7 @@ export const Terrain = {
   Grass: 3,
   Forest: 4,
   Rock: 5,
+  Bridge: 6,
 } as const;
 export type TerrainId = (typeof Terrain)[keyof typeof Terrain];
 
@@ -22,6 +25,7 @@ export const TERRAIN_NAMES: Record<TerrainId, string> = {
   3: 'Grassland',
   4: 'Forest',
   5: 'Rock',
+  6: 'Bridge',
 };
 
 export type ResourceKind = 'ore' | 'oil';
@@ -33,6 +37,29 @@ export interface ResourceSpot {
   y: number;
   amount: number;
   offshore: boolean;
+}
+
+/**
+ * A straight bridge running along the (1, 1) diagonal. Positions along it are
+ * measured as p = (x + y) / sqrt(2); across it as q = (x - y) / sqrt(2).
+ */
+export interface BridgeInfo {
+  /** Which bridge: sign of (x - y) of its tiles. */
+  side: number;
+  pStart: number;
+  pEnd: number;
+  /** Centre line, across the bridge. */
+  q: number;
+  /** Half the deck width, in tiles. */
+  halfWidth: number;
+}
+
+export const BRIDGE_PEAK = 1.6;
+
+/** Deck height at position p along a bridge: ramps up from both ends to the peak. */
+export function bridgeDeckHeight(b: BridgeInfo, p: number): number {
+  const fromEnd = Math.min(p - b.pStart, b.pEnd - p);
+  return Math.max(0.3, Math.min(BRIDGE_PEAK, 0.3 + 0.32 * fromEnd));
 }
 
 export interface StartPos {
@@ -51,6 +78,11 @@ export interface GameMap {
   elev: Float32Array;
   /** Elevation per tile corner, (width+1) x (height+1). Used for rendering and unit heights. */
   velev: Float32Array;
+  /** Surface land units stand on, per tile corner: like velev, but bridge decks instead of the seabed. */
+  vsurf: Float32Array;
+  /** Bridge deck height per tile (0 where there is no bridge). */
+  deck: Float32Array;
+  bridges: BridgeInfo[];
   starts: StartPos[];
   resources: ResourceSpot[];
 }
@@ -71,8 +103,7 @@ export function isWater(t: TerrainId): boolean {
   return t === Terrain.Deep || t === Terrain.Shallow;
 }
 
-/** Bilinear ground height at a world position (clamped to the map). */
-export function groundHeight(map: GameMap, x: number, y: number): number {
+function bilinear(grid: Float32Array, map: GameMap, x: number, y: number): number {
   const w = map.width;
   const h = map.height;
   const cx = Math.max(0, Math.min(w - 0.0001, x));
@@ -82,11 +113,21 @@ export function groundHeight(map: GameMap, x: number, y: number): number {
   const fx = cx - ix;
   const fy = cy - iy;
   const s = w + 1;
-  const a = map.velev[iy * s + ix]!;
-  const b = map.velev[iy * s + ix + 1]!;
-  const c = map.velev[(iy + 1) * s + ix]!;
-  const d = map.velev[(iy + 1) * s + ix + 1]!;
+  const a = grid[iy * s + ix]!;
+  const b = grid[iy * s + ix + 1]!;
+  const c = grid[(iy + 1) * s + ix]!;
+  const d = grid[(iy + 1) * s + ix + 1]!;
   return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+}
+
+/** Bilinear terrain height at a world position (seabed under water). */
+export function groundHeight(map: GameMap, x: number, y: number): number {
+  return bilinear(map.velev, map, x, y);
+}
+
+/** Height a land unit stands at: the terrain, or the deck on bridges. */
+export function surfaceHeight(map: GameMap, x: number, y: number): number {
+  return bilinear(map.vsurf, map, x, y);
 }
 
 // ---------------------------------------------------------------------------
@@ -109,12 +150,6 @@ function landness(seed: number, u: number, v: number): number {
   const coast = (fbm(seed, u * 7, v * 7, 4) - 0.5) * 0.07;
   let L = Math.abs(d) - (0.115 + coast);
 
-  // Two land bridges across the sea, at t = +0.33 and t = -0.33.
-  for (const tb of [0.33, -0.33]) {
-    const wobble = (fbm(seed + 7, u * 12, v * 12, 2) - 0.5) * 0.01;
-    L = Math.max(L, 0.026 - Math.abs(t - tb + wobble) * 1.1);
-  }
-
   // Island chain along the centre line.
   const islands: Array<[number, number]> = [
     [0, 0.065],
@@ -132,10 +167,20 @@ function landness(seed: number, u: number, v: number): number {
   return L;
 }
 
+/** Two bridges cross the sea, at t = +0.33 and t = -0.33 along the channel. */
+const BRIDGES_T = [0.33, -0.33];
+const BRIDGE_HALF_WIDTH = 0.0165; // ~5 tiles wide
+
+function onBridge(u: number, v: number): boolean {
+  const t = (u - v) * SQRT1_2;
+  return BRIDGES_T.some((tb) => Math.abs(t - tb) < BRIDGE_HALF_WIDTH);
+}
+
 function fieldAt(seed: number, u: number, v: number): Field {
   const L = landness(seed, u, v);
   if (L < 0) {
     const elev = Math.max(-3, L * 22) - 0.08;
+    if (onBridge(u, v)) return { terrain: Terrain.Bridge, elev };
     return { terrain: L > -0.028 ? Terrain.Shallow : Terrain.Deep, elev };
   }
   if (L < 0.011) {
@@ -173,6 +218,31 @@ function canonical(w: number, h: number, tx: number, ty: number): [number, numbe
   const my = h - 1 - ty;
   if (key < 0 || (key === 0 && tx <= mx)) return [tx, ty];
   return [mx, my];
+}
+
+function measureBridges(terrain: Uint8Array, w: number, h: number): BridgeInfo[] {
+  const out: BridgeInfo[] = [];
+  for (const side of [1, -1]) {
+    let pMin = Infinity;
+    let pMax = -Infinity;
+    let qSum = 0;
+    let n = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (terrain[i] !== Terrain.Bridge) continue;
+      const cx = (i % w) + 0.5;
+      const cy = Math.floor(i / w) + 0.5;
+      if (Math.sign(cx - cy) !== side) continue;
+      const p = (cx + cy) * SQRT1_2;
+      pMin = Math.min(pMin, p);
+      pMax = Math.max(pMax, p);
+      qSum += (cx - cy) * SQRT1_2;
+      n++;
+    }
+    if (n === 0) continue;
+    // Extend a little onto each shore so the ramps meet the land.
+    out.push({ side, pStart: pMin - 1, pEnd: pMax + 1, q: qSum / n, halfWidth: BRIDGE_HALF_WIDTH * w + 0.45 });
+  }
+  return out;
 }
 
 function nearestTile(
@@ -238,12 +308,45 @@ export function generateTwinShores(seed = 1337, size = 160): GameMap {
     }
   }
 
+  // Bridges: one straight deck per bridge, rising from each shore to a peak so
+  // ships fit underneath. Tiles get the deck height of the profile at their centre.
+  const bridges = measureBridges(terrain, w, h);
+  const deck = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (terrain[i] !== Terrain.Bridge) continue;
+    const cx = (i % w) + 0.5;
+    const cy = Math.floor(i / w) + 0.5;
+    const b = bridges.find((br) => Math.sign(cx - cy) === br.side)!;
+    deck[i] = bridgeDeckHeight(b, (cx + cy) * SQRT1_2);
+  }
+
+  const vsurf = new Float32Array(velev);
+  for (let vy = 0; vy <= h; vy++) {
+    for (let vx = 0; vx <= w; vx++) {
+      let sum = 0;
+      let n = 0;
+      for (let oy = -1; oy <= 0; oy++) {
+        for (let ox = -1; ox <= 0; ox++) {
+          const tx = vx + ox;
+          const ty = vy + oy;
+          if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+          const d = deck[ty * w + tx]!;
+          if (d > 0) {
+            sum += d;
+            n++;
+          }
+        }
+      }
+      if (n > 0) vsurf[vy * (w + 1) + vx] = sum / n;
+    }
+  }
+
   const starts: StartPos[] = [
     { x: BASE_U * w, y: BASE_U * h },
     { x: w - BASE_U * w, y: h - BASE_U * h },
   ];
 
-  const map: GameMap = { name: 'Twin Shores', seed, width: w, height: h, terrain, elev, velev, starts, resources: [] };
+  const map: GameMap = { name: 'Twin Shores', seed, width: w, height: h, terrain, elev, velev, vsurf, deck, bridges, starts, resources: [] };
   placeResources(map);
   return map;
 }

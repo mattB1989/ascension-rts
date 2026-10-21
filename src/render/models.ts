@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import type { UnitTypeId } from '../data/units.ts';
+import { applyFow } from './fog.ts';
 
 // ---------------------------------------------------------------------------
 // Materials (cached per colour so units share them)
@@ -21,12 +22,13 @@ export function mat(color: number, opts: { metal?: number; rough?: number; emiss
       emissive: opts.emissive ?? 0x000000,
       emissiveIntensity: opts.emissive ? 0.6 : 0,
     });
+    applyFow(m);
     matCache.set(key, m);
   }
   return m;
 }
 
-const C = {
+export const C = {
   dark: 0x2b2f33,
   steel: 0x5c636b,
   light: 0xb9c0c7,
@@ -50,7 +52,7 @@ export function teamMats(color: number): { main: THREE.MeshStandardMaterial; acc
 // Geometry helpers
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
-function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
+export function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   let g = geoCache.get(key) as T | undefined;
   if (!g) {
     g = make();
@@ -59,7 +61,7 @@ function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   return g;
 }
 
-function mesh(geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+export function mesh(geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   const me = new THREE.Mesh(geo, m);
   me.position.set(x, y, z);
   me.castShadow = true;
@@ -67,27 +69,27 @@ function mesh(geo: THREE.BufferGeometry, m: THREE.Material, x = 0, y = 0, z = 0)
   return me;
 }
 
-function box(w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+export function box(w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   return mesh(cached(`box${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d)), m, x, y, z);
 }
 
 /** Cylinder along the Y axis. */
-function cyl(rt: number, rb: number, h: number, seg: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+export function cyl(rt: number, rb: number, h: number, seg: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   return mesh(cached(`cyl${rt},${rb},${h},${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg)), m, x, y, z);
 }
 
 /** Cylinder along the X axis (barrels, fuselages). */
-function cylX(r: number, len: number, seg: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+export function cylX(r: number, len: number, seg: number, m: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   const g = cached(`cylx${r},${len},${seg}`, () => new THREE.CylinderGeometry(r, r, len, seg).rotateZ(Math.PI / 2));
   return mesh(g, m, x, y, z);
 }
 
-function sphere(r: number, m: THREE.Material, x = 0, y = 0, z = 0, seg = 8): THREE.Mesh {
+export function sphere(r: number, m: THREE.Material, x = 0, y = 0, z = 0, seg = 8): THREE.Mesh {
   return mesh(cached(`sph${r},${seg}`, () => new THREE.SphereGeometry(r, seg, Math.max(4, seg - 2))), m, x, y, z);
 }
 
 /** Flat outline (in the XZ plane, points given as [x, z]) extruded upwards by `height`. */
-function extrudeXZ(key: string, pts: Array<[number, number]>, height: number, m: THREE.Material, y = 0): THREE.Mesh {
+export function extrudeXZ(key: string, pts: Array<[number, number]>, height: number, m: THREE.Material, y = 0): THREE.Mesh {
   const g = cached(`ext${key}`, () => {
     const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
     const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
@@ -100,7 +102,7 @@ function extrudeXZ(key: string, pts: Array<[number, number]>, height: number, m:
 // ---------------------------------------------------------------------------
 // Units
 
-function soldier(team: number, kind: 'rifle' | 'rocket' | 'engineer'): THREE.Group {
+function soldier(team: number, kind: 'rifle' | 'rocket' | 'engineer' | 'skyguard'): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
   g.add(box(0.12, 0.24, 0.2, mat(C.dark), 0, 0.12, 0));
@@ -112,9 +114,23 @@ function soldier(team: number, kind: 'rifle' | 'rocket' | 'engineer'): THREE.Gro
     g.add(box(0.34, 0.04, 0.04, mat(C.black), 0.14, 0.38, 0.1));
   } else if (kind === 'rocket') {
     g.add(cylX(0.05, 0.46, 6, mat(C.steel), 0.02, 0.5, 0.13));
+  } else if (kind === 'skyguard') {
+    const tube = cylX(0.045, 0.5, 6, mat(0x4a5a3a), 0.05, 0.56, 0.13);
+    tube.rotation.z = 0.6; // pointed at the sky
+    g.add(tube);
+    g.add(box(0.06, 0.08, 0.1, mat(C.dark), 0.12, 0.5, 0.2));
   } else {
     g.add(box(0.12, 0.2, 0.2, mat(C.steel), -0.13, 0.38, 0));
-    g.add(box(0.22, 0.04, 0.04, mat(C.yellow), 0.12, 0.3, 0.12));
+    const tool = new THREE.Group();
+    tool.name = 'tool';
+    tool.position.set(0.06, 0.4, 0.12);
+    tool.add(box(0.04, 0.04, 0.3, mat(0x7a5a3a), 0.1, 0, 0).rotateY(Math.PI / 2));
+    tool.add(box(0.05, 0.12, 0.05, mat(C.steel, { metal: 0.6 }), 0.24, 0.02, 0));
+    g.add(tool);
+    const carry = mesh(cached('carryOre', () => new THREE.OctahedronGeometry(0.11, 0).scale(1, 1.4, 1)), mat(0x4fd1c5, { emissive: 0x1a8f86, rough: 0.3 }), -0.2, 0.55, 0);
+    carry.name = 'carry';
+    carry.visible = false;
+    g.add(carry);
   }
   g.scale.setScalar(1.5);
   return g;
@@ -268,6 +284,75 @@ function attackHelicopter(team: number): THREE.Group {
   return g;
 }
 
+function howitzer(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  for (const tr of tracks(1.5, 0.28, 0.34)) g.add(tr);
+  g.add(box(1.4, 0.26, 0.66, t.main, 0, 0.36, 0));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(-0.2, 0.6, 0);
+  turret.add(box(0.75, 0.32, 0.56, t.accent));
+  const barrel = cylX(0.06, 1.4, 6, mat(C.steel, { metal: 0.6 }), 0.75, 0.25, 0);
+  barrel.rotation.z = 0.35;
+  turret.add(barrel);
+  turret.add(cylX(0.09, 0.2, 6, mat(C.dark), 1.38, 0.5, 0).rotateZ(0.35));
+  g.add(turret);
+  return g;
+}
+
+function seaEngineer(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const outline: Array<[number, number]> = [[-0.7, 0.32], [0.35, 0.34], [0.8, 0], [0.35, -0.34], [-0.7, -0.32]];
+  g.add(extrudeXZ('seaEngHull', outline, 0.3, mat(0xc98a2a, { rough: 0.6 }), -0.12));
+  g.add(box(0.36, 0.26, 0.4, mat(C.light), -0.35, 0.3, 0));
+  g.add(box(0.38, 0.04, 0.42, t.main, -0.35, 0.45, 0));
+  // Little work crane
+  g.add(cyl(0.04, 0.05, 0.5, 5, mat(C.yellow), 0.2, 0.42, 0));
+  const jib = box(0.6, 0.05, 0.05, mat(C.yellow), 0.45, 0.66, 0);
+  jib.rotation.z = -0.35;
+  g.add(jib);
+  return g;
+}
+
+function frigate(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const outline: Array<[number, number]> = [[-1.25, 0.3], [0.45, 0.37], [0.9, 0.26], [1.4, 0], [0.9, -0.26], [0.45, -0.37], [-1.25, -0.3]];
+  g.add(extrudeXZ('frigateHull', outline, 0.38, mat(C.hullGrey, { metal: 0.4, rough: 0.5 }), -0.16));
+  g.add(box(0.9, 0.36, 0.44, mat(C.light), -0.15, 0.4, 0));
+  g.add(box(0.92, 0.06, 0.46, t.main, -0.15, 0.6, 0));
+  // Radar mast with a rotating array
+  g.add(cyl(0.05, 0.08, 0.6, 5, mat(C.dark), -0.1, 0.9, 0));
+  const radar = box(0.08, 0.18, 0.5, mat(C.light), -0.1, 1.22, 0);
+  radar.name = 'radar';
+  g.add(radar);
+  // Vertical launch cells fore and aft
+  for (const x of [0.65, -0.85]) g.add(box(0.3, 0.06, 0.3, mat(C.steel), x, 0.25, 0));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0.95, 0.3, 0);
+  turret.add(box(0.22, 0.12, 0.2, mat(C.light)));
+  turret.add(cylX(0.03, 0.3, 5, mat(C.steel), 0.2, 0.02, 0));
+  g.add(turret);
+  return g;
+}
+
+function transportShip(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const outline: Array<[number, number]> = [[-1.3, 0.48], [0.9, 0.5], [1.3, 0.38], [1.3, -0.38], [0.9, -0.5], [-1.3, -0.48]];
+  g.add(extrudeXZ('transportHull', outline, 0.42, mat(0x5a6670, { metal: 0.4, rough: 0.55 }), -0.18));
+  // Open cargo well with a bow ramp
+  g.add(box(1.7, 0.04, 0.78, mat(0x3d4247), 0.05, 0.25, 0));
+  g.add(box(0.08, 0.3, 0.86, t.main, 1.28, 0.35, 0));
+  g.add(box(0.5, 0.45, 0.8, mat(C.light), -1.0, 0.45, 0));
+  g.add(box(0.06, 0.12, 0.6, mat(C.glass, { metal: 0.5, rough: 0.2 }), -0.74, 0.55, 0));
+  g.add(box(0.52, 0.05, 0.82, t.main, -1.0, 0.7, 0));
+  return g;
+}
+
 export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
   switch (type) {
     case 'engineer':
@@ -276,6 +361,16 @@ export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
       return soldier(team, 'rifle');
     case 'rocket_trooper':
       return soldier(team, 'rocket');
+    case 'skyguard':
+      return soldier(team, 'skyguard');
+    case 'howitzer':
+      return howitzer(team);
+    case 'sea_engineer':
+      return seaEngineer(team);
+    case 'frigate':
+      return frigate(team);
+    case 'transport_ship':
+      return transportShip(team);
     case 'battle_tank':
       return battleTank(team);
     case 'flak_track':
@@ -304,29 +399,6 @@ function placeholder(team: number): THREE.Group {
 
 // ---------------------------------------------------------------------------
 // Buildings and map features
-
-export function buildCommandCenter(team: number): THREE.Group {
-  const t = teamMats(team);
-  const g = new THREE.Group();
-  const concrete = mat(C.concrete, { rough: 0.9 });
-  g.add(box(4.4, 0.4, 4.4, concrete, 0, 0.2, 0));
-  g.add(box(2.8, 1.5, 2.6, mat(C.light, { rough: 0.6 }), -0.3, 1.15, 0));
-  g.add(box(2.84, 0.25, 2.64, t.main, -0.3, 1.5, 0)); // team band
-  g.add(box(1.0, 0.9, 1.0, mat(C.light), 1.4, 0.85, 1.2));
-  g.add(box(1.02, 0.2, 1.02, t.main, 1.4, 1.2, 1.2));
-  g.add(box(2.0, 0.6, 1.6, mat(C.steel), -0.4, 2.2, -0.2));
-  g.add(cyl(0.15, 0.2, 1.6, 6, mat(C.dark), -1.2, 3.1, 0.6)); // antenna mast
-  const dish = mesh(cached('dish', () => new THREE.SphereGeometry(0.55, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2)), mat(C.light, { metal: 0.5 }), 0.3, 2.55, -0.3);
-  dish.rotation.z = 0.6;
-  g.add(dish);
-  const pad = mesh(cached('pad', () => new THREE.CylinderGeometry(0.75, 0.75, 0.06, 16)), mat(C.dark), 1.35, 0.43, -1.35);
-  g.add(pad);
-  g.add(box(0.7, 0.07, 0.1, mat(C.yellow), 1.35, 0.47, -1.35));
-  // Glowing windows
-  const glow = mat(0xffd27a, { emissive: 0xffb84a });
-  for (let i = 0; i < 3; i++) g.add(box(0.05, 0.25, 0.4, glow, 1.11, 0.7 + i * 0.35, -0.6 + (i % 2) * 0.8));
-  return g;
-}
 
 export function buildOreCrystals(seedish: number): THREE.Group {
   const g = new THREE.Group();

@@ -12,14 +12,16 @@ function start(): void {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const uiRoot = document.getElementById('ui') as HTMLElement;
 
-  const seed = Number(new URLSearchParams(location.search).get('seed')) || 1337;
-  const world = createMatch({ seed });
+  const params = new URLSearchParams(location.search);
+  const seed = Number(params.get('seed')) || 1337;
+  const mode = params.get('mode') === 'sandbox' ? 'sandbox' : 'standard';
+  const world = createMatch({ seed, mode });
   const game = new Game(world, 0);
-  const renderer = new GameRenderer(canvas, world);
+  const renderer = new GameRenderer(canvas, world, game.humanPlayer, params.get('fog') !== '0');
   const selection = new Selection(world);
   const input = new InputController(canvas, renderer, game, selection, uiRoot);
   const minimap = new Minimap(world, renderer, input, selection);
-  const hud = new Hud(uiRoot, world, selection, input, minimap);
+  const hud = new Hud(uiRoot, game, selection, input, minimap);
 
   input.goHome();
   window.addEventListener('resize', () => renderer.resize());
@@ -29,7 +31,8 @@ function start(): void {
 
   let last = performance.now();
   const frame = (now: number) => {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const realDt = (now - last) / 1000;
+    const dt = Math.min(0.1, realDt);
     last = now;
     input.update(dt);
     const alpha = game.update(dt);
@@ -37,7 +40,7 @@ function start(): void {
     selection.prune();
     renderer.render(alpha, now / 1000, dt, selection.ids);
     minimap.draw(now);
-    hud.update(dt);
+    hud.update(dt, realDt);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

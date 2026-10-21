@@ -11,6 +11,9 @@ interface UnitObject {
   ring: THREE.Mesh;
   rotor: THREE.Object3D | null;
   tailRotor: THREE.Object3D | null;
+  radar: THREE.Object3D | null;
+  tool: THREE.Object3D | null;
+  carry: THREE.Object3D | null;
   bank: number;
 }
 
@@ -67,11 +70,24 @@ export class UnitsView {
       ring,
       rotor: model.getObjectByName('rotor') ?? null,
       tailRotor: model.getObjectByName('tailRotor') ?? null,
+      radar: model.getObjectByName('radar') ?? null,
+      tool: model.getObjectByName('tool') ?? null,
+      carry: model.getObjectByName('carry') ?? null,
       bank: 0,
     };
   }
 
-  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>): void {
+  /** Is this unit shown to the viewer (own units always; others only where the viewer can see)? */
+  isShown(u: Unit, viewer: number): boolean {
+    if (u.owner === viewer) return true;
+    const p = this.world.players[viewer];
+    if (!p) return true;
+    const tx = Math.floor(u.x);
+    const ty = Math.floor(u.y);
+    return p.visible[ty * this.world.map.width + tx] === 1;
+  }
+
+  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, viewer: number): void {
     const seen = new Set<number>();
     const pos = new THREE.Vector3();
     for (const u of this.world.units) {
@@ -109,8 +125,14 @@ export class UnitsView {
       }
       if (o.rotor) o.rotor.rotation.y += frameDt * 22;
       if (o.tailRotor) o.tailRotor.rotation.z += frameDt * 30;
+      if (o.radar) o.radar.rotation.y += frameDt * 2;
+      if (o.carry) o.carry.visible = u.carry > 0;
+      if (o.tool) o.tool.rotation.z = u.working ? Math.sin(time * 9 + u.id) * 0.7 - 0.2 : 0;
+      if (u.working && u.def.domain === 'land') o.root.position.y += Math.abs(Math.sin(time * 9 + u.id)) * 0.03;
+      const shown = this.isShown(u, viewer);
+      o.root.visible = shown;
 
-      const isSel = selected.has(u.id);
+      const isSel = selected.has(u.id) && shown;
       o.ring.visible = isSel;
       if (isSel) {
         // Aircraft get the ring around them in the air; everything else on the ground/water.

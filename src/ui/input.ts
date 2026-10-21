@@ -5,12 +5,28 @@
 //          rotate, wheel zoom, WASD/arrows pan, Q/E rotate, edge scrolling.
 // Touch:   tap select / tap ground to move, one-finger drag pans (or box-selects
 //          in Select mode), two fingers pan + pinch zoom + twist rotate.
+//
+// Right click (or tap, on touch) is context-sensitive: ore -> mine, own
+// foundation -> help build, anything else -> move; with buildings selected it
+// sets their rally point.
 
 import * as THREE from 'three';
+import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { Game } from '../game.ts';
 import type { GameRenderer } from '../render/renderer.ts';
-import type { Unit } from '../sim/world.ts';
+import type { Building, Unit } from '../sim/world.ts';
+import { placementCheck, snapFootprint } from './placementCheck.ts';
 import type { Selection } from './selection.ts';
+
+export interface PlacingState {
+  type: BuildingTypeId;
+  tx: number;
+  ty: number;
+  valid: boolean;
+  problem: string | null;
+  /** Touch: the ghost has been positioned at least once. */
+  positioned: boolean;
+}
 
 type DragKind = 'none' | 'box' | 'pan' | 'rotate' | 'gesture';
 
@@ -44,7 +60,10 @@ export class InputController {
   private readonly game: Game;
   private readonly selection: Selection;
   readonly touchDevice: boolean;
+  placing: PlacingState | null = null;
   onDragModeChange: (mode: DragMode) => void = () => {};
+  /** Show a short message to the player (set by the HUD). */
+  toast: (text: string) => void = () => {};
 
   constructor(canvas: HTMLCanvasElement, renderer: GameRenderer, game: Game, selection: Selection, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -80,6 +99,7 @@ export class InputController {
   // Per-frame: keyboard panning and edge scrolling
 
   update(frameDt: number): void {
+    if (this.placing) this.updateGhost();
     const rig = this.renderer.rig;
     const speed = rig.distance * 1.1 * frameDt;
     let r = 0;
@@ -151,6 +171,7 @@ export class InputController {
       this.mouse.inside = true;
     }
     const pi = this.pointers.get(e.pointerId);
+    if (this.placing && e.pointerType === 'mouse' && (!pi || !pi.moved)) this.moveGhost(e.clientX, e.clientY);
     if (!pi) return;
     const dx = p.x - pi.x;
     const dy = p.y - pi.y;
@@ -208,6 +229,20 @@ export class InputController {
     }
     if (pi.moved) return;
 
+    if (this.placing) {
+      const rect = this.canvas.getBoundingClientRect();
+      if (pi.type === 'mouse') {
+        if (pi.button === 2) this.cancelPlacement();
+        else if (pi.button === 0) {
+          this.moveGhost(pi.x + rect.left, pi.y + rect.top);
+          this.confirmPlacement(e.shiftKey);
+        }
+      } else {
+        // Touch: a tap positions the ghost; the card's button confirms.
+        this.moveGhost(pi.x + rect.left, pi.y + rect.top);
+      }
+      return;
+    }
     if (pi.type === 'mouse') {
       if (pi.button === 0) this.clickSelect(pi.x, pi.y, additive);
       else if (pi.button === 2) this.commandAt(pi.x, pi.y);
@@ -249,13 +284,17 @@ export class InputController {
     }
     switch (e.code) {
       case 'Escape':
-        this.selection.clear();
+        if (this.placing) this.cancelPlacement();
+        else this.selection.clear();
         break;
       case 'KeyX':
         this.stopSelected();
         break;
       case 'KeyH':
         this.goHome();
+        break;
+      case 'Period':
+        this.selectNextIdle();
         break;
       case 'Space':
         e.preventDefault();
@@ -315,10 +354,127 @@ export class InputController {
     this.renderer.effects.moveMarker(x, Math.max(0, markerHeight), y);
   }
 
+  /** Context command at a screen point for the current selection. */
   private commandAt(sx: number, sy: number): void {
     const rect = this.canvas.getBoundingClientRect();
     const g = this.renderer.pickGround(sx + rect.left, sy + rect.top);
-    if (g) this.moveSelectedTo(g.x, g.y, g.h);
+    if (!g) return;
+    this.commandAtWorld(g.x, g.y, g.h);
+  }
+
+  commandAtWorld(x: number, y: number, h: number): void {
+    const world = this.game.world;
+    const player = this.game.humanPlayer;
+    const ids = this.selection.list();
+    const units: Unit[] = [];
+    const buildings: Building[] = [];
+    for (const id of ids) {
+      const e = world.getEntity(id);
+      if (!e || e.owner !== player) continue;
+      if (e.kind === 'unit') units.push(e);
+      else buildings.push(e);
+    }
+    if (units.length === 0) {
+      // Buildings only: set the rally point.
+      for (const b of buildings) this.game.issue({ kind: 'rally', player, building: b.id, x, y });
+      if (buildings.length) this.renderer.effects.moveMarker(x, Math.max(0, h), y);
+      return;
+    }
+    const gatherers = units.filter((u) => u.def.gatherRate);
+    const ore = gatherers.length ? world.oreNear(x, y, 1.3) : -1;
+    const tile = Math.floor(y) * world.map.width + Math.floor(x);
+    const target = world.getBuilding(world.occupancy[tile] ?? 0);
+    const builders = target && target.owner === player && !target.complete ? units.filter((u) => u.def.builder === target.def.builtBy) : [];
+    const used = new Set<number>();
+    if (ore >= 0) {
+      this.game.issue({ kind: 'gather', player, units: gatherers.map((u) => u.id), resource: ore });
+      gatherers.forEach((u) => used.add(u.id));
+    } else if (target && builders.length) {
+      this.game.issue({ kind: 'assist', player, units: builders.map((u) => u.id), target: target.id });
+      builders.forEach((u) => used.add(u.id));
+    }
+    const rest = units.filter((u) => !used.has(u.id)).map((u) => u.id);
+    if (rest.length) this.game.issue({ kind: 'move', player, units: rest, x, y });
+    this.renderer.effects.moveMarker(x, Math.max(0, h), y);
+  }
+
+  // -------------------------------------------------------------------------
+  // Building placement
+
+  startPlacement(type: BuildingTypeId): void {
+    const s = this.renderer.rig.target;
+    const [tx, ty] = snapFootprint(this.game.world, type, s.x, s.y);
+    this.placing = { type, tx, ty, valid: false, problem: null, positioned: false };
+    this.updateGhost();
+  }
+
+  cancelPlacement(): void {
+    this.placing = null;
+    this.renderer.ghost.hide();
+  }
+
+  private moveGhost(clientX: number, clientY: number): void {
+    if (!this.placing) return;
+    const g = this.renderer.pickGround(clientX, clientY);
+    if (!g) return;
+    const [tx, ty] = snapFootprint(this.game.world, this.placing.type, g.x, g.y);
+    this.placing.tx = tx;
+    this.placing.ty = ty;
+    this.placing.positioned = true;
+    this.updateGhost();
+  }
+
+  /** Re-check validity (resources change, units move) and redraw the ghost. */
+  updateGhost(): void {
+    const pl = this.placing;
+    if (!pl) return;
+    pl.problem = placementCheck(this.game.world, this.game.humanPlayer, pl.type, pl.tx, pl.ty);
+    if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = 'Tap the map to choose a spot';
+    pl.valid = pl.problem === null;
+    this.renderer.ghost.show(pl.type, pl.tx, pl.ty, pl.valid);
+  }
+
+  confirmPlacement(keepPlacing = false): void {
+    const pl = this.placing;
+    if (!pl) return;
+    this.updateGhost();
+    if (!pl.valid) {
+      if (pl.problem) this.toast(pl.problem);
+      return;
+    }
+    const world = this.game.world;
+    const def = BUILDINGS[pl.type];
+    const builders = this.selection
+      .list()
+      .map((id) => world.getUnit(id))
+      .filter((u): u is Unit => !!u && u.owner === this.game.humanPlayer && u.def.builder === def.builtBy);
+    if (!builders.length) {
+      this.toast(def.builtBy === 'sea_engineer' ? 'Select a Sea Engineer' : 'Select an Engineer');
+      return;
+    }
+    this.game.issue({ kind: 'build', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: pl.type, tx: pl.tx, ty: pl.ty });
+    if (keepPlacing) {
+      pl.positioned = false;
+    } else {
+      this.cancelPlacement();
+    }
+  }
+
+  /** Select idle engineers one at a time, centring the camera on each. */
+  private idleCursor = 0;
+  selectNextIdle(): void {
+    const idle = this.idleEngineers();
+    if (!idle.length) {
+      this.toast('No idle engineers');
+      return;
+    }
+    const u = idle[this.idleCursor++ % idle.length]!;
+    this.selection.set([u.id]);
+    this.renderer.rig.lookAt(u.x, u.y);
+  }
+
+  idleEngineers(): Unit[] {
+    return this.ownUnits().filter((u) => u.def.builder && !u.task && u.state === 'idle');
   }
 
   // -------------------------------------------------------------------------
@@ -357,11 +513,24 @@ export class InputController {
     this.selection.set(ids);
   }
 
+  /** Own building under a screen point (via the ground tile it covers). */
+  private pickOwnBuilding(sx: number, sy: number): Building | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const g = this.renderer.pickGround(sx + rect.left, sy + rect.top);
+    if (!g) return null;
+    const world = this.game.world;
+    const id = world.occupancy[Math.floor(g.y) * world.map.width + Math.floor(g.x)] ?? 0;
+    const b = world.getBuilding(id);
+    return b && b.owner === this.game.humanPlayer ? b : null;
+  }
+
   private clickSelect(sx: number, sy: number, additive: boolean): void {
     const u = this.pickOwnUnit(sx, sy);
     const now = performance.now();
     if (!u) {
-      if (!additive) this.selection.clear();
+      const b = this.pickOwnBuilding(sx, sy);
+      if (b) this.selection.set([b.id]);
+      else if (!additive) this.selection.clear();
       return;
     }
     const dbl = this.lastClick.unitId === u.id && now - this.lastClick.time < 350;
@@ -379,6 +548,14 @@ export class InputController {
       this.lastClick = { time: now, unitId: u.id };
       if (dbl) this.selectTypeOnScreen(u.type);
       else this.selection.set([u.id]);
+      return;
+    }
+    const b = this.pickOwnBuilding(sx, sy);
+    const hasUnits = this.selection.list().some((id) => this.game.world.getUnit(id));
+    // With units selected, tapping one of our own foundations sends builders to help;
+    // otherwise tapping a building selects it.
+    if (b && !(hasUnits && !b.complete)) {
+      this.selection.set([b.id]);
       return;
     }
     if (this.selection.ids.size > 0) this.commandAt(sx, sy);

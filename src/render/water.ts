@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import type { GameMap } from '../sim/map.ts';
+import { FOW_GLSL, fowUniforms } from './fog.ts';
 
 const vertex = /* glsl */ `
   varying vec3 vWorld;
@@ -27,6 +28,7 @@ const fragment = /* glsl */ `
   uniform vec2 uMapSize;
   varying vec3 vWorld;
   #include <fog_pars_fragment>
+  ${FOW_GLSL}
 
   float waveHeight(vec2 p, float t) {
     return sin(p.x * 0.9 + t * 1.3) * 0.5
@@ -64,6 +66,7 @@ const fragment = /* glsl */ `
 
     float alpha = mix(0.5, 0.93, smoothstep(0.0, 0.35, depth));
     alpha = max(alpha, foam * 0.9);
+    col = fowApply(col, p);
     gl_FragColor = vec4(col, alpha);
     #include <colorspace_fragment>
     #include <fog_fragment>
@@ -113,8 +116,11 @@ export class Water {
       fog: true,
       depthWrite: false,
     });
-    // UniformsUtils.merge clones textures; point back at the original.
+    // UniformsUtils.merge clones textures; point back at the originals / shared fog uniforms.
     this.material.uniforms.uDepth!.value = tex;
+    this.material.uniforms.uFow = fowUniforms.uFow;
+    this.material.uniforms.uFowSize = fowUniforms.uFowSize;
+    this.material.uniforms.uFowOn = fowUniforms.uFowOn;
 
     const geo = new THREE.PlaneGeometry(w, h, 1, 1).rotateX(-Math.PI / 2);
     this.mesh = new THREE.Mesh(geo, this.material);

@@ -4,11 +4,13 @@ import * as THREE from 'three';
 import type { World } from '../sim/world.ts';
 import { CameraRig } from './camera.ts';
 import { Effects } from './effects.ts';
-import { buildCommandCenter } from './models.ts';
+import { BuildingsView } from './buildingsView.ts';
+import { applyFowTree, initFog, updateFogTexture } from './fog.ts';
+import { PlacementGhost } from './ghost.ts';
+import { ResourcesView } from './resourcesView.ts';
 import { TerrainView } from './terrain.ts';
 import { UnitsView } from './unitsView.ts';
 import { Water } from './water.ts';
-import { groundHeight } from '../sim/map.ts';
 
 const SKY = 0x9cc4e4;
 
@@ -18,7 +20,13 @@ export class GameRenderer {
   readonly rig: CameraRig;
   readonly terrain: TerrainView;
   readonly units: UnitsView;
+  readonly buildings: BuildingsView;
+  readonly resources: ResourcesView;
+  readonly ghost: PlacementGhost;
   readonly effects = new Effects();
+  /** Whose eyes we see the world through (fog of war). */
+  viewer: number;
+  private lastFogTick = -1;
   private readonly water: Water;
   private readonly sun: THREE.DirectionalLight;
   private readonly sunDir = new THREE.Vector3(-0.45, 0.8, -0.35).normalize();
@@ -27,10 +35,12 @@ export class GameRenderer {
   private readonly raycaster = new THREE.Raycaster();
   private readonly lowPower: boolean;
 
-  constructor(canvas: HTMLCanvasElement, world: World) {
+  constructor(canvas: HTMLCanvasElement, world: World, viewer: number, fogOn = true) {
     this.canvas = canvas;
     this.world = world;
+    this.viewer = viewer;
     const map = world.map;
+    initFog(map.width, map.height, fogOn);
     this.lowPower = matchMedia('(pointer: coarse)').matches;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
@@ -60,22 +70,17 @@ export class GameRenderer {
     this.scene.add(this.sun, this.sun.target);
 
     this.terrain = new TerrainView(map);
+    applyFowTree(this.terrain.group);
     this.scene.add(this.terrain.group);
     this.water = new Water(map, this.sunDir);
     this.scene.add(this.water.mesh);
-
-    // Headquarters (decorative until buildings arrive in M2).
-    for (const p of world.players) {
-      const s = map.starts[p.id];
-      if (!s) continue;
-      const hq = buildCommandCenter(p.color);
-      hq.position.set(s.x, groundHeight(map, s.x, s.y), s.y);
-      hq.rotation.y = p.id === 0 ? -Math.PI / 4 : (Math.PI * 3) / 4;
-      this.scene.add(hq);
-    }
-
+    this.resources = new ResourcesView(world);
+    this.scene.add(this.resources.group);
+    this.buildings = new BuildingsView(world);
+    this.buildings.onCreate = (b) => this.terrain.clearTrees(b.tx, b.ty, b.w, b.h);
     this.units = new UnitsView(world);
-    this.scene.add(this.units.group, this.effects.group);
+    this.ghost = new PlacementGhost(map);
+    this.scene.add(this.buildings.group, this.units.group, this.effects.group, this.ghost.group);
 
     this.rig = new CameraRig(1, map.width, map.height);
     this.resize();
@@ -116,8 +121,14 @@ export class GameRenderer {
     fog.near = this.rig.distance * 1.6;
     fog.far = this.rig.distance * 4.5 + 60;
 
+    if (this.world.tick !== this.lastFogTick) {
+      this.lastFogTick = this.world.tick;
+      updateFogTexture(this.world, this.viewer);
+    }
     this.water.update(time);
-    this.units.update(alpha, time, frameDt, selected);
+    this.resources.update();
+    this.buildings.update(time, frameDt, selected, this.viewer);
+    this.units.update(alpha, time, frameDt, selected, this.viewer);
     this.effects.update(frameDt);
     this.renderer.render(this.scene, this.rig.camera);
   }

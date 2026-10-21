@@ -2,7 +2,7 @@
 // which are applied on the next tick and logged (for replays later).
 
 import type { Command, TimedCommand } from './sim/commands.ts';
-import { DT, type World } from './sim/world.ts';
+import { DT, type GameEvent, type World } from './sim/world.ts';
 
 export class Game {
   readonly world: World;
@@ -11,6 +11,7 @@ export class Game {
   timeScale = 1;
   paused = false;
   private pending: Command[] = [];
+  private events: GameEvent[] = [];
   private acc = 0;
 
   constructor(world: World, humanPlayer: number) {
@@ -20,6 +21,13 @@ export class Game {
 
   issue(cmd: Command): void {
     this.pending.push(cmd);
+  }
+
+  /** Events raised since the last call (UI notifications). */
+  drainEvents(): GameEvent[] {
+    const e = this.events;
+    this.events = [];
+    return e;
   }
 
   /** Advance by real elapsed time. Returns the interpolation factor for rendering. */
@@ -32,6 +40,7 @@ export class Game {
       this.pending = [];
       for (const cmd of cmds) this.log.push({ tick: this.world.tick, cmd });
       this.world.step(cmds);
+      if (this.world.events.length) this.events.push(...this.world.events);
       this.acc -= DT;
       steps++;
     }

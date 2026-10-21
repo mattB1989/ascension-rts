@@ -29,6 +29,9 @@ export class Minimap {
   private readonly input: InputController;
   private readonly selection: Selection;
   private lastDraw = 0;
+  private readonly fogCanvas: HTMLCanvasElement;
+  private readonly fogCtx: CanvasRenderingContext2D;
+  private readonly fogOn: boolean;
 
   constructor(world: World, renderer: GameRenderer, input: InputController, selection: Selection) {
     this.world = world;
@@ -39,6 +42,13 @@ export class Minimap {
     this.el.className = 'minimap';
     this.ctx = this.el.getContext('2d')!;
     this.terrainImg = this.bakeTerrain();
+    this.fogCanvas = document.createElement('canvas');
+    this.fogCanvas.width = world.map.width;
+    this.fogCanvas.height = world.map.height;
+    this.fogCtx = this.fogCanvas.getContext('2d', { willReadFrequently: true })!;
+    this.fogCtx.fillStyle = '#05080c';
+    this.fogCtx.fillRect(0, 0, world.map.width, world.map.height);
+    this.fogOn = new URLSearchParams(location.search).get('fog') !== '0';
 
     this.el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -129,8 +139,39 @@ export class Minimap {
     ctx.drawImage(this.terrainImg, -m.width / 2, -m.height / 2);
     ctx.restore();
 
-    // Units.
+    // Fog of war: black where unexplored, dimmed where not currently visible.
+    const viewer = this.renderer.viewer;
+    const pl = this.world.players[viewer];
+    if (pl && this.fogOn) {
+      const n = m.width * m.height;
+      const img = this.fogCtx.getImageData(0, 0, m.width, m.height);
+      for (let i = 0; i < n; i++) img.data[i * 4 + 3] = pl.visible[i] ? 0 : pl.explored[i] ? 110 : 255;
+      this.fogCtx.putImageData(img, 0, 0);
+      ctx.save();
+      ctx.translate(this.size / 2, this.size / 2);
+      ctx.transform((-1 / Math.SQRT2) * k, (-1 / Math.SQRT2) * k, (1 / Math.SQRT2) * k, (-1 / Math.SQRT2) * k, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.fogCanvas, -m.width / 2, -m.height / 2);
+      ctx.restore();
+    }
+
+    // Buildings (enemy ones once explored).
+    for (const b of this.world.buildings) {
+      if (b.owner !== viewer && pl && !pl.explored[Math.floor(b.y) * m.width + Math.floor(b.x)]) continue;
+      const color = '#' + (this.world.players[b.owner]?.color ?? 0xffffff).toString(16).padStart(6, '0');
+      ctx.fillStyle = this.selection.ids.has(b.id) ? '#ffffff' : color;
+      const corners = [[b.tx, b.ty], [b.tx + b.w, b.ty], [b.tx + b.w, b.ty + b.h], [b.tx, b.ty + b.h]].map(([x, y]) => this.project(x!, y!));
+      ctx.beginPath();
+      corners.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.stroke();
+    }
+
+    // Units (enemy ones only where visible).
     for (const u of this.world.units) {
+      if (u.owner !== viewer && pl && this.fogOn && !pl.visible[Math.floor(u.y) * m.width + Math.floor(u.x)]) continue;
       const [px, py] = this.project(u.x, u.y);
       const color = '#' + (this.world.players[u.owner]?.color ?? 0xffffff).toString(16).padStart(6, '0');
       const sel = this.selection.ids.has(u.id);

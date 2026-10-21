@@ -46,7 +46,7 @@ export class Selection {
   prune(): void {
     let removed = false;
     for (const id of this.ids) {
-      if (!this.world.getUnit(id)) {
+      if (!this.world.getEntity(id)) {
         this.ids.delete(id);
         removed = true;
       }
@@ -61,7 +61,7 @@ export class Selection {
   recallGroup(n: number): boolean {
     const g = this.groups.get(n);
     if (!g || g.length === 0) return false;
-    this.set(g.filter((id) => this.world.getUnit(id)));
+    this.set(g.filter((id) => this.world.getEntity(id)));
     return true;
   }
 }

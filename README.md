@@ -9,28 +9,37 @@ Single player against an AI (Easy / Normal / Hard). Desktop and mobile.
 
 TypeScript + three.js + Vite. Static site, no server. Every model, texture and sound is generated in code.
 
-## Status: M1, movement sandbox
+## Status: M2, economy and base building
 
-- **Twin Shores** map (160×160): two continents, a sea channel with islands, two bridges
-  (tanks drive over, ships sail under), ore fields and land/offshore oil.
-- Each side has a mixed Modern-age force: tanks, buggies, flak, infantry, engineers,
-  destroyers, patrol boats, jets and helicopters.
-- Land units path on land, ships on water, aircraft fly anywhere. Jets circle when idle.
-- Full mouse/keyboard and touch controls, diamond minimap, control groups.
-- Deterministic simulation (seeded, fixed tick, custom trig): the foundation for
-  replays, AI-vs-AI and multiplayer later.
+- **Economy:** Engineers mine **◆ Ore** and carry it to the Command Center or an Ore Refinery.
+  Oil Derricks (on land oil) and Offshore Rigs (built by a Sea Engineer on sea oil) produce
+  **⚡ Energy**. Habitat Blocks raise the population cap.
+- **Base building:** all 11 Modern-age economy and production buildings with procedural 3D
+  models, construction scaffolding, placement preview and real placement rules (open ground,
+  coast for shipyards, oil spots for derricks and rigs, explored ground only).
+- **Production:** unit queues with housing limits, rally points (engineers rallied onto ore start
+  mining), cancel with refunds, economic research (Deep Drilling, Efficient Logistics).
+- **Fog of war:** unexplored ground is black, explored-but-unseen ground is dimmed; enemy units
+  only show where you can see.
+- **Game-state UI:** resource bar with income per minute, population, age, idle engineers,
+  a command card for whatever is selected, toasts.
+- The full catalog of ages, buildings, units and research lives in `src/data/`, and
+  [docs/TECH_TREE.md](docs/TECH_TREE.md) is generated from it.
 
-Next: M2, economy and base building. See [docs/PLAN.md](docs/PLAN.md) and
-[docs/TECH_TREE.md](docs/TECH_TREE.md).
+URL options: `?mode=sandbox` starts with a mixed army, navy and air force (the M1 test bed);
+`?fog=0` turns the fog of war off; `?seed=42` picks another map seed.
+
+Next: M3, combat, walls and towers. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 
 | | Mouse & keyboard | Touch |
 |---|---|---|
 | Select | Left click, drag a box, Shift to add, double-click for all of a type | Tap, double-tap for all of a type, **Select** mode for box |
-| Move | Right click (or on the minimap) | Tap the ground |
+| Move / work | Right click: ground = move, ore = mine, foundation = help build; with a building selected = rally point | Tap: same rules |
+| Build | Select engineers, pick a building in the command card, click to place (Shift for several) | Pick a building, tap to position, then ✓ |
 | Camera | WASD/arrows/screen edge, right drag, wheel zoom, Q/E or middle drag rotate | One finger pans, two fingers pan/pinch/twist |
-| Other | Ctrl+1..9 / 1..9 groups, Ctrl+A army, X stop, Space centre, H home | Buttons at the bottom right |
+| Other | `.` next idle engineer, Ctrl+1..9 / 1..9 groups, Ctrl+A army, X stop, Space centre, H home | Idle button in the top bar, buttons at the bottom right |
 
 ## Develop
 
@@ -48,10 +57,11 @@ Append `?seed=42` to the URL for a different map seed.
 ### Layout
 
 ```
-src/data/     unit definitions (single source of truth for stats)
-src/sim/      deterministic simulation: map generator, nav layers, A*, movement. No DOM, no three.js.
-src/render/   three.js: terrain, water shader, bridges, procedural models, camera
-src/ui/       input (mouse/keyboard/touch), selection, minimap, HUD
+src/data/     ages, buildings, units, research: the single source of truth for stats
+src/sim/      deterministic simulation: map, nav, A*, movement, placement, economy, fog. No DOM, no three.js.
+src/render/   three.js: terrain, water, bridges, unit and building models, fog-of-war shader, camera
+src/ui/       input (mouse/keyboard/touch), selection, command card, minimap, HUD
+tools/        gen-docs.ts: regenerates the tech-tree tables (npm run docs)
 tests/        sim and map tests
 ```
 

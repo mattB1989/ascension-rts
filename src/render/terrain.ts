@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import { fbm, hash2 } from '../sim/rng.ts';
 import { groundHeight, Terrain, type GameMap, type TerrainId } from '../sim/map.ts';
 import { buildBridges } from './bridges.ts';
-import { buildOilSpot, buildOreCrystals } from './models.ts';
 
 /** Two colours per terrain; large-scale noise blends between them. */
 const TERRAIN_COLORS: Record<TerrainId, [number, number]> = {
@@ -25,6 +24,8 @@ export class TerrainView {
   readonly mesh: THREE.Mesh;
   /** Everything a click can land on (ground and bridge decks). */
   readonly pickables: THREE.Object3D[];
+  private treeSpots: Array<[number, number, number]> = [];
+  private treeMeshes: THREE.InstancedMesh[] = [];
 
   constructor(map: GameMap) {
     this.mesh = this.buildGround(map);
@@ -35,7 +36,6 @@ export class TerrainView {
     this.group.add(this.buildSkirt(map));
     this.group.add(this.buildTrees(map));
     this.group.add(this.buildRocks(map));
-    this.group.add(this.buildResources(map));
   }
 
   private buildGround(map: GameMap): THREE.Mesh {
@@ -167,7 +167,22 @@ export class TerrainView {
       canopy.setColorAt(i, color.setHex(greens[Math.floor(r * greens.length)]!));
     });
     g.add(canopy, trunk);
+    this.treeSpots = spots;
+    this.treeMeshes = [canopy, trunk];
     return g;
+  }
+
+  /** Remove trees standing inside a building footprint (a building was placed there). */
+  clearTrees(tx: number, ty: number, w: number, h: number): void {
+    const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    let changed = false;
+    this.treeSpots.forEach(([x, y], i) => {
+      if (x >= tx - 0.2 && x < tx + w + 0.2 && y >= ty - 0.2 && y < ty + h + 0.2) {
+        for (const m of this.treeMeshes) m.setMatrixAt(i, zero);
+        changed = true;
+      }
+    });
+    if (changed) for (const m of this.treeMeshes) m.instanceMatrix.needsUpdate = true;
   }
 
   private buildRocks(map: GameMap): THREE.Group {
@@ -194,17 +209,6 @@ export class TerrainView {
       rocks.setMatrixAt(i, m);
     });
     g.add(rocks);
-    return g;
-  }
-
-  private buildResources(map: GameMap): THREE.Group {
-    const g = new THREE.Group();
-    map.resources.forEach((r, i) => {
-      const model = r.kind === 'ore' ? buildOreCrystals(Math.floor(r.x * 7 + r.y * 13 + i)) : buildOilSpot(r.offshore);
-      const y = r.offshore ? 0 : groundHeight(map, r.x, r.y);
-      model.position.set(r.x, y, r.y);
-      g.add(model);
-    });
     return g;
   }
 }

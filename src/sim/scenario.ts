@@ -1,14 +1,17 @@
-// Match setup: map, players and starting forces.
-// M1 is a movement sandbox, so each side starts with a mixed army. From M2 players
-// start with an HQ and engineers and build up from there.
+// Match setup: map, players, starting base and forces.
 
 import type { UnitTypeId } from '../data/units.ts';
+import { updateFog } from './fog.ts';
 import { generateTwinShores } from './map.ts';
 import { NavLayer } from './nav.ts';
 import { World, type PlayerInfo } from './world.ts';
 
+export type MatchMode = 'standard' | 'sandbox';
+
 export interface MatchOptions {
   seed: number;
+  /** standard: HQ + engineers. sandbox: also a mixed army, navy and air force (M1 test bed). */
+  mode?: MatchMode;
 }
 
 export const DEFAULT_PLAYERS: PlayerInfo[] = [
@@ -16,13 +19,15 @@ export const DEFAULT_PLAYERS: PlayerInfo[] = [
   { id: 1, name: 'Red', color: 0xd64541, isHuman: false },
 ];
 
+export const START_RESOURCES = { ore: 400, energy: 200 };
+export const START_ENGINEERS = 5;
+
 const LAND_ARMY: Array<[UnitTypeId, number]> = [
   ['battle_tank', 4],
   ['scout_buggy', 2],
   ['flak_track', 1],
   ['rifleman', 6],
   ['rocket_trooper', 3],
-  ['engineer', 2],
 ];
 const NAVY: Array<[UnitTypeId, number]> = [
   ['destroyer', 2],
@@ -41,36 +46,35 @@ export function createMatch(opts: MatchOptions): World {
   for (const player of DEFAULT_PLAYERS) {
     const mirror = player.id === 1;
     const start = map.starts[player.id]!;
+    const p = world.players[player.id]!;
+    p.res.ore = START_RESOURCES.ore;
+    p.res.energy = START_RESOURCES.energy;
     // Direction from this base towards the enemy (+x +y for player 0).
     const sgn = mirror ? -1 : 1;
     const facing = mirror ? -2.356 : 0.785;
+    const along = (fx: number, side: number): [number, number] => [
+      start.x + sgn * (fx * 0.7071 - side * 0.7071),
+      start.y + sgn * (fx * 0.7071 + side * 0.7071),
+    ];
 
-    // The HQ blocks the ground it stands on (buildings proper arrive in M2).
-    for (let ty = Math.floor(start.y) - 3; ty <= Math.floor(start.y) + 3; ty++) {
-      for (let tx = Math.floor(start.x) - 3; tx <= Math.floor(start.x) + 3; tx++) {
-        if (Math.hypot(tx + 0.5 - start.x, ty + 0.5 - start.y) < 2.8) world.nav.setBlocked(tx, ty, true, map);
-      }
+    world.addBuilding('command_center', player.id, Math.floor(start.x) - 2, Math.floor(start.y) - 2, true);
+
+    for (let i = 0; i < START_ENGINEERS; i++) {
+      const [x, y] = along(4.2, (i - (START_ENGINEERS - 1) / 2) * 1.1);
+      world.spawnUnit('engineer', player.id, x, y, facing);
     }
 
-    // Land army in a block in front of the HQ.
+    if (opts.mode !== 'sandbox') continue;
+
     let i = 0;
     for (const [type, count] of LAND_ARMY) {
       for (let k = 0; k < count; k++, i++) {
-        const row = Math.floor(i / 6);
-        const col = i % 6;
-        const fx = 7 + row * 1.6;
-        const side = (col - 2.5) * 1.6;
-        // Forward along the diagonal, sideways across it.
-        const x = start.x + sgn * (fx * 0.7071 - side * 0.7071);
-        const y = start.y + sgn * (fx * 0.7071 + side * 0.7071);
+        const [x, y] = along(8 + Math.floor(i / 6) * 1.6, ((i % 6) - 2.5) * 1.6);
         world.spawnUnit(type, player.id, x, y, facing);
       }
     }
-
-    // Navy off the home coast.
-    const coastX = mirror ? w - 0.41 * w : 0.41 * w;
-    const coastY = coastX;
-    const water = world.pathfinder.nearestPassable(NavLayer.Water, Math.floor(coastX), Math.floor(coastY), 30);
+    const coast = mirror ? w - 0.41 * w : 0.41 * w;
+    const water = world.pathfinder.nearestPassable(NavLayer.Water, Math.floor(coast), Math.floor(coast), 30);
     if (water) {
       let j = 0;
       for (const [type, count] of NAVY) {
@@ -86,18 +90,14 @@ export function createMatch(opts: MatchOptions): World {
         }
       }
     }
-
-    // Air units above the base.
     let a = 0;
     for (const [type, count] of AIR) {
       for (let k = 0; k < count; k++, a++) {
-        const x = start.x + sgn * (-3 + a * 2);
-        const y = start.y + sgn * (3 - a * 2) * 0.5;
-        const u = world.spawnUnit(type, player.id, x, y, facing);
-        u.goalX = x;
-        u.goalY = y;
+        const [x, y] = along(-4, -3 + a * 2);
+        world.spawnUnit(type, player.id, x, y, facing);
       }
     }
   }
+  updateFog(world);
   return world;
 }

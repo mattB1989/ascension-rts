@@ -5,6 +5,7 @@
 // underneath, so they never cut the sea in two.
 // The map is rotationally symmetric (180 degrees) so both sides are equal.
 
+import { fcos, fsin } from './fmath.ts';
 import { fbm, hash2 } from './rng.ts';
 
 export const Terrain = {
@@ -373,9 +374,7 @@ function placeResources(map: GameMap): void {
     for (let i = 0; i < n; i++) {
       const a = hash2(map.seed + 99, Math.floor(x * 10) + i, Math.floor(y * 10)) * 6.283;
       const r = i === 0 ? 0 : 1.6 + hash2(map.seed + 98, i, Math.floor(x)) * 1.2;
-      // Math.cos/sin are fine here: map generation output is checked for symmetry, and
-      // positions are snapped to tiles, so tiny cross-browser differences cannot leak in.
-      add('ore', x + Math.cos(a) * r, y + Math.sin(a) * r, amount, okFn);
+      add('ore', x + fcos(a) * r, y + fsin(a) * r, amount, okFn);
     }
   };
 

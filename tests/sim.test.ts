@@ -36,7 +36,7 @@ function playerUnits(world: World, owner: number, domain?: string): number[] {
 }
 
 function runScript(seed: number): number[] {
-  const world = createMatch({ seed });
+  const world = createMatch({ seed, mode: 'sandbox' });
   const hashes: number[] = [];
   const s = world.map.starts[0]!;
   const script = new Map<number, Command[]>([
@@ -57,7 +57,7 @@ test('simulation is deterministic: same commands, same state', () => {
 });
 
 test('land units reach their destination and stay on land', () => {
-  const world = createMatch({ seed: 1337 });
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const s = world.map.starts[0]!;
   const ids = playerUnits(world, 0, 'land');
   const gx = s.x + 18;
@@ -79,7 +79,7 @@ test('land units reach their destination and stay on land', () => {
 });
 
 test('ships stay in water and can cross to the enemy coast', () => {
-  const world = createMatch({ seed: 1337 });
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const ids = playerUnits(world, 0, 'sea');
   assert.ok(ids.length > 0);
   const w = world.map.width;
@@ -100,7 +100,7 @@ test('ships stay in water and can cross to the enemy coast', () => {
 });
 
 test('ordering a tank onto an island takes it to the nearest reachable shore', () => {
-  const world = createMatch({ seed: 1337 });
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const tank = world.units.find((u) => u.owner === 0 && u.type === 'battle_tank')!;
   const c = world.map.width / 2;
   world.step([{ kind: 'move', player: 0, units: [tank.id], x: c, y: c }]);
@@ -111,7 +111,7 @@ test('ordering a tank onto an island takes it to the nearest reachable shore', (
 });
 
 test('players cannot command enemy units', () => {
-  const world = createMatch({ seed: 1337 });
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const enemy = world.units.find((u) => u.owner === 1 && u.def.domain === 'land')!;
   const x = enemy.x;
   world.step([{ kind: 'move', player: 0, units: [enemy.id], x: 10, y: 10 }]);
@@ -121,7 +121,7 @@ test('players cannot command enemy units', () => {
 });
 
 test('jets keep flying and circle their goal', () => {
-  const world = createMatch({ seed: 1337 });
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const jet = world.units.find((u) => u.owner === 0 && u.type === 'fighter_jet')!;
   world.step([{ kind: 'move', player: 0, units: [jet.id], x: 60, y: 60 }]);
   for (let t = 0; t < 15 * 30; t++) world.step();

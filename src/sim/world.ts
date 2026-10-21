@@ -1,43 +1,25 @@
 // The deterministic simulation. No DOM, no three.js: it runs the same in the
 // browser and in Node (tests, headless AI-vs-AI). Advances in fixed ticks.
 
-import { UNITS, type UnitTypeId } from '../data/units.ts';
+import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { UnitDef } from '../data/types.ts';
+import { UNITS, type UnitTypeId } from '../data/units.ts';
 import type { Command } from './commands.ts';
-import { fatan2, fcos, fsin, PI, TAU, wrapAngle } from './fmath.ts';
+import {
+  cancelConstruction, cancelQueueItem, claimOil, orderBuildAssist, orderGather, orderPlace, orderResearch, orderTrain,
+  updateBuildings, updateWorker,
+} from './economy.ts';
+import { FOG_INTERVAL, updateFog } from './fog.ts';
 import type { GameMap } from './map.ts';
-import { layerForDomain, NavGrid, NavLayer, type NavLayerId } from './nav.ts';
+import { moveUnit, orderMove, separate, stopUnit } from './movement.ts';
+import { layerForDomain, NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
 import { Rng } from './rng.ts';
+import { DT } from './time.ts';
+import { POP_LIMIT, type Building, type Entity, type GameEvent, type PlayerState, type ResourceState, type Unit } from './types.ts';
 
-export const TICK_RATE = 15;
-export const DT = 1 / TICK_RATE;
-
-export type UnitState = 'idle' | 'moving';
-
-export interface Unit {
-  id: number;
-  owner: number;
-  type: UnitTypeId;
-  def: UnitDef;
-  layer: NavLayerId;
-  x: number;
-  y: number;
-  angle: number;
-  /** Position and angle at the start of the current tick, for render interpolation. */
-  px: number;
-  py: number;
-  pa: number;
-  hp: number;
-  state: UnitState;
-  /** Remaining waypoints, flat [x, y, ...]. */
-  path: number[];
-  pathIdx: number;
-  goalX: number;
-  goalY: number;
-  speed: number;
-  stuckTicks: number;
-}
+export { DT, TICK_RATE } from './time.ts';
+export type { Building, Entity, GameEvent, PlayerState, ResourceState, Unit, UnitState } from './types.ts';
 
 export interface PlayerInfo {
   id: number;
@@ -52,27 +34,114 @@ export class World {
   readonly nav: NavGrid;
   readonly pathfinder: Pathfinder;
   readonly rng: Rng;
-  readonly players: PlayerInfo[];
+  readonly players: PlayerState[];
   /** Kept sorted by id: iteration order is part of determinism. */
   readonly units: Unit[] = [];
-  private readonly byId = new Map<number, Unit>();
+  readonly buildings: Building[] = [];
+  readonly resources: ResourceState[];
+  /** Tile index -> resource index, for spots still on the map. */
+  readonly resourceAtTile = new Map<number, number>();
+  /** Per tile: building id occupying it, or 0. */
+  readonly occupancy: Int32Array;
+  /** Events raised during the last step (UI notifications, sounds). */
+  events: GameEvent[] = [];
+  private readonly byId = new Map<number, Entity>();
   private nextId = 1;
 
   constructor(map: GameMap, players: PlayerInfo[], seed: number) {
     this.map = map;
-    this.players = players;
     this.nav = new NavGrid(map);
     this.pathfinder = new Pathfinder(this.nav);
     this.rng = new Rng(seed);
+    this.occupancy = new Int32Array(map.width * map.height);
+    const n = map.width * map.height;
+    this.players = players.map((p) => ({
+      ...p,
+      age: 'modern',
+      res: { ore: 0, energy: 0 },
+      gathered: { ore: 0, energy: 0 },
+      researched: new Set(),
+      mult: { gather: { ore: 1, energy: 1 }, produce: { ore: 1, energy: 1 }, buildSpeed: 1 },
+      popUsed: 0,
+      popCap: 0,
+      visible: new Uint8Array(n),
+      explored: new Uint8Array(n),
+    }));
+    this.resources = map.resources.map((r, index) => ({
+      index,
+      kind: r.kind,
+      x: r.x,
+      y: r.y,
+      tx: Math.floor(r.x),
+      ty: Math.floor(r.y),
+      amount: r.amount,
+      max: r.amount,
+      offshore: r.offshore,
+      claimedBy: 0,
+    }));
+    for (const r of this.resources) {
+      const i = r.ty * map.width + r.tx;
+      this.resourceAtTile.set(i, r.index);
+      // Ore crystals block movement; oil spots are flat until a derrick is built on them.
+      if (r.kind === 'ore') this.nav.setBlocked(r.tx, r.ty, true, map);
+    }
   }
 
-  getUnit(id: number): Unit | undefined {
+  // -------------------------------------------------------------------------
+  // Lookup
+
+  getEntity(id: number): Entity | undefined {
     return this.byId.get(id);
   }
 
+  getUnit(id: number): Unit | undefined {
+    const e = this.byId.get(id);
+    return e?.kind === 'unit' ? e : undefined;
+  }
+
+  getBuilding(id: number): Building | undefined {
+    const e = this.byId.get(id);
+    return e?.kind === 'building' ? e : undefined;
+  }
+
+  unitsOf(player: number): Unit[] {
+    return this.units.filter((u) => u.owner === player);
+  }
+
+  buildingsOf(player: number): Building[] {
+    return this.buildings.filter((b) => b.owner === player);
+  }
+
+  hasCompleted(player: number, type: BuildingTypeId): boolean {
+    return this.buildings.some((b) => b.owner === player && b.type === type && b.complete);
+  }
+
+  /** Ore spot within `radius` of a point, or -1. */
+  oreNear(x: number, y: number, radius: number): number {
+    let best = -1;
+    let bestD = radius * radius;
+    for (const r of this.resources) {
+      if (r.kind !== 'ore' || r.amount <= 0) continue;
+      const d = (r.x - x) * (r.x - x) + (r.y - y) * (r.y - y);
+      if (d <= bestD) {
+        bestD = d;
+        best = r.index;
+      }
+    }
+    return best;
+  }
+
+  emit(e: GameEvent): void {
+    this.events.push(e);
+  }
+
+  // -------------------------------------------------------------------------
+  // Creation and removal
+
   spawnUnit(type: UnitTypeId, owner: number, x: number, y: number, angle = 0): Unit {
-    const def = UNITS[type];
+    const def: UnitDef = UNITS[type];
     const u: Unit = {
+      kind: 'unit',
       id: this.nextId++,
       owner,
       type,
@@ -88,23 +157,105 @@ export class World {
       goalY: y,
       speed: 0,
       stuckTicks: 0,
+      task: null,
+      carry: 0,
+      working: false,
     };
     this.units.push(u);
     this.byId.set(u.id, u);
+    this.recomputePop(this.players[owner]!);
     return u;
   }
 
+  addBuilding(type: BuildingTypeId, owner: number, tx: number, ty: number, complete: boolean): Building {
+    const def = BUILDINGS[type];
+    const [w, h] = def.size;
+    const b: Building = {
+      kind: 'building',
+      id: this.nextId++,
+      owner,
+      type,
+      def,
+      tx, ty, w, h,
+      x: tx + w / 2,
+      y: ty + h / 2,
+      hp: complete ? def.hp : def.hp * 0.1,
+      maxHp: def.hp,
+      progress: complete ? 1 : 0,
+      complete,
+      queue: [],
+      rally: null,
+      resource: -1,
+      builders: 0,
+      waitingForPop: false,
+    };
+    this.buildings.push(b);
+    this.byId.set(b.id, b);
+    for (let y = ty; y < ty + h; y++) {
+      for (let x = tx; x < tx + w; x++) {
+        this.occupancy[y * this.map.width + x] = b.id;
+        this.nav.setBlocked(x, y, true, this.map);
+      }
+    }
+    claimOil(this, b);
+    this.recomputePop(this.players[owner]!);
+    return b;
+  }
+
+  removeBuilding(b: Building): void {
+    const i = this.buildings.indexOf(b);
+    if (i >= 0) this.buildings.splice(i, 1);
+    this.byId.delete(b.id);
+    for (let y = b.ty; y < b.ty + b.h; y++) {
+      for (let x = b.tx; x < b.tx + b.w; x++) {
+        this.occupancy[y * this.map.width + x] = 0;
+        this.nav.setBlocked(x, y, false, this.map);
+      }
+    }
+    if (b.resource >= 0) this.resources[b.resource]!.claimedBy = 0;
+    for (const u of this.units) if (u.task?.kind === 'build' && u.task.building === b.id) u.task = null;
+    this.recomputePop(this.players[b.owner]!);
+  }
+
+  depleteResource(r: ResourceState): void {
+    r.amount = 0;
+    const i = r.ty * this.map.width + r.tx;
+    this.resourceAtTile.delete(i);
+    if (r.kind === 'ore' && this.occupancy[i] === 0) this.nav.setBlocked(r.tx, r.ty, false, this.map);
+  }
+
+  recomputePop(p: PlayerState): void {
+    let used = 0;
+    for (const u of this.units) if (u.owner === p.id) used += u.def.pop;
+    let cap = 0;
+    for (const b of this.buildings) if (b.owner === p.id && b.complete) cap += b.def.pop;
+    p.popUsed = used;
+    p.popCap = Math.min(POP_LIMIT, cap);
+  }
+
+  // -------------------------------------------------------------------------
+  // Simulation step
+
   /** Advance one tick, applying the given commands first. */
   step(commands: readonly Command[] = []): void {
+    this.events = [];
     for (const u of this.units) {
       u.px = u.x;
       u.py = u.y;
       u.pa = u.angle;
     }
     for (const c of commands) this.apply(c);
-    for (const u of this.units) this.moveUnit(u);
-    this.separate();
+    for (const u of this.units) updateWorker(this, u);
+    for (const u of this.units) moveUnit(this, u);
+    separate(this);
+    updateBuildings(this);
+    if (this.tick % FOG_INTERVAL === 0) updateFog(this);
     this.tick++;
+  }
+
+  /** Seconds of game time elapsed. */
+  get time(): number {
+    return this.tick * DT;
   }
 
   private ownedUnits(player: number, ids: readonly number[]): Unit[] {
@@ -113,262 +264,77 @@ export class World {
     for (const id of ids) {
       if (seen.has(id)) continue;
       seen.add(id);
-      const u = this.byId.get(id);
+      const u = this.getUnit(id);
       if (u && u.owner === player) out.push(u);
     }
     out.sort((a, b) => a.id - b.id);
     return out;
   }
 
+  private ownedBuilding(player: number, id: number): Building | undefined {
+    const b = this.getBuilding(id);
+    return b && b.owner === player ? b : undefined;
+  }
+
+  private notify(player: number, text: string | null): void {
+    if (text) this.emit({ kind: 'notify', player, text });
+  }
+
   private apply(c: Command): void {
     switch (c.kind) {
-      case 'move':
-        this.orderMove(this.ownedUnits(c.player, c.units), c.x, c.y);
+      case 'move': {
+        const units = this.ownedUnits(c.player, c.units);
+        for (const u of units) {
+          u.task = null;
+          u.working = false;
+        }
+        orderMove(this, units, c.x, c.y);
         break;
+      }
       case 'stop':
         for (const u of this.ownedUnits(c.player, c.units)) {
-          u.path = [];
-          u.pathIdx = 0;
-          u.goalX = u.x;
-          u.goalY = u.y;
-          u.state = 'idle';
+          u.task = null;
+          u.working = false;
+          stopUnit(u);
         }
         break;
-    }
-  }
-
-  /** Group move: give each unit its own slot in a loose formation around the target. */
-  private orderMove(units: Unit[], x: number, y: number): void {
-    const byLayer = new Map<NavLayerId, Unit[]>();
-    for (const u of units) {
-      const list = byLayer.get(u.layer) ?? [];
-      list.push(u);
-      byLayer.set(u.layer, list);
-    }
-    for (const layer of [NavLayer.Land, NavLayer.Water, NavLayer.Air] as const) {
-      const group = byLayer.get(layer);
-      if (!group) continue;
-      let spacing = 0;
-      for (const u of group) spacing = Math.max(spacing, u.def.radius * 2 + 0.25);
-      if (layer === NavLayer.Air) spacing = Math.max(spacing, 1.6);
-      const slots = this.formationSlots(layer, x, y, group.length, spacing);
-      // Closest units take the closest slots: fewer crossing paths.
-      const ordered = group
-        .map((u) => ({ u, d: (u.x - x) * (u.x - x) + (u.y - y) * (u.y - y) }))
-        .sort((a, b) => a.d - b.d || a.u.id - b.u.id);
-      ordered.forEach(({ u }, i) => {
-        const [sx, sy] = slots[i]!;
-        this.setDestination(u, sx, sy);
-      });
-    }
-  }
-
-  /** Spiral of slot positions around (x, y) on passable tiles of a layer. */
-  private formationSlots(layer: NavLayerId, x: number, y: number, n: number, spacing: number): Array<[number, number]> {
-    const slots: Array<[number, number]> = [];
-    if (layer !== NavLayer.Air && !this.nav.passableAt(layer, x, y)) {
-      const near = this.pathfinder.nearestPassable(layer, Math.floor(x), Math.floor(y), 24);
-      if (near) {
-        x = near[0] + 0.5;
-        y = near[1] + 0.5;
+      case 'gather':
+        orderGather(this, this.ownedUnits(c.player, c.units), c.resource);
+        break;
+      case 'build': {
+        const r = orderPlace(this, c.player, this.ownedUnits(c.player, c.units), c.building, c.tx, c.ty);
+        if (typeof r === 'string') this.notify(c.player, `Can't build: ${r}`);
+        break;
       }
-    }
-    slots.push([x, y]);
-    for (let ring = 1; slots.length < n && ring < 30; ring++) {
-      const r = ring * spacing;
-      const count = Math.max(6, Math.floor((TAU * r) / spacing));
-      for (let k = 0; k < count && slots.length < n; k++) {
-        const a = (k / count) * TAU + ring * 0.5;
-        const sx = x + fcos(a) * r;
-        const sy = y + fsin(a) * r;
-        if (layer === NavLayer.Air || this.nav.passableAt(layer, sx, sy)) slots.push([sx, sy]);
+      case 'assist': {
+        const b = this.ownedBuilding(c.player, c.target);
+        if (b) orderBuildAssist(this, this.ownedUnits(c.player, c.units), b);
+        break;
       }
-    }
-    while (slots.length < n) slots.push([x, y]);
-    return slots;
-  }
-
-  private setDestination(u: Unit, x: number, y: number): void {
-    u.goalX = x;
-    u.goalY = y;
-    u.stuckTicks = 0;
-    if (u.layer === NavLayer.Air) {
-      u.path = [x, y];
-    } else {
-      u.path = this.pathfinder.findPath(u.layer, u.x, u.y, x, y) ?? [];
-      if (u.path.length >= 2) {
-        u.goalX = u.path[u.path.length - 2]!;
-        u.goalY = u.path[u.path.length - 1]!;
+      case 'train': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) this.notify(c.player, orderTrain(this, c.player, b, c.unit));
+        break;
       }
-    }
-    u.pathIdx = 0;
-    u.state = u.path.length > 0 ? 'moving' : 'idle';
-  }
-
-  private moveUnit(u: Unit): void {
-    const def = u.def;
-    if (def.move === 'jet') {
-      this.moveJet(u);
-      return;
-    }
-    if (u.state !== 'moving' || u.pathIdx >= u.path.length) {
-      u.state = 'idle';
-      u.speed = 0;
-      return;
-    }
-    const tx = u.path[u.pathIdx]!;
-    const ty = u.path[u.pathIdx + 1]!;
-    const dx = tx - u.x;
-    const dy = ty - u.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const isLast = u.pathIdx + 2 >= u.path.length;
-    const arrive = isLast ? 0.12 : Math.max(0.35, def.speed * DT * 1.5);
-    if (dist < arrive) {
-      u.pathIdx += 2;
-      if (u.pathIdx >= u.path.length) {
-        u.state = 'idle';
-        u.speed = 0;
+      case 'research': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) this.notify(c.player, orderResearch(this, c.player, b, c.tech));
+        break;
       }
-      return;
-    }
-
-    // Turn towards the waypoint.
-    const want = fatan2(dy, dx);
-    const diff = wrapAngle(want - u.angle);
-    const maxTurn = def.turnRate * DT;
-    u.angle = wrapAngle(u.angle + Math.max(-maxTurn, Math.min(maxTurn, diff)));
-
-    // Vehicles and ships only drive when roughly facing the right way; slow down in turns.
-    const absDiff = Math.abs(diff);
-    let factor = 1;
-    if (def.move === 'vehicle' || def.move === 'ship') {
-      factor = absDiff > PI / 3 ? 0 : 1 - absDiff / (PI / 3) * 0.6;
-    } else if (def.move === 'heli') {
-      factor = absDiff > PI / 2 ? 0.2 : 1;
-    }
-    // Ease in on the final approach.
-    if (isLast) factor *= Math.min(1, 0.35 + dist / 1.5);
-    const accel = def.move === 'ship' ? 0.6 : 3;
-    const target = def.speed * factor;
-    u.speed += Math.max(-accel * 2 * DT * def.speed, Math.min(accel * DT * def.speed, target - u.speed));
-
-    const step = Math.min(u.speed * DT, dist);
-    const nx = u.x + fcos(u.angle) * step;
-    const ny = u.y + fsin(u.angle) * step;
-    if (u.layer === NavLayer.Air || this.nav.passableAt(u.layer, nx, ny)) {
-      u.x = nx;
-      u.y = ny;
-    } else {
-      u.speed = 0;
-    }
-
-    // Stuck detection: crowded at the destination, or blocked on the way.
-    const moved = Math.abs(u.x - u.px) + Math.abs(u.y - u.py);
-    if (u.speed > 0.2 * def.speed && moved < 0.25 * def.speed * DT) u.stuckTicks++;
-    else if (absDiff < 0.5 && moved < 0.05 * def.speed * DT) u.stuckTicks++;
-    else u.stuckTicks = Math.max(0, u.stuckTicks - 1);
-    if (u.stuckTicks > 20) {
-      const gdx = u.goalX - u.x;
-      const gdy = u.goalY - u.y;
-      if (gdx * gdx + gdy * gdy < 6.25) {
-        u.state = 'idle';
-        u.path = [];
-        u.pathIdx = 0;
-        u.speed = 0;
-      } else if (u.stuckTicks > 45) {
-        this.setDestination(u, u.goalX, u.goalY);
+      case 'cancel': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) cancelQueueItem(this, b, c.index);
+        break;
       }
-    }
-  }
-
-  /** Jets always fly forward; when there is nothing to do they circle their goal. */
-  private moveJet(u: Unit): void {
-    const def = u.def;
-    const dx = u.goalX - u.x;
-    const dy = u.goalY - u.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const orbitR = 4;
-    let want = fatan2(dy, dx);
-    if (dist < orbitR * 1.4) {
-      // Steer along a circle: tangent direction, pulled in or out towards the orbit radius.
-      const pull = (dist - orbitR) / orbitR;
-      want = want + PI / 2 - Math.max(-0.8, Math.min(0.8, pull));
-      u.state = 'idle';
-    } else {
-      u.state = 'moving';
-    }
-    const diff = wrapAngle(want - u.angle);
-    const maxTurn = def.turnRate * DT;
-    u.angle = wrapAngle(u.angle + Math.max(-maxTurn, Math.min(maxTurn, diff)));
-    const cruise = u.state === 'idle' ? def.speed * 0.6 : def.speed;
-    u.speed += Math.max(-def.speed * DT, Math.min(def.speed * DT, cruise - u.speed));
-    u.x += fcos(u.angle) * u.speed * DT;
-    u.y += fsin(u.angle) * u.speed * DT;
-    // Keep inside the map.
-    u.x = Math.max(1, Math.min(this.map.width - 1, u.x));
-    u.y = Math.max(1, Math.min(this.map.height - 1, u.y));
-  }
-
-  /** Push overlapping units apart (per layer), using a coarse spatial hash. */
-  private separate(): void {
-    const cell = 2;
-    const cols = Math.ceil(this.map.width / cell);
-    const buckets = new Map<number, Unit[]>();
-    for (const u of this.units) {
-      if (u.def.move === 'jet') continue;
-      const key = (u.layer * 100000) + Math.floor(u.y / cell) * cols + Math.floor(u.x / cell);
-      const b = buckets.get(key);
-      if (b) b.push(u);
-      else buckets.set(key, [u]);
-    }
-    for (const u of this.units) {
-      if (u.def.move === 'jet') continue;
-      const cx = Math.floor(u.x / cell);
-      const cy = Math.floor(u.y / cell);
-      let pushX = 0;
-      let pushY = 0;
-      for (let oy = -1; oy <= 1; oy++) {
-        for (let ox = -1; ox <= 1; ox++) {
-          const b = buckets.get(u.layer * 100000 + (cy + oy) * cols + (cx + ox));
-          if (!b) continue;
-          for (const o of b) {
-            if (o === u || o.def.move === 'jet') continue;
-            const dx = u.x - o.x;
-            const dy = u.y - o.y;
-            const minD = u.def.radius + o.def.radius;
-            const d2 = dx * dx + dy * dy;
-            if (d2 >= minD * minD) continue;
-            const d = Math.sqrt(d2);
-            const overlap = minD - d;
-            // Identical positions: separate along an id-based direction.
-            const nx = d > 1e-6 ? dx / d : fcos(u.id * 2.39996);
-            const ny = d > 1e-6 ? dy / d : fsin(u.id * 2.39996);
-            // Idle units yield to moving ones.
-            const share = u.state === 'idle' && o.state === 'moving' ? 0.8 : u.state === 'moving' && o.state === 'idle' ? 0.2 : 0.5;
-            pushX += nx * overlap * share;
-            pushY += ny * overlap * share;
-          }
-        }
+      case 'cancelBuild': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) cancelConstruction(this, b);
+        break;
       }
-      if (pushX === 0 && pushY === 0) continue;
-      const maxPush = 0.15;
-      const len = Math.sqrt(pushX * pushX + pushY * pushY);
-      if (len > maxPush) {
-        pushX = (pushX / len) * maxPush;
-        pushY = (pushY / len) * maxPush;
-      }
-      if (u.layer === NavLayer.Air) {
-        u.x += pushX;
-        u.y += pushY;
-        continue;
-      }
-      if (this.nav.passableAt(u.layer, u.x + pushX, u.y + pushY)) {
-        u.x += pushX;
-        u.y += pushY;
-      } else if (this.nav.passableAt(u.layer, u.x + pushX, u.y)) {
-        u.x += pushX;
-      } else if (this.nav.passableAt(u.layer, u.x, u.y + pushY)) {
-        u.y += pushY;
+      case 'rally': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) b.rally = { x: c.x, y: c.y };
+        break;
       }
     }
   }
@@ -391,7 +357,19 @@ export class World {
       mix(u.angle);
       mix(u.hp);
       mix(u.speed);
+      mix(u.carry);
     }
+    for (const b of this.buildings) {
+      mix(b.id);
+      mix(b.progress);
+      mix(b.hp);
+      for (const q of b.queue) mix(q.progress);
+    }
+    for (const p of this.players) {
+      mix(p.res.ore);
+      mix(p.res.energy);
+    }
+    for (const r of this.resources) mix(r.amount);
     mix(this.rng.state);
     return h >>> 0;
   }

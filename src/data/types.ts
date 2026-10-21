@@ -1,6 +1,8 @@
-// Shared vocabulary for the game data. See docs/TECH_TREE.md.
+// Shared vocabulary for the game data. See docs/TECH_TREE.md (generated from these files).
 
 export type AgeId = 'modern' | 'digital' | 'nano' | 'space';
+
+export type ResourceId = 'ore' | 'energy';
 
 /** Where a unit can go. Decides which navigation layer it uses. */
 export type Domain = 'land' | 'sea' | 'air';
@@ -21,6 +23,59 @@ export interface Cost {
   energy: number;
 }
 
+export interface AgeDef {
+  id: AgeId;
+  name: string;
+  index: number;
+  theme: string;
+  /** Cost and time to advance INTO this age (at the Command Center). */
+  cost: Cost;
+  time: number;
+  /** All of these buildings, completed. */
+  requiresAll: BuildingId[];
+  /** And at least `anyCount` of these. */
+  requiresAny: BuildingId[];
+  anyCount: number;
+}
+
+export type BuildingCategory = 'core' | 'housing' | 'resource' | 'military' | 'tech' | 'support' | 'defense' | 'special' | 'wonder';
+
+/** What the footprint must stand on. */
+export type Placement =
+  | 'land' // open land
+  | 'coast' // land, touching water (shipyards, coastal batteries)
+  | 'landOil' // on a land oil spot
+  | 'seaOil' // on an offshore oil spot
+  | 'water'; // open water (sonar nets)
+
+export interface BuildingDef {
+  id: string;
+  name: string;
+  category: BuildingCategory;
+  age: AgeId;
+  requires: readonly BuildingId[];
+  cost: Cost;
+  /** Seconds for one builder. */
+  buildTime: number;
+  hp: number;
+  /** Footprint in tiles. */
+  size: readonly [number, number];
+  placement: Placement;
+  /** Population capacity added once complete. */
+  pop: number;
+  vision: number;
+  /** Who can build it. */
+  builtBy: 'engineer' | 'sea_engineer';
+  /** Resources that can be dropped off here. */
+  dropOff?: readonly ResourceId[];
+  /** Energy produced per second (derricks, rigs, fusion plants). */
+  produces?: { resource: ResourceId; perSecond: number };
+  garrison?: number;
+  /** Max number per player (wonders, superweapons). */
+  limit?: number;
+  description: string;
+}
+
 export interface UnitDef {
   id: string;
   name: string;
@@ -36,8 +91,41 @@ export interface UnitDef {
   turnRate: number;
   /** Collision radius in tiles. */
   radius: number;
+  vision: number;
   move: MoveStyle;
+  trainedAt: BuildingId;
+  trainTime: number;
   /** Render-only: flying height in tiles for air units. */
   flyHeight?: number;
+  /** Builders: which building list they can construct. */
+  builder?: 'engineer' | 'sea_engineer';
+  /** Ore gathered per second while mining. */
+  gatherRate?: number;
+  /** Max per player. */
+  limit?: number;
+  strongVs: string;
+  weakVs: string;
   description: string;
 }
+
+export type TechEffect =
+  | { kind: 'gatherRate'; resource: ResourceId; mult: number }
+  | { kind: 'produceRate'; resource: ResourceId; mult: number }
+  | { kind: 'buildSpeed'; mult: number }
+  /** Effect not implemented yet: the tech is listed but cannot be researched. */
+  | { kind: 'pending'; milestone: string };
+
+export interface TechDef {
+  id: string;
+  name: string;
+  at: BuildingId;
+  age: AgeId;
+  cost: Cost;
+  time: number;
+  summary: string;
+  effects: readonly TechEffect[];
+}
+
+// Ids are plain strings in the defs (so the data files can reference each other
+// without circular types); the catalog checks every reference in a test.
+export type BuildingId = string;

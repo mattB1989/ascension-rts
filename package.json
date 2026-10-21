@@ -10,7 +10,8 @@
     "build:single": "vite build --mode single",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.sim.json && tsc -p tsconfig.node.json",
-    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\""
+    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\"",
+    "docs": "node --experimental-strip-types --no-warnings tools/gen-docs.ts"
   },
   "dependencies": {
     "three": "^0.185.0"

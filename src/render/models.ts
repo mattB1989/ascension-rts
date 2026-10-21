@@ -290,7 +290,16 @@ export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
       return fighterJet(team);
     case 'attack_helicopter':
       return attackHelicopter(team);
+    default:
+      return placeholder(team);
   }
+}
+
+/** Stand-in for units whose models arrive with their age (M5+). */
+function placeholder(team: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.8, 0.5, 0.6, teamMats(team).main, 0, 0.25, 0));
+  return g;
 }
 
 // ---------------------------------------------------------------------------

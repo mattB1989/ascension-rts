@@ -284,6 +284,46 @@ function attackHelicopter(team: number): THREE.Group {
   return g;
 }
 
+function cargoPlane(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const body = mat(0x8f9aa3, { metal: 0.4, rough: 0.5 });
+  g.add(cylX(0.24, 1.9, 10, body, 0, 0, 0));
+  g.add(mesh(cached('cargoNose', () => new THREE.SphereGeometry(0.24, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(-Math.PI / 2)), body, 0.95, 0, 0));
+  // Upswept tail with a loading ramp
+  const tail = mesh(cached('cargoTail', () => new THREE.CylinderGeometry(0.24, 0.1, 0.8, 10).rotateZ(Math.PI / 2)), body, -1.3, 0.1, 0);
+  tail.rotation.z = -0.12;
+  g.add(tail);
+  // High wing with two engines each side
+  g.add(box(0.5, 0.05, 2.9, t.main, 0.1, 0.22, 0));
+  for (const z of [-1.0, -0.5, 0.5, 1.0]) {
+    g.add(cylX(0.08, 0.38, 8, mat(C.dark), 0.25, 0.12, z));
+    const prop = box(0.02, 0.36, 0.04, mat(C.black), 0.46, 0.12, z);
+    prop.name = 'prop';
+    g.add(prop);
+  }
+  // T-tail
+  g.add(box(0.35, 0.5, 0.04, t.accent, -1.6, 0.42, 0));
+  g.add(box(0.3, 0.04, 1.0, t.accent, -1.65, 0.66, 0));
+  g.add(box(0.2, 0.07, 0.3, mat(C.glass, { metal: 0.5, rough: 0.2 }), 0.85, 0.13, 0));
+  return g;
+}
+
+/** Parachute canopy (shown over paratroopers while they descend). */
+export function buildChute(team: number): THREE.Group {
+  const g = new THREE.Group();
+  const canopy = mesh(cached('chute', () => new THREE.SphereGeometry(0.55, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2.6)), mat(0xf1efe8, { rough: 0.9 }), 0, 1.1, 0);
+  g.add(canopy);
+  g.add(mesh(cached('chuteBand', () => new THREE.CylinderGeometry(0.5, 0.5, 0.06, 10, 1, true)), teamMats(team).main, 0, 1.12, 0));
+  for (const [x, z] of [[0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]] as const) {
+    const line = box(0.012, 0.75, 0.012, mat(C.dark), x * 0.55, 0.75, z * 0.55);
+    line.rotation.z = -x * 0.6;
+    line.rotation.x = z * 0.6;
+    g.add(line);
+  }
+  return g;
+}
+
 function howitzer(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
@@ -371,6 +411,8 @@ export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
       return frigate(team);
     case 'transport_ship':
       return transportShip(team);
+    case 'cargo_plane':
+      return cargoPlane(team);
     case 'battle_tank':
       return battleTank(team);
     case 'flak_track':

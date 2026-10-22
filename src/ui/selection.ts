@@ -68,7 +68,8 @@ export class Selection {
       removed = true;
     }
     for (const id of this.ids) {
-      if (!this.world.getEntity(id)) {
+      // Gone, or riding inside a transport (select the transport instead).
+      if (!this.world.getEntity(id) || this.world.getUnit(id)?.carrier) {
         this.ids.delete(id);
         removed = true;
       }

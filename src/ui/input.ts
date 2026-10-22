@@ -14,6 +14,7 @@ import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { Game } from '../game.ts';
 import type { GameRenderer } from '../render/renderer.ts';
 import { Terrain } from '../sim/map.ts';
+import { NavLayer } from '../sim/nav.ts';
 import type { Building, Unit } from '../sim/world.ts';
 import { cursorCss, type CursorKind } from './cursors.ts';
 import { hitName, Picker, type Hit } from './pick.ts';
@@ -276,6 +277,11 @@ export class InputController {
     }
     if (pi.moved) return;
 
+    if (this.targeting) {
+      if (pi.type === 'mouse' && pi.button === 2) this.cancelTargeting();
+      else this.completeTargeting(pi.x, pi.y);
+      return;
+    }
     if (this.placing) {
       const rect = this.canvas.getBoundingClientRect();
       if (pi.type === 'mouse') {
@@ -334,7 +340,8 @@ export class InputController {
     }
     switch (e.code) {
       case 'Escape':
-        if (this.placing) this.cancelPlacement();
+        if (this.targeting) this.cancelTargeting();
+        else if (this.placing) this.cancelPlacement();
         else this.selection.clear();
         break;
       case 'KeyX':
@@ -406,10 +413,75 @@ export class InputController {
 
   /** Context command at a screen point for the current selection. */
   private commandAt(sx: number, sy: number): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const g = this.renderer.pickGround(sx + rect.left, sy + rect.top);
+    this.picker.alpha = this.alpha;
+    const hit = this.picker.at(sx, sy);
+    const world = this.game.world;
+    const player = this.game.humanPlayer;
+    const sel = this.ownSelected();
+    // Board: land units onto one of our transports.
+    if (hit.kind === 'unit' && hit.own && hit.unit.def.cargo) {
+      const riders = sel.units.filter((u) => u !== hit.unit && u.def.domain === 'land');
+      if (riders.length) {
+        this.game.issue({ kind: 'board', player, units: riders.map((u) => u.id), carrier: hit.unit.id });
+        this.renderer.effects.moveMarker(hit.unit.x, 0.1, hit.unit.y);
+        return;
+      }
+    }
+    // Land: aircraft onto one of our airfields.
+    if (hit.kind === 'building' && hit.own && hit.building.def.dock && sel.units.some((u) => u.def.fuel)) {
+      this.game.issue({ kind: 'returnBase', player, units: sel.units.filter((u) => u.def.fuel).map((u) => u.id) });
+      return;
+    }
+    const g = hit.kind === 'ground' ? hit : this.picker.ground(sx, sy);
     if (!g) return;
+    // Unload: loaded transport ships told to go to land.
+    const ships = sel.units.filter((u) => u.def.cargo && u.def.domain === 'sea' && u.cargo.length > 0);
+    if (ships.length && world.nav.passableAt(NavLayer.Foot, g.x, g.y)) {
+      this.game.issue({ kind: 'unload', player, units: ships.map((u) => u.id), x: g.x, y: g.y });
+      const others = sel.units.filter((u) => !ships.includes(u)).map((u) => u.id);
+      if (others.length) this.game.issue({ kind: 'move', player, units: others, x: g.x, y: g.y });
+      this.renderer.effects.moveMarker(g.x, Math.max(0, g.h), g.y);
+      return;
+    }
     this.commandAtWorld(g.x, g.y, g.h);
+  }
+
+  ownSelected(): { units: Unit[]; buildings: Building[] } {
+    const world = this.game.world;
+    const units: Unit[] = [];
+    const buildings: Building[] = [];
+    for (const id of this.selection.ids) {
+      const e = world.getEntity(id);
+      if (!e || e.owner !== this.game.humanPlayer) continue;
+      if (e.kind === 'unit') units.push(e);
+      else buildings.push(e);
+    }
+    return { units, buildings };
+  }
+
+  // -------------------------------------------------------------------------
+  // Targeted orders (paradrop): the next click / tap on the map picks the spot.
+
+  targeting: { kind: 'paradrop'; units: number[] } | null = null;
+
+  startTargeting(kind: 'paradrop', units: number[]): void {
+    this.cancelPlacement();
+    this.targeting = { kind, units };
+    this.toast(this.touchDevice ? 'Tap where to drop the paratroopers' : 'Click where to drop the paratroopers (right click to cancel)');
+  }
+
+  cancelTargeting(): void {
+    this.targeting = null;
+  }
+
+  private completeTargeting(sx: number, sy: number): void {
+    const t = this.targeting;
+    if (!t) return;
+    const g = this.picker.ground(sx, sy);
+    if (!g) return;
+    this.game.issue({ kind: 'paradrop', player: this.game.humanPlayer, units: t.units, x: g.x, y: g.y });
+    this.renderer.effects.moveMarker(g.x, Math.max(0, g.h), g.y);
+    this.targeting = null;
   }
 
   commandAtWorld(x: number, y: number, h: number): void {
@@ -595,7 +667,7 @@ export class InputController {
     }
     const verb = this.verbFor(hit);
     // Tapping a building selects it, unless the selection has a job to do there (help build).
-    if (hit.kind === 'building' && hit.own && verb !== 'build') {
+    if (hit.kind === 'building' && hit.own && verb !== 'build' && verb !== 'board') {
       this.selection.set([hit.building.id]);
       return;
     }
@@ -631,6 +703,10 @@ export class InputController {
       if (e.def.builder) builderKinds.add(e.def.builder);
     }
     if (units === 0) return buildings > 0 && hit.kind !== 'none' ? 'rally' : null;
+    const sel = this.ownSelected();
+    if (hit.kind === 'unit' && hit.own && hit.unit.def.cargo && sel.units.some((u) => u !== hit.unit && u.def.domain === 'land')) return 'board';
+    if (hit.kind === 'building' && hit.own && hit.building.def.dock && sel.units.some((u) => u.def.fuel)) return 'board';
+    if (hit.kind === 'ground' && sel.units.some((u) => u.def.cargo && u.def.domain === 'sea' && u.cargo.length > 0) && world.nav.passableAt(NavLayer.Foot, hit.x, hit.y)) return 'unload';
     if (hit.kind === 'resource' && hit.res.kind === 'ore' && gatherers > 0) return 'mine';
     if (hit.kind === 'building' && hit.own && !hit.building.complete && builderKinds.has(hit.building.def.builtBy)) return 'build';
     if (hit.kind === 'none') return null;
@@ -654,7 +730,9 @@ export class InputController {
     }
     let cursor: CursorKind = 'default';
     let label: { title: string; sub: string } | null = null;
-    if (this.placing) {
+    if (this.targeting) {
+      cursor = 'paradrop';
+    } else if (this.placing) {
       cursor = this.placing.valid ? 'place' : 'nope';
     } else if (this.mouse.inside && !this.touchDevice) {
       this.picker.alpha = this.alpha;

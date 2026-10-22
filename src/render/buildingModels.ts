@@ -247,33 +247,46 @@ function shipyard(team: number): THREE.Group {
 }
 
 function airfield(team: number): THREE.Group {
+  // 6x5 footprint: runway along +z edge, four parking stands in the middle,
+  // hangar and control tower at the back. Stand positions match sim/transport.ts.
   const t = teamMats(team);
   const g = new THREE.Group();
-  g.add(box(4.9, 0.08, 3.9, concreteDark(), 0, 0.04, 0));
-  // Runway along x with centre dashes
-  g.add(box(4.9, 0.04, 1.3, mat(0x3d4043, { rough: 0.9 }), 0, 0.1, 0.9));
-  for (let i = 0; i < 6; i++) g.add(box(0.4, 0.02, 0.08, mat(0xf2f2f2), -2.0 + i * 0.8, 0.13, 0.9));
-  for (const x of [-2.3, 2.3]) for (let k = 0; k < 4; k++) g.add(box(0.12, 0.02, 0.08, mat(0xf2f2f2), x, 0.13, 0.5 + k * 0.27));
-  // Hangar
+  g.add(box(5.9, 0.1, 4.9, concreteDark(), 0, 0.05, 0));
+  const tarmac = mat(0x3d4043, { rough: 0.9 });
+  const paint = mat(0xf2f2f2);
+  g.add(box(5.9, 0.04, 1.3, tarmac, 0, 0.12, 1.65));
+  for (let i = 0; i < 7; i++) g.add(box(0.45, 0.02, 0.08, paint, -2.55 + i * 0.85, 0.15, 1.65));
+  for (const x of [-2.75, 2.75]) for (let k = 0; k < 4; k++) g.add(box(0.14, 0.02, 0.08, paint, x, 0.15, 1.25 + k * 0.27));
+  // Taxiway and stands
+  g.add(box(5.9, 0.03, 1.5, mat(0x585c60, { rough: 0.9 }), 0, 0.115, 0.15));
+  const yellow = hazard();
+  for (const x of [-2.1, -0.7, 0.7, 2.1]) {
+    g.add(box(0.06, 0.02, 1.2, yellow, x, 0.14, 0.15));
+    g.add(box(0.5, 0.02, 0.06, yellow, x, 0.14, -0.5));
+  }
+  // Hangar (arched roof along x)
   const hangar = mesh(
-    cached('hangar', () => new THREE.CylinderGeometry(0.9, 0.9, 1.8, 14, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2)),
-    metal(), -1.2, 0.08, -1.0,
+    cached('hangar6', () => new THREE.CylinderGeometry(0.75, 0.75, 2.4, 14, 1, false, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2)),
+    metal(), -1.4, 0.1, -1.75,
   );
-  hangar.scale.set(1, 1, 1);
   g.add(hangar);
-  g.add(box(0.05, 0.7, 1.4, darkMetal(), -0.29, 0.43, -1.0));
-  g.add(box(0.07, 0.1, 1.5, t.main, -0.28, 0.85, -1.0));
+  g.add(box(2.4, 0.08, 0.06, t.main, -1.4, 0.82, -1.0));
+  g.add(box(1.6, 0.6, 0.04, darkMetal(), -1.4, 0.4, -1.03));
+  // Fuel tanks
+  for (const x of [0.5, 1.05]) {
+    g.add(cyl(0.25, 0.25, 0.55, 10, mat(0xe8e2d0, { rough: 0.6 }), x, 0.38, -1.9));
+    g.add(cyl(0.26, 0.26, 0.06, 10, t.main, x, 0.62, -1.9));
+  }
   // Control tower
-  g.add(cyl(0.22, 0.28, 1.8, 8, wall(), 1.4, 0.95, -1.2));
-  g.add(cyl(0.42, 0.34, 0.4, 8, glass(), 1.4, 2.05, -1.2));
-  g.add(cyl(0.45, 0.45, 0.08, 8, t.main, 1.4, 2.29, -1.2));
-  const beacon = sphere(0.06, mat(0xff4a3a, { emissive: 0xff2a1a }), 1.4, 2.4, -1.2, 6);
+  g.add(cyl(0.22, 0.28, 1.8, 8, wall(), 2.3, 0.95, -1.75));
+  g.add(cyl(0.42, 0.34, 0.4, 8, glass(), 2.3, 2.05, -1.75));
+  g.add(cyl(0.45, 0.45, 0.08, 8, t.main, 2.3, 2.29, -1.75));
+  const beacon = sphere(0.06, mat(0xff4a3a, { emissive: 0xff2a1a }), 2.3, 2.4, -1.75, 6);
   beacon.name = 'flare';
   g.add(beacon);
   // Windsock
-  g.add(cyl(0.02, 0.02, 0.9, 4, darkMetal(), 2.25, 0.5, -0.2));
-  const sock = mesh(cached('sock', () => new THREE.ConeGeometry(0.08, 0.35, 6).rotateZ(Math.PI / 2)), mat(0xff7a2a), 2.42, 0.9, -0.2);
-  g.add(sock);
+  g.add(cyl(0.02, 0.02, 0.9, 4, darkMetal(), 2.8, 0.5, -0.8));
+  g.add(mesh(cached('sock', () => new THREE.ConeGeometry(0.08, 0.35, 6).rotateZ(Math.PI / 2)), mat(0xff7a2a), 2.97, 0.9, -0.8));
   return g;
 }
 

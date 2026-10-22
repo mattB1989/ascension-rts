@@ -5,10 +5,11 @@
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingTypeId } from '../data/buildings.ts';
 import { TECH_IDS, TECHS, techImplemented, type TechId } from '../data/techs.ts';
-import type { BuildingDef, Cost, UnitDef } from '../data/types.ts';
+import { cargoSize, type BuildingDef, type Cost, type UnitDef } from '../data/types.ts';
 import { UNIT_TYPES, UNITS, type UnitTypeId } from '../data/units.ts';
 import type { Game } from '../game.ts';
 import { buildTimeLeft, researchLockReason, trainLockReason } from '../sim/economy.ts';
+import { airfieldLoad } from '../sim/transport.ts';
 import { TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
 import { ageIndex, buildLockReason, canAfford } from '../sim/placement.ts';
 import type { Building, Unit } from '../sim/world.ts';
@@ -74,6 +75,17 @@ export class CommandCard {
     const world = this.game.world;
     const p = world.players[this.player]!;
     const ok = (c: Cost) => ({ ore: p.res.ore >= c.ore, energy: p.res.energy >= c.energy });
+
+    if (this.input.targeting) {
+      return {
+        title: 'Choose the drop zone',
+        status: () => '',
+        progress: null,
+        hint: this.input.touchDevice ? 'Tap the map where the paratroopers should land.' : 'Click the map where the paratroopers should land. Right click or Esc to cancel.',
+        buttons: [{ key: 'cancelTarget', label: '✕ Cancel', disabled: false, reason: null, title: 'Cancel', onClick: () => this.input.cancelTargeting() }],
+        queue: [],
+      };
+    }
 
     // Placement in progress.
     const placing = this.input.placing;
@@ -202,6 +214,7 @@ export class CommandCard {
           parts.push(res && res.amount <= 0 ? 'Oil exhausted' : `+${Math.round(rate)} energy/min${res ? ` · ${Math.floor(res.amount)} oil left` : ''}`);
         }
         if (def.pop) parts.push(`Housing +${def.pop}`);
+        if (def.dock) parts.push(`Parking ${airfieldLoad(world, b)}/${def.dock}`);
         if (b.waitingForPop) parts.push('⚠ Need more housing');
         return parts.join(' · ');
       };
@@ -220,14 +233,57 @@ export class CommandCard {
         })),
       };
     }
-    // A single non-builder unit of ours: stats.
+    // Units of one type: stats, plus transport and aircraft orders.
     if (units.length > 0 && buildings.length === 0) {
       const types = new Set(units.map((u) => u.type));
-      if (types.size === 1) {
-        const u = units[0]!;
-        return this.infoCard(units.length > 1 ? `${u.def.name} ×${units.length}` : u.def.name, () => `${Math.ceil(u.hp)}/${u.def.hp} HP`, this.unitHint(u.def), []);
+      if (types.size !== 1) return null;
+      const u = units[0]!;
+      const d = u.def;
+      const ids = units.map((x) => x.id);
+      const me = this.player;
+      const buttons: Btn[] = [];
+      const loaded = units.some((x) => x.cargo.length > 0);
+      if (d.cargo && d.domain === 'air') {
+        buttons.push({
+          key: 'paradrop', label: '🪂 Paradrop', disabled: !loaded, reason: loaded ? null : 'Load infantry first', title: 'Pick a spot on the map: the plane flies over and drops everyone',
+          onClick: () => this.input.startTargeting('paradrop', ids.filter((id) => (world.getUnit(id)?.cargo.length ?? 0) > 0)), cls: 'primary',
+        });
       }
-      return null;
+      if (d.cargo && loaded && (d.domain === 'sea' || units.some((x) => x.parked))) {
+        buttons.push({
+          key: 'unload', label: '⬆ Unload here', disabled: false, reason: null, title: d.domain === 'sea' ? 'Put everyone ashore at the nearest coast' : 'Get everyone out at the airfield',
+          onClick: () => this.game.issue({ kind: 'unload', player: me, units: ids, x: u.x, y: u.y }),
+        });
+      }
+      if (d.fuel) {
+        const flying = units.some((x) => !x.parked);
+        buttons.push({
+          key: 'return', label: '🛬 Return to base', disabled: !flying, reason: flying ? null : 'Already parked', title: 'Fly back to an airfield, land and refuel',
+          onClick: () => this.game.issue({ kind: 'returnBase', player: me, units: ids }),
+        });
+      }
+      const status = () => {
+        const parts: string[] = [units.length > 1 ? `${units.length} selected` : `${Math.ceil(u.hp)}/${d.hp} HP`];
+        if (d.fuel) {
+          const f = Math.round((Math.min(...units.map((x) => x.fuel)) / d.fuel) * 100);
+          parts.push(u.parked ? `Parked · fuel ${f}%` : `Fuel ${f}%${f < 25 ? ' ⚠' : ''}`);
+        }
+        if (d.cargo) {
+          let used = 0;
+          for (const id of u.cargo) {
+            const c = world.getUnit(id);
+            if (c) used += cargoSize(c.def);
+          }
+          parts.push(`Cargo ${used}/${d.cargo.slots}`);
+        }
+        return parts.join(' · ');
+      };
+      let hint = this.unitHint(d);
+      const touch = this.input.touchDevice;
+      if (d.cargo && d.domain === 'sea') hint = `Select land units and ${touch ? 'tap' : 'right click'} this ship to board at the nearest shore. ${touch ? 'Tap' : 'Right click'} land to sail there and unload. Infantry take 1 slot, vehicles 3.`;
+      else if (d.cargo && d.domain === 'air') hint = `Select infantry and ${touch ? 'tap' : 'right click'} this plane while it is parked: they walk to the Airfield and board. Then Paradrop anywhere.`;
+      else if (d.fuel) hint = `Planes burn fuel in the air (${d.fuel} s) and fly home to refuel automatically. ${touch ? 'Tap' : 'Right click'} an Airfield to land there.`;
+      return { title: units.length > 1 ? `${d.name} ×${units.length}` : d.name, status, progress: null, hint, buttons, queue: [] };
     }
 
     // Something we clicked but don't control.

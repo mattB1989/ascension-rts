@@ -71,6 +71,8 @@ export interface BuildingDef {
   /** Energy produced per second (derricks, rigs, fusion plants). */
   produces?: { resource: ResourceId; perSecond: number };
   garrison?: number;
+  /** Airfields: parking spots for aircraft that need to land and refuel. */
+  dock?: number;
   /** Max number per player (wonders, superweapons). */
   limit?: number;
   description: string;
@@ -103,6 +105,10 @@ export interface UnitDef {
   gatherRate?: number;
   /** Max per player. */
   limit?: number;
+  /** Transports: how many cargo slots, and what may board (infantry take 1 slot, vehicles 3). */
+  cargo?: { slots: number; carries: 'land' | 'infantry' };
+  /** Aircraft that must land at an airfield: seconds of flight on a full tank. */
+  fuel?: number;
   strongVs: string;
   weakVs: string;
   description: string;
@@ -129,3 +135,11 @@ export interface TechDef {
 // Ids are plain strings in the defs (so the data files can reference each other
 // without circular types); the catalog checks every reference in a test.
 export type BuildingId = string;
+
+/** Cargo slots a unit takes in a transport (0 = cannot be carried). */
+export function cargoSize(def: Pick<UnitDef, 'domain' | 'armor' | 'pop'>): number {
+  if (def.domain !== 'land') return 0;
+  if (def.armor === 'inf') return def.pop >= 2 ? 2 : 1;
+  if (def.armor === 'lt' || def.armor === 'hv') return 3;
+  return 0;
+}

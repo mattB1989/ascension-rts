@@ -120,7 +120,7 @@ flowchart LR
 | **Barracks** | Military | Modern | Command Center | 200 / 0 | 35 | 3×3 | — | Trains infantry. |
 | **Vehicle Factory** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds land vehicles. |
 | **Shipyard** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds ships and submarines. Must touch the water. |
-| **Airfield** | Military | Modern | Radar Station + Vehicle Factory | 350 / 200 | 55 | 5×4 | — | Builds aircraft; rearms and repairs them. |
+| **Airfield** | Military | Modern | Radar Station + Vehicle Factory | 350 / 200 | 55 | 6×5 | — | Builds aircraft. 4 parking spots where planes land to refuel and repair. |
 | **Mech Foundry** | Military | Digital | Research Lab + Vehicle Factory | 600 / 400 | 70 | 5×5 | — | Builds giant mechs. |
 | **Spaceport** | Military | Space | Airfield | 800 / 800 | 80 | 5×5 | — | Builds orbital units. |
 | **Radar Station** | Tech | Modern | Barracks | 200 / 50 | 30 | 2×2 | — | Large vision radius, enemy blips on the minimap, detects stealth aircraft. |
@@ -194,6 +194,7 @@ Armor classes: **Inf** infantry, **Lt** light vehicle, **Hv** heavy vehicle, **M
 | **Frigate** | Shipyard | Ship | 300 / 150 | 3 | 30 | aircraft | ships |
 | **Transport Ship** | Shipyard | Ship | 200 / 50 | 2 | 22 | — | everything |
 | **Fighter Jet** | Airfield | Air | 250 / 150 | 2 | 25 | aircraft | SAM, Flak |
+| **Cargo Plane** | Airfield | Air | 250 / 150 | 2 | 30 | drops 8 paratroopers anywhere | fighters, anti-air |
 | **Attack Helicopter** | Airfield | Air | 300 / 150 | 3 | 28 | light and heavy vehicles | Fighter, Skyguard |
 <!-- /gen:units_modern -->
 

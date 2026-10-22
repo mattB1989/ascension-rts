@@ -94,17 +94,24 @@ export const UNITS = {
   transport_ship: {
     id: 'transport_ship', name: 'Transport Ship', domain: 'sea', armor: 'ship', age: 'modern',
     cost: { ore: 200, energy: 50 }, pop: 2, hp: 700, speed: 3.0, turnRate: 1.2, radius: 1.2, vision: 6, move: 'ship',
-    trainedAt: 'shipyard', trainTime: 22,
+    trainedAt: 'shipyard', trainTime: 22, cargo: { slots: 10, carries: 'land' },
     strongVs: '—', weakVs: 'everything',
-    description: 'Carries 10 land slots (infantry 1, vehicle 3) across the sea.',
+    description: 'Carries 10 slots of land units (infantry 1, vehicles 3) across the sea. Load at any shore, unload on another.',
   },
   // --- Modern: air ----------------------------------------------------------
   fighter_jet: {
     id: 'fighter_jet', name: 'Fighter Jet', domain: 'air', armor: 'air', age: 'modern',
     cost: { ore: 250, energy: 150 }, pop: 2, hp: 300, speed: 8, turnRate: 1.6, radius: 0.8, vision: 10, move: 'jet', flyHeight: 7,
-    trainedAt: 'airfield', trainTime: 25,
+    trainedAt: 'airfield', trainTime: 25, fuel: 60,
     strongVs: 'aircraft', weakVs: 'SAM, Flak',
-    description: 'Air superiority fighter.',
+    description: 'Air superiority fighter. 60 s of fuel: lands at an Airfield to refuel.',
+  },
+  cargo_plane: {
+    id: 'cargo_plane', name: 'Cargo Plane', domain: 'air', armor: 'air', age: 'modern',
+    cost: { ore: 250, energy: 150 }, pop: 2, hp: 500, speed: 6, turnRate: 1.2, radius: 1.2, vision: 8, move: 'jet', flyHeight: 6,
+    trainedAt: 'airfield', trainTime: 30, fuel: 90, cargo: { slots: 8, carries: 'infantry' },
+    strongVs: 'drops 8 paratroopers anywhere', weakVs: 'fighters, anti-air',
+    description: 'Infantry board it at the Airfield; it paradrops them anywhere on the map, then flies home.',
   },
   attack_helicopter: {
     id: 'attack_helicopter', name: 'Attack Helicopter', domain: 'air', armor: 'air', age: 'modern',
@@ -152,7 +159,7 @@ export const UNITS = {
   stealth_bomber: {
     id: 'stealth_bomber', name: 'Stealth Bomber', domain: 'air', armor: 'air', age: 'digital',
     cost: { ore: 600, energy: 400 }, pop: 4, hp: 500, speed: 6, turnRate: 1.0, radius: 1.2, vision: 8, move: 'jet', flyHeight: 9,
-    trainedAt: 'airfield', trainTime: 40,
+    trainedAt: 'airfield', trainTime: 40, fuel: 90,
     strongVs: 'structures, heavy vehicles', weakVs: 'fighters once detected',
     description: 'Invisible unless near a Radar, SAM or Aegis Cruiser.',
   },

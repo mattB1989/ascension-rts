@@ -183,7 +183,9 @@ function moveJet(world: World, u: Unit): void {
   const dist = Math.sqrt(dx * dx + dy * dy);
   const orbitR = 4;
   let want = fatan2(dy, dx);
-  if (dist < orbitR * 1.4) {
+  // Landing and paradrop runs fly straight at the target instead of circling it.
+  const direct = u.task?.kind === 'return' || u.task?.kind === 'paradrop';
+  if (dist < orbitR * 1.4 && !direct) {
     const pull = (dist - orbitR) / orbitR;
     want = want + PI / 2 - Math.max(-0.8, Math.min(0.8, pull));
     u.state = 'idle';
@@ -213,14 +215,14 @@ export function separate(world: World): void {
   const buckets = new Map<number, Unit[]>();
   const units = world.units;
   for (const u of units) {
-    if (u.def.move === 'jet') continue;
+    if (u.def.move === 'jet' || u.carrier || u.chute > 0) continue;
     const key = surface(u) * 100000 + Math.floor(u.y / cell) * cols + Math.floor(u.x / cell);
     const b = buckets.get(key);
     if (b) b.push(u);
     else buckets.set(key, [u]);
   }
   for (const u of units) {
-    if (u.def.move === 'jet') continue;
+    if (u.def.move === 'jet' || u.carrier || u.chute > 0) continue;
     const cx = Math.floor(u.x / cell);
     const cy = Math.floor(u.y / cell);
     let pushX = 0;

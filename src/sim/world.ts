@@ -12,6 +12,9 @@ import {
 import { FOG_INTERVAL, updateFog } from './fog.ts';
 import type { GameMap } from './map.ts';
 import { moveUnit, orderMove, separate, stopUnit } from './movement.ts';
+import {
+  immobile, orderBoard, orderParadrop, orderReturn, orderUnload, syncCargo, takeOff, updateAir, updateChute, updateTransport,
+} from './transport.ts';
 import { layerFor, NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
 import { Rng } from './rng.ts';
@@ -160,6 +163,13 @@ export class World {
       task: null,
       carry: 0,
       working: false,
+      cargo: [],
+      carrier: 0,
+      chute: 0,
+      fuel: def.fuel ?? 0,
+      parked: false,
+      home: 0,
+      slot: -1,
     };
     this.units.push(u);
     this.byId.set(u.id, u);
@@ -218,6 +228,26 @@ export class World {
     this.recomputePop(this.players[b.owner]!);
   }
 
+  /** Remove a unit from play (and anyone riding in it). */
+  removeUnit(u: Unit, reason: string): void {
+    for (const id of u.cargo) {
+      const c = this.getUnit(id);
+      if (c) this.removeUnit(c, reason);
+    }
+    u.cargo = [];
+    const i = this.units.indexOf(u);
+    if (i < 0) return;
+    this.units.splice(i, 1);
+    this.byId.delete(u.id);
+    if (u.carrier) {
+      const c = this.getUnit(u.carrier);
+      if (c) c.cargo = c.cargo.filter((id) => id !== u.id);
+    }
+    this.recomputePop(this.players[u.owner]!);
+    this.emit({ kind: 'unitLost', player: u.owner, unit: u.id, reason });
+    this.emit({ kind: 'notify', player: u.owner, text: `${u.def.name} lost: ${reason}`, x: u.x, y: u.y });
+  }
+
   depleteResource(r: ResourceState): void {
     r.amount = 0;
     const i = r.ty * this.map.width + r.tx;
@@ -246,8 +276,18 @@ export class World {
       u.pa = u.angle;
     }
     for (const c of commands) this.apply(c);
-    for (const u of this.units) updateWorker(this, u);
-    for (const u of this.units) moveUnit(this, u);
+    for (const u of this.units) {
+      if (u.carrier) continue;
+      if (u.chute > 0) {
+        updateChute(this, u);
+        continue;
+      }
+      updateWorker(this, u);
+      updateTransport(this, u);
+    }
+    for (const u of this.units) if (!immobile(u)) moveUnit(this, u);
+    for (const u of [...this.units]) updateAir(this, u);
+    syncCargo(this);
     separate(this);
     updateBuildings(this);
     if (this.tick % FOG_INTERVAL === 0) updateFog(this);
@@ -284,16 +324,32 @@ export class World {
   private apply(c: Command): void {
     switch (c.kind) {
       case 'move': {
-        const units = this.ownedUnits(c.player, c.units);
+        const units = this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0);
         for (const u of units) {
           u.task = null;
           u.working = false;
+          takeOff(u);
         }
         orderMove(this, units, c.x, c.y);
         break;
       }
+      case 'board': {
+        const carrier = this.getUnit(c.carrier);
+        if (carrier && carrier.owner === c.player) orderBoard(this, this.ownedUnits(c.player, c.units), carrier);
+        break;
+      }
+      case 'unload':
+        orderUnload(this, this.ownedUnits(c.player, c.units), c.x, c.y);
+        break;
+      case 'paradrop':
+        orderParadrop(this, this.ownedUnits(c.player, c.units), c.x, c.y);
+        break;
+      case 'returnBase':
+        orderReturn(this, this.ownedUnits(c.player, c.units));
+        break;
       case 'stop':
         for (const u of this.ownedUnits(c.player, c.units)) {
+          if (u.carrier || u.chute > 0 || u.parked) continue;
           u.task = null;
           u.working = false;
           stopUnit(u);
@@ -359,6 +415,9 @@ export class World {
       mix(u.hp);
       mix(u.speed);
       mix(u.carry);
+      mix(u.fuel);
+      mix(u.carrier);
+      mix(u.chute);
     }
     for (const b of this.buildings) {
       mix(b.id);

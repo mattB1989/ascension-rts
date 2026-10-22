@@ -155,12 +155,18 @@ test('players cannot command enemy units', () => {
   assert.ok(Math.abs(enemy.x - x) < 1);
 });
 
-test('jets keep flying and circle their goal', () => {
+test('jets take off, circle their goal, and return to the airfield to refuel', () => {
   const world = createMatch({ seed: 1337, mode: 'sandbox' });
   const jet = world.units.find((u) => u.owner === 0 && u.type === 'fighter_jet')!;
+  assert.ok(jet.parked, 'jets start parked');
   world.step([{ kind: 'move', player: 0, units: [jet.id], x: 60, y: 60 }]);
-  for (let t = 0; t < 15 * 30; t++) world.step();
-  const d = Math.hypot(jet.x - jet.goalX, jet.y - jet.goalY);
-  assert.ok(d < 9, `jet orbit distance ${d}`);
-  assert.ok(jet.speed > 1, 'jets never stop');
+  assert.ok(!jet.parked, 'took off');
+  for (let t = 0; t < 15 * 25; t++) world.step();
+  assert.ok(Math.hypot(jet.x - 60, jet.y - 60) < 9, 'circling the goal');
+  assert.ok(jet.speed > 1, 'jets never stop in the air');
+  for (let t = 0; t < 15 * 45; t++) world.step();
+  assert.ok(jet.parked, 'came home before running dry');
+  assert.ok(jet.fuel > 0);
+  for (let t = 0; t < 15 * 11; t++) world.step();
+  assert.equal(jet.fuel, jet.def.fuel, 'refuelled');
 });

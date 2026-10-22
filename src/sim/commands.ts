@@ -22,7 +22,15 @@ export type Command =
   | { kind: 'cancel'; player: number; building: number; index: number }
   /** Cancel an unfinished building (refunded for the unbuilt part). */
   | { kind: 'cancelBuild'; player: number; building: number }
-  | { kind: 'rally'; player: number; building: number; x: number; y: number };
+  | { kind: 'rally'; player: number; building: number; x: number; y: number }
+  /** Units get into a transport (ship or cargo plane). */
+  | { kind: 'board'; player: number; units: number[]; carrier: number }
+  /** Transports put their passengers ashore near (x, y). */
+  | { kind: 'unload'; player: number; units: number[]; x: number; y: number }
+  /** Cargo planes drop their passengers by parachute over (x, y). */
+  | { kind: 'paradrop'; player: number; units: number[]; x: number; y: number }
+  /** Aircraft fly back to an airfield and land. */
+  | { kind: 'returnBase'; player: number; units: number[] };
 
 /** A command stamped with the tick it executes on (for replays). */
 export interface TimedCommand {

@@ -4,6 +4,8 @@ import type { UnitTypeId } from '../data/units.ts';
 import { updateFog } from './fog.ts';
 import { generateTwinShores } from './map.ts';
 import { NavLayer } from './nav.ts';
+import { findPlacement } from './placement.ts';
+import { dockNew } from './transport.ts';
 import { World, type PlayerInfo } from './world.ts';
 
 export type MatchMode = 'standard' | 'sandbox';
@@ -31,12 +33,12 @@ const LAND_ARMY: Array<[UnitTypeId, number]> = [
 ];
 const NAVY: Array<[UnitTypeId, number]> = [
   ['destroyer', 2],
-  ['patrol_boat', 2],
+  ['patrol_boat', 1],
+  ['transport_ship', 1],
 ];
-const AIR: Array<[UnitTypeId, number]> = [
-  ['fighter_jet', 2],
-  ['attack_helicopter', 2],
-];
+const AIR: Array<[UnitTypeId, number]> = [['attack_helicopter', 2]];
+/** Aircraft that need an airfield start parked at one. */
+const PARKED: UnitTypeId[] = ['fighter_jet', 'fighter_jet', 'cargo_plane'];
 
 export function createMatch(opts: MatchOptions): World {
   const map = generateTwinShores(opts.seed);
@@ -96,6 +98,15 @@ export function createMatch(opts: MatchOptions): World {
         const [x, y] = along(-4, -3 + a * 2);
         world.spawnUnit(type, player.id, x, y, facing);
       }
+    }
+    const [ax, ay] = along(-3, 10);
+    const pl = world.players[player.id]!;
+    pl.explored.fill(1); // placement normally needs explored ground
+    const spot = findPlacement(world, player.id, 'airfield', ax, ay, 30);
+    pl.explored.fill(0);
+    if (spot) {
+      const field = world.addBuilding('airfield', player.id, spot[0], spot[1], true);
+      for (const type of PARKED) dockNew(world, world.spawnUnit(type, player.id, field.x, field.y), field);
     }
   }
   updateFog(world);

@@ -40,7 +40,7 @@ export function updateFog(world: World): void {
         p.explored[k] = 1;
       }
     };
-    for (const u of world.units) if (u.owner === p.id) stamp(u.x, u.y, u.def.vision);
+    for (const u of world.units) if (u.owner === p.id && !u.carrier) stamp(u.x, u.y, u.chute > 0 ? 4 : u.def.vision);
     for (const b of world.buildings) if (b.owner === p.id) stamp(b.x, b.y, b.complete ? b.def.vision + Math.max(b.w, b.h) / 2 : 3);
   }
 }

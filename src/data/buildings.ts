@@ -67,9 +67,9 @@ export const BUILDINGS = {
   },
   airfield: {
     id: 'airfield', name: 'Airfield', category: 'military', age: 'modern', requires: ['radar_station', 'vehicle_factory'],
-    cost: { ore: 350, energy: 200 }, buildTime: 55, hp: 2000, size: [5, 4], placement: 'land', pop: 0, vision: 6,
-    builtBy: 'engineer',
-    description: 'Builds aircraft; rearms and repairs them.',
+    cost: { ore: 350, energy: 200 }, buildTime: 55, hp: 2000, size: [6, 5], placement: 'land', pop: 0, vision: 6,
+    builtBy: 'engineer', dock: 4,
+    description: 'Builds aircraft. 4 parking spots where planes land to refuel and repair.',
   },
   mech_foundry: {
     id: 'mech_foundry', name: 'Mech Foundry', category: 'military', age: 'digital', requires: ['research_lab', 'vehicle_factory'],

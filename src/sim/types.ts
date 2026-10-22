@@ -12,7 +12,15 @@ export type UnitTask =
   /** Mine ore at a resource spot, carry it to a drop-off, repeat. */
   | { kind: 'gather'; res: number; phase: 'toResource' | 'mining' | 'toDropOff'; dropId: number }
   /** Construct a building (foundation) until complete. */
-  | { kind: 'build'; building: number };
+  | { kind: 'build'; building: number }
+  /** Walk to a transport (ship at the shore, or a cargo plane parked at its airfield) and get in. */
+  | { kind: 'board'; carrier: number }
+  /** Transport ship: sail to the coast nearest (x, y), put everyone ashore, send them to (x, y). */
+  | { kind: 'unload'; x: number; y: number }
+  /** Cargo plane: fly over (x, y) and drop everyone by parachute, then fly home. */
+  | { kind: 'paradrop'; x: number; y: number }
+  /** Aircraft: fly back to an airfield and land. */
+  | { kind: 'return' };
 
 export interface Unit {
   kind: 'unit';
@@ -42,6 +50,18 @@ export interface Unit {
   carry: number;
   /** True while mining or constructing (render: work animation). */
   working: boolean;
+  /** Units inside this transport. */
+  cargo: number[];
+  /** Transport this unit is riding in, or 0. */
+  carrier: number;
+  /** Seconds left under a parachute (0 when on the ground). */
+  chute: number;
+  /** Aircraft that must land: fuel left (seconds of flight), parked state and home airfield. */
+  fuel: number;
+  parked: boolean;
+  home: number;
+  /** Parking spot index at the home airfield. */
+  slot: number;
 }
 
 export type QueueItem =
@@ -115,6 +135,7 @@ export interface PlayerState {
 
 export type GameEvent =
   | { kind: 'notify'; player: number; text: string; x?: number; y?: number }
+  | { kind: 'unitLost'; player: number; unit: number; reason: string }
   | { kind: 'buildingComplete'; player: number; building: number }
   | { kind: 'unitTrained'; player: number; unit: number }
   | { kind: 'researchComplete'; player: number; tech: TechId };

@@ -6,6 +6,7 @@ import type { ResourceId, TechEffect, UnitDef } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { fatan2, fcos, fsin } from './fmath.ts';
 import { evict, orderMove, setDestination, stopUnit } from './movement.ts';
+import { airfieldLoad, dockNew, takeOff } from './transport.ts';
 import { layerFor, NavLayer } from './nav.ts';
 import { ageIndex, buildLockReason, canAfford, oilUnder, pay, placementProblem, refund } from './placement.ts';
 import { DT } from './time.ts';
@@ -125,6 +126,7 @@ export function trainLockReason(world: World, player: number, b: Building, type:
     if (have >= def.limit) return `Limit ${def.limit}`;
   }
   if (b.queue.length >= MAX_QUEUE) return 'Queue full';
+  if (def.fuel && b.def.dock && airfieldLoad(world, b) >= b.def.dock) return `Airfield full (${b.def.dock} planes)`;
   return null;
 }
 
@@ -189,7 +191,7 @@ export function updateWorker(world: World, u: Unit): void {
   u.working = false;
   if (!task) return;
   if (task.kind === 'gather') updateGather(world, u, task);
-  else updateBuild(world, u, task);
+  else if (task.kind === 'build') updateBuild(world, u, task);
 }
 
 function nearestOre(world: World, x: number, y: number, maxDist: number): number {
@@ -438,7 +440,20 @@ function completeResearch(world: World, p: PlayerState, tech: TechId): void {
 
 /** Spawn a freshly trained unit beside its building, then send it to the rally point. */
 function spawnFromBuilding(world: World, b: Building, type: UnitTypeId): void {
-  const def = UNITS[type];
+  const def: UnitDef = UNITS[type];
+  if (def.fuel && b.def.dock) {
+    const plane = world.spawnUnit(type, b.owner, b.x, b.y, 0);
+    if (!dockNew(world, plane, b)) {
+      plane.goalX = b.x;
+      plane.goalY = b.y;
+    }
+    world.emit({ kind: 'unitTrained', player: b.owner, unit: plane.id });
+    if (b.rally) {
+      takeOff(plane);
+      orderMove(world, [plane], b.rally.x, b.rally.y);
+    }
+    return;
+  }
   const layer = layerFor(def);
   const toward = b.rally ?? { x: world.map.width / 2, y: world.map.height / 2 };
   let sx = b.x;

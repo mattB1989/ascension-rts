@@ -4,7 +4,7 @@ import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import { TECHS, techImplemented, type TechId } from '../data/techs.ts';
 import type { ResourceId, TechEffect, UnitDef } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
-import { fatan2 } from './fmath.ts';
+import { fatan2, fcos, fsin } from './fmath.ts';
 import { evict, orderMove, setDestination, stopUnit } from './movement.ts';
 import { layerFor, NavLayer } from './nav.ts';
 import { ageIndex, buildLockReason, canAfford, oilUnder, pay, placementProblem, refund } from './placement.ts';
@@ -45,11 +45,20 @@ function approachRect(b: Building, x: number, y: number): [number, number] {
   return [cx + (dx / d) * 0.7, cy + (dy / d) * 0.7];
 }
 
-function approachPoint(res: ResourceState, x: number, y: number): [number, number] {
-  const dx = x - res.x;
-  const dy = y - res.y;
-  const d = Math.sqrt(dx * dx + dy * dy) || 1;
-  return [res.x + (dx / d) * 1.05, res.y + (dy / d) * 1.05];
+/**
+ * Where a worker stands to mine a deposit: on the side facing it, fanned out by
+ * unit id so a crowd spreads around the crystals instead of queueing for one spot.
+ */
+function approachPoint(world: World, u: Unit, res: ResourceState): [number, number] {
+  const base = fatan2(u.y - res.y, u.x - res.x);
+  const fan = ((u.id * 7) % 9 - 4) * 0.32;
+  for (const extra of [0, 0.9, -0.9, 1.8, -1.8, 2.7, -2.7, 3.14]) {
+    const a = base + fan + extra;
+    const x = res.x + fcos(a) * 1.1;
+    const y = res.y + fsin(a) * 1.1;
+    if (world.nav.passableAt(u.layer, x, y)) return [x, y];
+  }
+  return [res.x + fcos(base) * 1.1, res.y + fsin(base) * 1.1];
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +71,7 @@ export function orderGather(world: World, units: Unit[], resIndex: number): void
     if (!u.def.gatherRate) continue;
     u.task = { kind: 'gather', res: resIndex, phase: u.carry >= CARRY_CAPACITY ? 'toDropOff' : 'toResource', dropId: 0 };
     u.working = false;
-    const [ax, ay] = approachPoint(res, u.x, u.y);
+    const [ax, ay] = approachPoint(world, u, res);
     if (u.task.phase === 'toResource') setDestination(world, u, ax, ay);
     else stopUnit(u);
   }
@@ -243,7 +252,7 @@ function updateGather(world: World, u: Unit, task: Extract<Unit['task'], { kind:
         task.res = next;
         res = world.resources[next]!;
       }
-      const [ax, ay] = approachPoint(res, u.x, u.y);
+      const [ax, ay] = approachPoint(world, u, res);
       setDestination(world, u, ax, ay);
     } else if (u.state === 'idle') {
       const [ax, ay] = approachRect(drop, u.x, u.y);
@@ -263,7 +272,7 @@ function updateGather(world: World, u: Unit, task: Extract<Unit['task'], { kind:
     task.res = next;
     res = world.resources[next]!;
     task.phase = 'toResource';
-    const [ax, ay] = approachPoint(res, u.x, u.y);
+    const [ax, ay] = approachPoint(world, u, res);
     setDestination(world, u, ax, ay);
   }
   const d = dist(res.x, res.y, u.x, u.y);
@@ -282,7 +291,7 @@ function updateGather(world: World, u: Unit, task: Extract<Unit['task'], { kind:
     if (u.carry >= CARRY_CAPACITY - 1e-9) startDelivery(world, u, task);
   } else if (u.state === 'idle') {
     task.phase = 'toResource';
-    const [ax, ay] = approachPoint(res, u.x, u.y);
+    const [ax, ay] = approachPoint(world, u, res);
     setDestination(world, u, ax, ay);
     // Could not get close (crowded): try another spot next time round.
     if (u.state === 'idle') {
@@ -342,12 +351,24 @@ function afterBuilding(world: World, u: Unit, done: Building | null): void {
 // ---------------------------------------------------------------------------
 // Per-tick building behaviour (runs after units)
 
+/** Construction speed for n builders: the first works at 100%, each extra adds 60%. */
+export function buildRate(n: number): number {
+  return n <= 0 ? 0 : 1 + 0.6 * (n - 1);
+}
+
+/** Seconds left to finish a foundation at its current builder count (Infinity if nobody is working). */
+export function buildTimeLeft(world: World, b: Building): number {
+  const rate = buildRate(b.activeBuilders) * world.players[b.owner]!.mult.buildSpeed;
+  return rate > 0 ? ((1 - b.progress) * b.def.buildTime) / rate : Infinity;
+}
+
 export function updateBuildings(world: World): void {
   for (const b of world.buildings) {
     const p = world.players[b.owner]!;
     if (!b.complete) {
+      b.activeBuilders = b.builders;
       if (b.builders > 0) {
-        const rate = (1 + 0.6 * (b.builders - 1)) * p.mult.buildSpeed * DT / b.def.buildTime;
+        const rate = (buildRate(b.builders) * p.mult.buildSpeed * DT) / b.def.buildTime;
         const before = b.progress;
         b.progress = Math.min(1, b.progress + rate);
         b.hp = Math.min(b.maxHp, b.hp + (b.progress - before) * b.maxHp * 0.9);

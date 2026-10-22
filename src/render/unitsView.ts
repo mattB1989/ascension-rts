@@ -29,6 +29,7 @@ function ringGeo(r: number): THREE.RingGeometry {
 }
 
 const ringMat = new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.9, depthWrite: false });
+const enemyRingMat = new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.9, depthWrite: false });
 
 export class UnitsView {
   readonly group = new THREE.Group();
@@ -77,6 +78,11 @@ export class UnitsView {
     };
   }
 
+  /** Can this unit be clicked (false while carried inside a transport). */
+  isPickable(u: Unit): boolean {
+    return this.objects.get(u.id)?.root.visible ?? true;
+  }
+
   /** Is this unit shown to the viewer (own units always; others only where the viewer can see)? */
   isShown(u: Unit, viewer: number): boolean {
     if (u.owner === viewer) return true;
@@ -87,7 +93,7 @@ export class UnitsView {
     return p.visible[ty * this.world.map.width + tx] === 1;
   }
 
-  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, viewer: number): void {
+  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0): void {
     const seen = new Set<number>();
     const pos = new THREE.Vector3();
     for (const u of this.world.units) {
@@ -132,7 +138,8 @@ export class UnitsView {
       const shown = this.isShown(u, viewer);
       o.root.visible = shown;
 
-      const isSel = selected.has(u.id) && shown;
+      const isSel = (selected.has(u.id) || u.id === inspected) && shown;
+      if (isSel) o.ring.material = u.owner === viewer ? ringMat : enemyRingMat;
       o.ring.visible = isSel;
       if (isSel) {
         // Aircraft get the ring around them in the air; everything else on the ground/water.

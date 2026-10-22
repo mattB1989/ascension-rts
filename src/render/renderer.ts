@@ -97,7 +97,7 @@ export class GameRenderer {
     return this.canvas.clientHeight || window.innerHeight;
   }
 
-  render(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>): void {
+  render(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, inspect: { entity: number; resource: number } = { entity: 0, resource: -1 }): void {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
     this.rig.update(w / h);
@@ -126,9 +126,9 @@ export class GameRenderer {
       updateFogTexture(this.world, this.viewer);
     }
     this.water.update(time);
-    this.resources.update();
-    this.buildings.update(time, frameDt, selected, this.viewer);
-    this.units.update(alpha, time, frameDt, selected, this.viewer);
+    this.resources.update(inspect.resource, time);
+    this.buildings.update(time, frameDt, selected, this.viewer, inspect.entity);
+    this.units.update(alpha, time, frameDt, selected, this.viewer, inspect.entity);
     this.effects.update(frameDt);
     this.renderer.render(this.scene, this.rig.camera);
   }

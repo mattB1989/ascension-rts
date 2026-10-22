@@ -231,6 +231,9 @@ export function separate(world: World): void {
         if (!b) continue;
         for (const o of b) {
           if (o === u || o.def.move === 'jet') continue;
+          // Workers on a job (mining, hauling, building) pass through each other, like
+          // harvesters in most RTS games: otherwise busy ore fields jam.
+          if (u.task && o.task) continue;
           const dx = u.x - o.x;
           const dy = u.y - o.y;
           const minD = u.def.radius + o.def.radius;

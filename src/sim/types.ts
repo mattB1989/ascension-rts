@@ -73,6 +73,8 @@ export interface Building {
   resource: number;
   /** Builders working on it this tick (recomputed every tick). */
   builders: number;
+  /** Builders who worked on it during the last tick (for the UI). */
+  activeBuilders: number;
   /** True when the front of the queue is done but waiting for housing. */
   waitingForPop: boolean;
 }

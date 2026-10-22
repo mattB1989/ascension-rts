@@ -19,12 +19,13 @@ interface BuildingObject {
 }
 
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.9, depthWrite: false });
+const enemyOutlineMat = new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.9, depthWrite: false });
 
-function outlineRect(w: number, h: number): THREE.Group {
+function outlineRect(w: number, h: number, material: THREE.Material): THREE.Group {
   const g = new THREE.Group();
   const t = 0.08;
   const add = (sx: number, sz: number, x: number, z: number) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.04, sz), outlineMat);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, 0.04, sz), material);
     m.position.set(x, 0, z);
     m.renderOrder = 2;
     g.add(m);
@@ -100,7 +101,7 @@ export class BuildingsView {
       skirt.castShadow = false;
       root.add(skirt);
     }
-    const outline = outlineRect(b.w, b.h);
+    const outline = outlineRect(b.w, b.h, b.owner === this.viewerId ? outlineMat : enemyOutlineMat);
     outline.position.y = 0.2;
     outline.visible = false;
     root.add(outline);
@@ -117,7 +118,10 @@ export class BuildingsView {
     return { root, model, scaffold, outline, spins: named('spin'), beams: named('beam'), cranks: named('crank'), flares: named('flare') };
   }
 
-  update(time: number, dt: number, selected: ReadonlySet<number>, viewer: number): void {
+  private viewerId = 0;
+
+  update(time: number, dt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0): void {
+    this.viewerId = viewer;
     const seen = new Set<number>();
     const explored = this.world.players[viewer]?.explored;
     const w = this.world.map.width;
@@ -150,7 +154,7 @@ export class BuildingsView {
         f.scale.set(k, active || b.type === 'airfield' ? k * 1.2 : 0.01, k);
       }
 
-      const isSel = selected.has(b.id);
+      const isSel = selected.has(b.id) || b.id === inspected;
       o.outline.visible = isSel;
       if (isSel && b.rally && b.owner === viewer) {
         this.rally.visible = true;

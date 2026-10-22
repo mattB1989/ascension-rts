@@ -37,7 +37,8 @@ const HELP_HTML = `
     <section>
       <h3>Mouse &amp; keyboard</h3>
       <ul>
-        <li><b>Left click</b> select (units or buildings), <b>drag</b> box-select, <b>Shift</b> add</li>
+        <li><b>Left click</b> select your units/buildings, or see what anything else is (ore, oil, terrain, enemies); <b>drag</b> box-select, <b>Shift</b> add</li>
+        <li><b>Hover</b> shows names; the cursor shows what a right click will do (move, mine, help build, rally)</li>
         <li><b>Double click</b> select all of that type on screen</li>
         <li><b>Right click</b>: move · on ore: mine · on a foundation: help build · with a building selected: rally point</li>
         <li><b>Right drag</b> pan (flick to glide), <b>wheel</b> zoom towards the cursor, <b>middle drag</b> or <b>Q / E</b> rotate</li>
@@ -50,7 +51,7 @@ const HELP_HTML = `
     <section>
       <h3>Touch</h3>
       <ul>
-        <li><b>Tap</b> a unit or building to select, <b>double tap</b> for all of a type</li>
+        <li><b>Tap</b> a unit or building to select, <b>double tap</b> for all of a type; tap anything else to see what it is</li>
         <li><b>Tap</b> the ground to move, ore to mine, a foundation to help build</li>
         <li>To build: select engineers, pick a building, <b>tap</b> to position it, then <b>✓</b></li>
         <li><b>One finger drag</b> pans, <b>flick</b> to glide (or box-selects in <b>Select</b> mode)</li>
@@ -59,6 +60,7 @@ const HELP_HTML = `
       </ul>
     </section>
   </div>
+  <p>Forests block vehicles; infantry and engineers can walk through them, slowly. More engineers on one foundation build faster.</p>
   <p class="muted">Milestone 2: economy and base building. Combat, walls and towers arrive in M3, the AI opponent in M4.</p>
 `;
 
@@ -206,7 +208,7 @@ export class Hud {
     }
     this.chipsEl.replaceChildren();
     if (counts.size === 0) {
-      this.chipsEl.appendChild(el('div', 'muted', this.input.touchDevice ? 'Tap a unit or building to select it' : 'Click or drag to select'));
+      if (!this.selection.inspect) this.chipsEl.appendChild(el('div', 'muted', this.input.touchDevice ? 'Tap anything to see what it is' : 'Click anything to see what it is · drag to select units'));
       return;
     }
     if (counts.size === 1) return; // the command card already names it

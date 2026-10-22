@@ -38,7 +38,11 @@ function start(): void {
     const alpha = game.update(dt);
     input.alpha = alpha;
     selection.prune();
-    renderer.render(alpha, now / 1000, dt, selection.ids);
+    const ins = selection.inspect;
+    renderer.render(alpha, now / 1000, dt, selection.ids, {
+      entity: ins?.kind === 'entity' ? ins.id : 0,
+      resource: ins?.kind === 'resource' ? ins.index : -1,
+    });
     minimap.draw(now);
     hud.update(dt, realDt);
     requestAnimationFrame(frame);

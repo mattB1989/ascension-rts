@@ -5,14 +5,15 @@
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingTypeId } from '../data/buildings.ts';
 import { TECH_IDS, TECHS, techImplemented, type TechId } from '../data/techs.ts';
-import type { BuildingDef, Cost } from '../data/types.ts';
+import type { BuildingDef, Cost, UnitDef } from '../data/types.ts';
 import { UNIT_TYPES, UNITS, type UnitTypeId } from '../data/units.ts';
 import type { Game } from '../game.ts';
-import { researchLockReason, trainLockReason } from '../sim/economy.ts';
+import { buildTimeLeft, researchLockReason, trainLockReason } from '../sim/economy.ts';
+import { TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
 import { ageIndex, buildLockReason, canAfford } from '../sim/placement.ts';
 import type { Building, Unit } from '../sim/world.ts';
 import type { InputController } from './input.ts';
-import type { Selection } from './selection.ts';
+import type { Inspect, Selection } from './selection.ts';
 
 interface Btn {
   key: string;
@@ -150,9 +151,14 @@ export class CommandCard {
       if (!b.complete) {
         return {
           title: def.name,
-          status: () => `Under construction · ${Math.floor(b.progress * 100)}%`,
+          status: () => {
+            const n = b.activeBuilders;
+            const left = buildTimeLeft(this.game.world, b);
+            const who = n === 0 ? '⚠ nobody building' : `${n} builder${n > 1 ? 's' : ''} · ${Math.ceil(left)} s left`;
+            return `${Math.floor(b.progress * 100)}% · ${who}`;
+          },
           progress: () => b.progress,
-          hint: 'Engineers build faster together.',
+          hint: `Each extra engineer adds 60% speed (1 → 100%, 3 → 220%, 5 → 340%). ${this.input.touchDevice ? 'Select engineers and tap' : 'Select engineers and right click'} the foundation to help.`,
           buttons: [{
             key: 'cancelBuild', label: '✕ Cancel building', disabled: false, reason: null, title: 'Refunds the unbuilt part',
             onClick: () => this.game.issue({ kind: 'cancelBuild', player: this.player, building: b.id }),
@@ -214,7 +220,65 @@ export class CommandCard {
         })),
       };
     }
+    // A single non-builder unit of ours: stats.
+    if (units.length > 0 && buildings.length === 0) {
+      const types = new Set(units.map((u) => u.type));
+      if (types.size === 1) {
+        const u = units[0]!;
+        return this.infoCard(units.length > 1 ? `${u.def.name} ×${units.length}` : u.def.name, () => `${Math.ceil(u.hp)}/${u.def.hp} HP`, this.unitHint(u.def), []);
+      }
+      return null;
+    }
+
+    // Something we clicked but don't control.
+    const ins = this.selection.inspect;
+    if (ins) return this.inspectCard(ins);
     return null;
+  }
+
+  private unitHint(d: UnitDef): string {
+    const moves = d.domain === 'sea' ? 'Ships only sail on water.' : d.domain === 'air' ? 'Flies anywhere.' : d.move === 'infantry' ? 'On foot: can cross forest.' : 'Vehicle: forests block it.';
+    return `Strong vs ${d.strongVs}. Weak vs ${d.weakVs}. ${moves}`;
+  }
+
+  private infoCard(title: string, status: () => string, hint: string, buttons: Btn[]): CardModel {
+    return { title, status, progress: null, hint, buttons, queue: [] };
+  }
+
+  private inspectCard(ins: Inspect): CardModel | null {
+    const world = this.game.world;
+    const touch = this.input.touchDevice;
+    if (ins.kind === 'resource') {
+      const r = world.resources[ins.index];
+      if (!r) return null;
+      if (r.kind === 'ore') {
+        return this.infoCard('Ore deposit', () => `◆ ${Math.floor(r.amount)} / ${r.max} left`, `Engineers mine ore and carry it to a Command Center or Ore Refinery. ${touch ? 'Select engineers and tap it' : 'Select engineers and right click it'} to mine.`, []);
+      }
+      return this.infoCard(r.offshore ? 'Offshore oil' : 'Oil spot', () => `${Math.floor(r.amount)} oil`, r.offshore ? 'A Sea Engineer (from the Shipyard) can build an Offshore Rig here: it produces Energy by itself.' : 'Engineers can build an Oil Derrick here: it produces Energy by itself.', []);
+    }
+    if (ins.kind === 'ground') {
+      const t = world.map.terrain[Math.floor(ins.y) * world.map.width + Math.floor(ins.x)] as TerrainId;
+      const hints: Record<number, string> = {
+        0: 'Deep water: ships and submarines only.',
+        1: 'Shallow water: ships only.',
+        2: 'Beach: open ground, good for coastal buildings.',
+        3: 'Open ground: anything can move and build here.',
+        4: 'Forest: infantry and engineers only, and they move slower. Vehicles must go around.',
+        5: 'Rock: impassable, nothing can be built.',
+        6: 'Bridge: land units drive across, ships sail underneath.',
+      };
+      return this.infoCard(TERRAIN_NAMES[t], () => '', hints[t] ?? '', []);
+    }
+    const e = world.getEntity(ins.id);
+    if (!e) return null;
+    const owner = world.players[e.owner]?.name ?? 'Enemy';
+    if (e.kind === 'unit') return this.infoCard(`${owner} ${e.def.name}`, () => `${Math.ceil(e.hp)}/${e.def.hp} HP`, this.unitHint(e.def), []);
+    return this.infoCard(
+      `${owner} ${e.def.name}`,
+      () => (e.complete ? `${Math.ceil(e.hp)}/${e.maxHp} HP` : `Under construction · ${Math.floor(e.progress * 100)}%`),
+      e.def.description,
+      [],
+    );
   }
 
   /** Queue at the selected building with the shortest queue. */

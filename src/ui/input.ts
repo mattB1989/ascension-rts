@@ -10,11 +10,13 @@
 // foundation -> help build, anything else -> move; with buildings selected it
 // sets their rally point.
 
-import * as THREE from 'three';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { Game } from '../game.ts';
 import type { GameRenderer } from '../render/renderer.ts';
+import { Terrain } from '../sim/map.ts';
 import type { Building, Unit } from '../sim/world.ts';
+import { cursorCss, type CursorKind } from './cursors.ts';
+import { hitName, Picker, type Hit } from './pick.ts';
 import { placementCheck, snapFootprint } from './placementCheck.ts';
 import type { Selection } from './selection.ts';
 
@@ -60,6 +62,8 @@ export class InputController {
   private lastClick = { time: 0, unitId: -1 };
   private lastGroupKey = { n: -1, time: 0 };
   private readonly boxEl: HTMLDivElement;
+  private readonly tooltip: HTMLDivElement;
+  readonly picker: Picker;
   private readonly canvas: HTMLCanvasElement;
   private readonly renderer: GameRenderer;
   private readonly game: Game;
@@ -79,6 +83,10 @@ export class InputController {
     this.boxEl = document.createElement('div');
     this.boxEl.className = 'select-box';
     uiRoot.appendChild(this.boxEl);
+    this.tooltip = document.createElement('div');
+    this.tooltip.className = 'hover-tip';
+    uiRoot.appendChild(this.tooltip);
+    this.picker = new Picker(canvas, renderer, game.world, game.humanPlayer, this.touchDevice);
 
     canvas.addEventListener('pointerdown', (e) => this.onDown(e));
     canvas.addEventListener('pointermove', (e) => this.onMove(e));
@@ -105,6 +113,7 @@ export class InputController {
 
   update(frameDt: number): void {
     if (this.placing) this.updateGhost();
+    this.updateHover();
     const rig = this.renderer.rig;
     rig.tick(frameDt);
     // Pan speed scales with zoom, ramps up while held, Shift doubles it.
@@ -522,84 +531,159 @@ export class InputController {
   // Selection
 
   private screenPos(u: Unit): { x: number; y: number; visible: boolean; pxPerUnit: number } {
-    const v = this.renderer.units.renderPosition(u, this.alpha);
-    v.y += u.def.domain === 'air' ? 0 : u.def.armor === 'inf' ? 0.4 : 0.35;
-    const cam = this.renderer.rig.camera;
-    const dist = cam.position.distanceTo(v);
-    const pxPerUnit = this.renderer.viewportHeight / (2 * dist * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)));
-    return { ...this.renderer.toScreen(v), pxPerUnit };
-  }
-
-  private pickOwnUnit(sx: number, sy: number): Unit | null {
-    let best: Unit | null = null;
-    let bestD = Infinity;
-    const minR = this.touchDevice ? 26 : 14;
-    for (const u of this.ownUnits()) {
-      const s = this.screenPos(u);
-      if (!s.visible) continue;
-      const d = Math.hypot(s.x - sx, s.y - sy);
-      const r = Math.max(minR, u.def.radius * s.pxPerUnit * 1.4);
-      if (d < r && d < bestD) {
-        bestD = d;
-        best = u;
-      }
-    }
-    return best;
+    this.picker.alpha = this.alpha;
+    return this.picker.unitScreen(u);
   }
 
   private selectTypeOnScreen(type: string): void {
     const ids = this.ownUnits()
-      .filter((u) => u.type === type && this.screenPos(u).visible)
+      .filter((u) => u.type === type && this.screenPos(u).visible && this.renderer.units.isPickable(u))
       .map((u) => u.id);
     this.selection.set(ids);
   }
 
-  /** Own building under a screen point (via the ground tile it covers). */
-  private pickOwnBuilding(sx: number, sy: number): Building | null {
-    const rect = this.canvas.getBoundingClientRect();
-    const g = this.renderer.pickGround(sx + rect.left, sy + rect.top);
-    if (!g) return null;
-    const world = this.game.world;
-    const id = world.occupancy[Math.floor(g.y) * world.map.width + Math.floor(g.x)] ?? 0;
-    const b = world.getBuilding(id);
-    return b && b.owner === this.game.humanPlayer ? b : null;
+  /** Show what was clicked, if it is something we don't control. */
+  private inspect(hit: Hit): void {
+    switch (hit.kind) {
+      case 'unit':
+      case 'building':
+        this.selection.setInspect({ kind: 'entity', id: hit.kind === 'unit' ? hit.unit.id : hit.building.id });
+        break;
+      case 'resource':
+        this.selection.setInspect({ kind: 'resource', index: hit.res.index });
+        break;
+      case 'ground':
+        if (hit.explored) this.selection.setInspect({ kind: 'ground', x: hit.x, y: hit.y });
+        else this.selection.clear();
+        break;
+      case 'none':
+        this.selection.clear();
+    }
   }
 
   private clickSelect(sx: number, sy: number, additive: boolean): void {
-    const u = this.pickOwnUnit(sx, sy);
+    this.picker.alpha = this.alpha;
+    const hit = this.picker.at(sx, sy);
     const now = performance.now();
-    if (!u) {
-      const b = this.pickOwnBuilding(sx, sy);
-      if (b) this.selection.set([b.id]);
-      else if (!additive) this.selection.clear();
+    if (hit.kind === 'unit' && hit.own) {
+      const u = hit.unit;
+      const dbl = this.lastClick.unitId === u.id && now - this.lastClick.time < 350;
+      this.lastClick = { time: now, unitId: u.id };
+      if (dbl) this.selectTypeOnScreen(u.type);
+      else if (additive) this.selection.toggle(u.id);
+      else this.selection.set([u.id]);
       return;
     }
-    const dbl = this.lastClick.unitId === u.id && now - this.lastClick.time < 350;
-    this.lastClick = { time: now, unitId: u.id };
-    if (dbl) this.selectTypeOnScreen(u.type);
-    else if (additive) this.selection.toggle(u.id);
-    else this.selection.set([u.id]);
+    if (hit.kind === 'building' && hit.own) {
+      this.selection.set([hit.building.id]);
+      return;
+    }
+    if (!additive) this.inspect(hit);
   }
 
   private tap(sx: number, sy: number): void {
-    const u = this.pickOwnUnit(sx, sy);
+    this.picker.alpha = this.alpha;
+    const hit = this.picker.at(sx, sy);
     const now = performance.now();
-    if (u) {
+    if (hit.kind === 'unit' && hit.own && this.verbFor(hit) === null) {
+      const u = hit.unit;
       const dbl = this.lastClick.unitId === u.id && now - this.lastClick.time < 400;
       this.lastClick = { time: now, unitId: u.id };
       if (dbl) this.selectTypeOnScreen(u.type);
       else this.selection.set([u.id]);
       return;
     }
-    const b = this.pickOwnBuilding(sx, sy);
-    const hasUnits = this.selection.list().some((id) => this.game.world.getUnit(id));
-    // With units selected, tapping one of our own foundations sends builders to help;
-    // otherwise tapping a building selects it.
-    if (b && !(hasUnits && !b.complete)) {
-      this.selection.set([b.id]);
+    const verb = this.verbFor(hit);
+    // Tapping a building selects it, unless the selection has a job to do there (help build).
+    if (hit.kind === 'building' && hit.own && verb !== 'build') {
+      this.selection.set([hit.building.id]);
       return;
     }
-    if (this.selection.ids.size > 0) this.commandAt(sx, sy);
+    // Enemies are inspected for now (attacking arrives with combat in M3).
+    if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own) {
+      this.inspect(hit);
+      return;
+    }
+    if (verb) {
+      this.commandAt(sx, sy);
+      return;
+    }
+    this.inspect(hit);
+  }
+
+  /** What a right click / tap on this hit would do with the current selection (null: nothing). */
+  verbFor(hit: Hit): CursorKind | null {
+    const world = this.game.world;
+    const me = this.game.humanPlayer;
+    let units = 0;
+    let gatherers = 0;
+    let buildings = 0;
+    const builderKinds = new Set<string>();
+    for (const id of this.selection.ids) {
+      const e = world.getEntity(id);
+      if (!e || e.owner !== me) continue;
+      if (e.kind === 'building') {
+        buildings++;
+        continue;
+      }
+      units++;
+      if (e.def.gatherRate) gatherers++;
+      if (e.def.builder) builderKinds.add(e.def.builder);
+    }
+    if (units === 0) return buildings > 0 && hit.kind !== 'none' ? 'rally' : null;
+    if (hit.kind === 'resource' && hit.res.kind === 'ore' && gatherers > 0) return 'mine';
+    if (hit.kind === 'building' && hit.own && !hit.building.complete && builderKinds.has(hit.building.def.builtBy)) return 'build';
+    if (hit.kind === 'none') return null;
+    return 'move';
+  }
+
+  // -------------------------------------------------------------------------
+  // Hover (desktop): label under the cursor and a context cursor
+
+  private hoverAt = 0;
+  private lastCursor = '';
+
+  private updateHover(): void {
+    const now = performance.now();
+    if (now - this.hoverAt < 70) return;
+    this.hoverAt = now;
+    const busy = this.pointers.size > 0;
+    if (this.touchDevice || !this.mouse.inside || busy) {
+      this.tooltip.style.display = 'none';
+      if (busy) return;
+    }
+    let cursor: CursorKind = 'default';
+    let label: { title: string; sub: string } | null = null;
+    if (this.placing) {
+      cursor = this.placing.valid ? 'place' : 'nope';
+    } else if (this.mouse.inside && !this.touchDevice) {
+      this.picker.alpha = this.alpha;
+      const hit = this.picker.at(this.mouse.x, this.mouse.y);
+      const verb = this.verbFor(hit);
+      const selectable = (hit.kind === 'unit' || hit.kind === 'building') && hit.own;
+      // Own units/buildings are selected by left click; the cursor shows the right-click verb otherwise.
+      cursor = verb && !(selectable && verb === 'move') ? verb : selectable ? 'select' : 'default';
+      if (hit.kind !== 'ground') label = hitName(this.game.world, hit, this.game.humanPlayer);
+      else if (hit.explored && hit.terrain !== Terrain.Grass && hit.terrain !== Terrain.Beach) label = hitName(this.game.world, hit, this.game.humanPlayer);
+    }
+    const css = cursorCss(cursor);
+    if (css !== this.lastCursor) {
+      this.canvas.style.cursor = css;
+      this.lastCursor = css;
+    }
+    if (label && this.mouse.inside && !this.touchDevice) {
+      this.tooltip.innerHTML = `<b></b>${label.sub ? '<span></span>' : ''}`;
+      this.tooltip.querySelector('b')!.textContent = label.title;
+      const sub = this.tooltip.querySelector('span');
+      if (sub) sub.textContent = label.sub;
+      this.tooltip.style.display = 'block';
+      const w = this.canvas.clientWidth;
+      const left = Math.min(this.mouse.x + 18, w - 220);
+      this.tooltip.style.left = `${left}px`;
+      this.tooltip.style.top = `${this.mouse.y + 20}px`;
+    } else {
+      this.tooltip.style.display = 'none';
+    }
   }
 
   private boxSelect(x0: number, y0: number, x1: number, y1: number, additive: boolean): void {

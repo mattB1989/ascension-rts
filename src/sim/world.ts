@@ -187,6 +187,7 @@ export class World {
       rally: null,
       resource: -1,
       builders: 0,
+      activeBuilders: 0,
       waitingForPop: false,
     };
     this.buildings.push(b);

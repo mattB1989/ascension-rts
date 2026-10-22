@@ -66,6 +66,20 @@ test('engineers mine ore and carry it to the HQ', () => {
   assert.equal(world.players[P]!.gathered.ore, gained);
 });
 
+test('a crowded ore field does not jam: 12 engineers mine as fast each as 1', () => {
+  const perEngineer = (n: number) => {
+    const world = createMatch({ seed: 1337 });
+    const h = hq(world);
+    for (let i = 0; i < n - 5; i++) world.spawnUnit('engineer', P, h.x + 3 + (i % 4) * 0.7, h.y + 3 + Math.floor(i / 4) * 0.7);
+    const ids = engineers(world).slice(0, n);
+    run(world, 120, [{ kind: 'gather', player: P, units: ids, resource: nearestOre(world) }]);
+    return world.players[P]!.gathered.ore / n;
+  };
+  const solo = perEngineer(1);
+  const crowd = perEngineer(12);
+  assert.ok(crowd > solo * 0.9, `crowd ${crowd.toFixed(0)} vs solo ${solo.toFixed(0)} ore per engineer`);
+});
+
 test('engineers build a Habitat Block, which raises the population cap', () => {
   const world = createMatch({ seed: 1337 });
   const h = hq(world);
@@ -78,6 +92,28 @@ test('engineers build a Habitat Block, which raises the population cap', () => {
   run(world, 25);
   assert.ok(b.complete, `progress ${b.progress}`);
   assert.equal(world.players[P]!.popCap, 20);
+});
+
+test('more builders build faster', () => {
+  const timeWith = (n: number) => {
+    const world = createMatch({ seed: 1337 });
+    const h = hq(world);
+    const [tx, ty] = findPlacement(world, P, 'barracks', h.x - 7, h.y + 2)!;
+    world.step([{ kind: 'build', player: P, units: engineers(world).slice(0, n), building: 'barracks', tx, ty }]);
+    const b = world.buildings.find((x) => x.type === 'barracks')!;
+    let t = 0;
+    while (!b.complete && t < 15 * 120) {
+      world.step();
+      t++;
+    }
+    return t / TICK_RATE;
+  };
+  const one = timeWith(1);
+  const three = timeWith(3);
+  const five = timeWith(5);
+  assert.ok(one > BUILDINGS.barracks.buildTime, `1 builder: ${one}s`);
+  assert.ok(three < one * 0.65, `3 builders ${three}s vs 1 builder ${one}s`);
+  assert.ok(five < three, `5 builders ${five}s vs 3 builders ${three}s`);
 });
 
 test('placement rules: water, overlap, unexplored, coast, oil', () => {

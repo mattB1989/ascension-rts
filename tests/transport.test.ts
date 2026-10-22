@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { NavLayer } from '../src/sim/nav.ts';
+import { findPlacement } from '../src/sim/placement.ts';
 import { createMatch } from '../src/sim/scenario.ts';
 import { TICK_RATE } from '../src/sim/time.ts';
 import type { Unit, World } from '../src/sim/world.ts';
@@ -116,3 +117,47 @@ test('transport logistics are deterministic', () => {
   assert.equal(play(), play());
 });
 
+
+test('offshore rig: pipeline alone gives 1/s; a hauling Sea Engineer brings in much more', () => {
+  const energyAfter = (haul: boolean) => {
+    const world = createMatch({ seed: 1337, mode: 'sandbox' });
+    const p = world.players[P]!;
+    p.explored.fill(1);
+    const h = world.buildings.find((b) => b.owner === P && b.type === 'command_center')!;
+    const oil = world.resources
+      .filter((r) => r.kind === 'oil' && r.offshore)
+      .sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0]!;
+    const yardSpot = findPlacement(world, P, 'shipyard', oil.x - 4, oil.y - 4, 20)!;
+    const yard = world.addBuilding('shipyard', P, yardSpot[0], yardSpot[1], true);
+    const rigSpot = findPlacement(world, P, 'offshore_rig', oil.x, oil.y, 3)!;
+    const rig = world.addBuilding('offshore_rig', P, rigSpot[0], rigSpot[1], true);
+    if (haul) {
+      const tanker = world.spawnUnit('sea_engineer', P, yard.x, yard.y);
+      const w = world.pathfinder.nearestPassable(NavLayer.Water, Math.floor(yard.x), Math.floor(yard.y), 6)!;
+      tanker.x = tanker.px = w[0] + 0.5;
+      tanker.y = tanker.py = w[1] + 0.5;
+      world.step([{ kind: 'haul', player: P, units: [tanker.id], building: rig.id }]);
+    }
+    const e0 = p.gathered.energy;
+    run(world, 120);
+    return { gained: p.gathered.energy - e0, stored: rig.stored };
+  };
+  const pipe = energyAfter(false);
+  const hauled = energyAfter(true);
+  assert.ok(pipe.gained > 110 && pipe.gained < 130, `pipeline only: ${pipe.gained.toFixed(0)} in 2 min`);
+  assert.equal(Math.round(pipe.stored), 150, 'unserviced tank fills up');
+  assert.ok(hauled.gained > pipe.gained * 1.8, `hauled ${hauled.gained.toFixed(0)} vs pipeline ${pipe.gained.toFixed(0)}`);
+});
+
+test('explore: a scout buggy uncovers a large part of the map on its own', () => {
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
+  const p = world.players[P]!;
+  const count = () => p.explored.reduce((s: number, v: number) => s + v, 0);
+  const before = count();
+  const scout = unit(world, 'scout_buggy');
+  world.step([{ kind: 'explore', player: P, units: [scout.id] }]);
+  run(world, 240);
+  const after = count();
+  assert.ok(after > before * 3, `explored ${before} -> ${after} tiles`);
+  assert.equal(scout.task?.kind, 'explore', 'still exploring');
+});

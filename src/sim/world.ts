@@ -9,7 +9,9 @@ import {
   cancelConstruction, cancelQueueItem, claimOil, orderBuildAssist, orderGather, orderPlace, orderResearch, orderTrain,
   updateBuildings, updateWorker,
 } from './economy.ts';
+import { orderExplore, updateExplore } from './explore.ts';
 import { FOG_INTERVAL, updateFog } from './fog.ts';
+import { orderHaul } from './haul.ts';
 import type { GameMap } from './map.ts';
 import { moveUnit, orderMove, separate, stopUnit } from './movement.ts';
 import {
@@ -198,6 +200,7 @@ export class World {
       resource: -1,
       builders: 0,
       activeBuilders: 0,
+      stored: 0,
       waitingForPop: false,
     };
     this.buildings.push(b);
@@ -284,6 +287,7 @@ export class World {
       }
       updateWorker(this, u);
       updateTransport(this, u);
+      updateExplore(this, u);
     }
     for (const u of this.units) if (!immobile(u)) moveUnit(this, u);
     for (const u of [...this.units]) updateAir(this, u);
@@ -346,6 +350,14 @@ export class World {
         break;
       case 'returnBase':
         orderReturn(this, this.ownedUnits(c.player, c.units));
+        break;
+      case 'haul': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) orderHaul(this, this.ownedUnits(c.player, c.units), b);
+        break;
+      }
+      case 'explore':
+        orderExplore(this, this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0));
         break;
       case 'stop':
         for (const u of this.ownedUnits(c.player, c.units)) {
@@ -421,6 +433,7 @@ export class World {
     }
     for (const b of this.buildings) {
       mix(b.id);
+      mix(b.stored);
       mix(b.progress);
       mix(b.hp);
       for (const q of b.queue) mix(q.progress);

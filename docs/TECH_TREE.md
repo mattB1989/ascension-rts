@@ -115,11 +115,11 @@ flowchart LR
 | **Arcology** | Housing | Nano | Habitat Block | 300 / 150 | 45 | 3×3 | +30 | Large housing: +30 population. Slowly heals nearby infantry. |
 | **Ore Refinery** | Resource | Modern | Command Center | 150 / 0 | 30 | 3×3 | — | Ore drop-off. Build it next to ore fields to shorten trips. Mining research. |
 | **Oil Derrick** | Resource | Modern | Command Center | 100 / 0 | 25 | 2×2 | — | Built on land oil. Produces Energy on its own. Produces 1.5 energy/s. |
-| **Offshore Rig** | Resource | Modern | Shipyard | 200 / 0 | 40 | 3×3 | — | Built on sea oil by a Sea Engineer. Richer than land oil, exposed to navies. Produces 2.5 energy/s. |
+| **Offshore Rig** | Resource | Modern | Shipyard | 200 / 0 | 40 | 3×3 | — | Built on sea oil by a Sea Engineer. Pumps 2.5 oil/s into its tank; 1/s flows ashore by pipeline, Sea Engineers haul the rest to a Shipyard. Produces 2.5 energy/s. |
 | **Fusion Plant** | Resource | Nano | Research Lab | 600 / 0 | 60 | 3×3 | — | Produces Energy anywhere. Explodes when destroyed. Produces 4 energy/s. |
 | **Barracks** | Military | Modern | Command Center | 200 / 0 | 35 | 3×3 | — | Trains infantry. |
 | **Vehicle Factory** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds land vehicles. |
-| **Shipyard** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds ships and submarines. Must touch the water. |
+| **Shipyard** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds ships and submarines. Must touch the water. Sea Engineers unload oil here. |
 | **Airfield** | Military | Modern | Radar Station + Vehicle Factory | 350 / 200 | 55 | 6×5 | — | Builds aircraft. 4 parking spots where planes land to refuel and repair. |
 | **Mech Foundry** | Military | Digital | Research Lab + Vehicle Factory | 600 / 400 | 70 | 5×5 | — | Builds giant mechs. |
 | **Spaceport** | Military | Space | Airfield | 800 / 800 | 80 | 5×5 | — | Builds orbital units. |

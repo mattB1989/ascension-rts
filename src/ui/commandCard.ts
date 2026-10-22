@@ -141,6 +141,7 @@ export class CommandCard {
           onClick: () => this.input.startPlacement(type),
         });
       }
+      buttons.unshift({ key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Wander off and uncover unexplored ground until the map is explored', onClick: () => this.input.exploreSelected(), cls: 'explore' });
       return {
         title: builders.length === 1 ? builders[0]!.def.name : `${builders.length} builders`,
         status: () => {
@@ -211,10 +212,15 @@ export class CommandCard {
         if (def.produces) {
           const res = b.resource >= 0 ? world.resources[b.resource] : undefined;
           const rate = def.produces.perSecond * p.mult.produce[def.produces.resource] * 60;
-          parts.push(res && res.amount <= 0 ? 'Oil exhausted' : `+${Math.round(rate)} energy/min${res ? ` · ${Math.floor(res.amount)} oil left` : ''}`);
+          const shown = def.tank ? def.tank.pipeline * p.mult.produce[def.produces.resource] * 60 : rate;
+          parts.push(res && res.amount <= 0 ? 'Oil exhausted' : `+${Math.round(shown)} energy/min${def.tank ? ' by pipeline' : ''}${res ? ` · ${Math.floor(res.amount)} oil left` : ''}`);
         }
         if (def.pop) parts.push(`Housing +${def.pop}`);
         if (def.dock) parts.push(`Parking ${airfieldLoad(world, b)}/${def.dock}`);
+        if (def.tank) {
+          const haulers = world.units.filter((x) => x.owner === b.owner && x.task?.kind === 'haul' && x.task.rig === b.id).length;
+          parts.push(`Tank ${Math.floor(b.stored)}/${def.tank.capacity} · ${haulers} hauler${haulers === 1 ? '' : 's'}`);
+        }
         if (b.waitingForPop) parts.push('⚠ Need more housing');
         return parts.join(' · ');
       };
@@ -223,7 +229,9 @@ export class CommandCard {
         title: def.name,
         status,
         progress: null,
-        hint: canTrain ? (this.input.touchDevice ? 'Tap the map to set the rally point.' : 'Right click the map to set the rally point.') : '',
+        hint: def.tank
+          ? `Pumps ${def.produces?.perSecond ?? 0}/s into its tank; ${def.tank.pipeline}/s flows ashore by pipeline. Select Sea Engineers and ${this.input.touchDevice ? 'tap' : 'right click'} the rig to haul the rest to a Shipyard.`
+          : canTrain ? (this.input.touchDevice ? 'Tap the map to set the rally point.' : 'Right click the map to set the rally point.') : '',
         buttons,
         queue: b.queue.map((q, i) => ({
           key: `q:${i}:${q.kind === 'unit' ? q.unit : q.tech}`,
@@ -262,8 +270,12 @@ export class CommandCard {
           onClick: () => this.game.issue({ kind: 'returnBase', player: me, units: ids }),
         });
       }
+      if (!d.cargo || d.domain !== 'air') {
+        buttons.push({ key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Wander off and uncover unexplored ground until the map is explored', onClick: () => this.input.exploreSelected(), cls: 'explore' });
+      }
       const status = () => {
         const parts: string[] = [units.length > 1 ? `${units.length} selected` : `${Math.ceil(u.hp)}/${d.hp} HP`];
+        if (u.task?.kind === 'explore') parts.push('exploring');
         if (d.fuel) {
           const f = Math.round((Math.min(...units.map((x) => x.fuel)) / d.fuel) * 100);
           parts.push(u.parked ? `Parked · fuel ${f}%` : `Fuel ${f}%${f < 25 ? ' ⚠' : ''}`);

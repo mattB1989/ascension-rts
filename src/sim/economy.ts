@@ -6,6 +6,7 @@ import type { ResourceId, TechEffect, UnitDef } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { fatan2, fcos, fsin } from './fmath.ts';
 import { evict, orderMove, setDestination, stopUnit } from './movement.ts';
+import { orderHaul, updateHaul } from './haul.ts';
 import { airfieldLoad, dockNew, takeOff } from './transport.ts';
 import { layerFor, NavLayer } from './nav.ts';
 import { ageIndex, buildLockReason, canAfford, oilUnder, pay, placementProblem, refund } from './placement.ts';
@@ -31,7 +32,7 @@ export function distToRect(x: number, y: number, b: Building): number {
 }
 
 /** A point just outside a building's footprint, on the side facing (x, y). */
-function approachRect(b: Building, x: number, y: number): [number, number] {
+export function approachRect(b: Building, x: number, y: number): [number, number] {
   const cx = Math.max(b.tx, Math.min(b.tx + b.w, x));
   const cy = Math.max(b.ty, Math.min(b.ty + b.h, y));
   let dx = x - cx;
@@ -192,6 +193,7 @@ export function updateWorker(world: World, u: Unit): void {
   if (!task) return;
   if (task.kind === 'gather') updateGather(world, u, task);
   else if (task.kind === 'build') updateBuild(world, u, task);
+  else if (task.kind === 'haul') updateHaul(world, u, task);
 }
 
 function nearestOre(world: World, x: number, y: number, maxDist: number): number {
@@ -334,6 +336,10 @@ function updateBuild(world: World, u: Unit, task: Extract<Unit['task'], { kind: 
 
 /** What a builder does once its building is finished. */
 function afterBuilding(world: World, u: Unit, done: Building | null): void {
+  if (done && done.complete && done.def.tank && u.def.haul) {
+    orderHaul(world, [u], done);
+    return;
+  }
   if (done && done.complete && done.def.dropOff?.includes('ore') && u.def.gatherRate) {
     const ore = nearestOre(world, done.x, done.y, 12);
     if (ore >= 0) {
@@ -390,8 +396,23 @@ export function updateBuildings(world: World): void {
         amount = Math.min(amount, res.amount);
         res.amount -= amount;
       }
-      p.res[prod.resource] += amount;
-      p.gathered[prod.resource] += amount;
+      const tank = b.def.tank;
+      if (tank) {
+        // Fill the tank (pumping pauses when it is full), then the pipeline drains it.
+        const room = tank.capacity - b.stored;
+        if (amount > room) {
+          if (res) res.amount += amount - room;
+          amount = room;
+        }
+        b.stored += amount;
+        const flow = Math.min(b.stored, tank.pipeline * p.mult.produce[prod.resource] * DT);
+        b.stored -= flow;
+        p.res[prod.resource] += flow;
+        p.gathered[prod.resource] += flow;
+      } else {
+        p.res[prod.resource] += amount;
+        p.gathered[prod.resource] += amount;
+      }
     }
 
     // Production queue.

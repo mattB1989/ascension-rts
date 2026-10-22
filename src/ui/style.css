@@ -428,6 +428,10 @@ body {
   justify-content: center;
 }
 
+.cmd.explore {
+  background: rgba(125, 255, 138, 0.1);
+}
+
 .cmd.tech {
   background: rgba(180, 140, 255, 0.1);
 }

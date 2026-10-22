@@ -26,7 +26,15 @@ TypeScript + three.js + Vite. Static site, no server. Every model, texture and s
 - The full catalog of ages, buildings, units and research lives in `src/data/`, and
   [docs/TECH_TREE.md](docs/TECH_TREE.md) is generated from it.
 
-URL options: `?mode=sandbox` starts with a mixed army, navy and air force (the M1 test bed);
+- **Movement:** forests block vehicles (infantry and engineers walk through, slower);
+  **🧭 Explore** sends any unit off to uncover the map by itself.
+- **Sea and air logistics:** Transport Ships ferry land units between shores. Offshore Rigs
+  fill a tank that Sea Engineers haul to a Shipyard. Planes have fuel, park and refuel at
+  Airfields (4 spots), and crash if they run dry. Cargo Planes paradrop 8 infantry anywhere.
+- **Feedback:** click or tap anything to see what it is; on desktop, hover labels and cursors
+  show what a right click will do.
+
+URL options: `?mode=sandbox` starts with a mixed army, a navy with a transport, and an airfield with jets and a cargo plane;
 `?fog=0` turns the fog of war off; `?seed=42` picks another map seed.
 
 Next: M3, combat, walls and towers. See [docs/PLAN.md](docs/PLAN.md).

@@ -70,6 +70,8 @@ export interface BuildingDef {
   dropOff?: readonly ResourceId[];
   /** Energy produced per second (derricks, rigs, fusion plants). */
   produces?: { resource: ResourceId; perSecond: number };
+  /** Production goes into a tank instead of straight to the player: a pipeline drains it slowly, haulers empty it faster. */
+  tank?: { capacity: number; pipeline: number };
   garrison?: number;
   /** Airfields: parking spots for aircraft that need to land and refuel. */
   dock?: number;
@@ -103,6 +105,8 @@ export interface UnitDef {
   builder?: 'engineer' | 'sea_engineer';
   /** Ore gathered per second while mining. */
   gatherRate?: number;
+  /** Tankers: oil loaded per second at a rig, and how much they carry per trip. */
+  haul?: { rate: number; capacity: number };
   /** Max per player. */
   limit?: number;
   /** Transports: how many cargo slots, and what may board (infantry take 1 slot, vehicles 3). */

@@ -82,10 +82,6 @@ export class Minimap {
         ctx.fillRect(x, y, 1, 1);
       }
     }
-    for (const r of m.resources) {
-      ctx.fillStyle = r.kind === 'ore' ? '#5ff0e0' : '#111';
-      ctx.fillRect(Math.floor(r.x) - 1, Math.floor(r.y) - 1, 2, 2);
-    }
     return c;
   }
 
@@ -167,6 +163,35 @@ export class Minimap {
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.stroke();
+    }
+
+    // Resources the player has discovered: ore as cyan diamonds, oil as dark drops with an orange ring.
+    const icon = Math.max(2.5, this.size / 48);
+    for (const r of this.world.resources) {
+      if (r.amount <= 0) continue;
+      if (pl && this.fogOn && !pl.explored[r.ty * m.width + r.tx]) continue;
+      const [px, py] = this.project(r.x, r.y);
+      if (r.kind === 'ore') {
+        ctx.beginPath();
+        ctx.moveTo(px, py - icon);
+        ctx.lineTo(px + icon * 0.75, py);
+        ctx.lineTo(px, py + icon);
+        ctx.lineTo(px - icon * 0.75, py);
+        ctx.closePath();
+        ctx.fillStyle = '#5ff0e0';
+        ctx.fill();
+        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = '#0b2a2a';
+        ctx.stroke();
+      } else if (r.claimedBy === 0) {
+        ctx.beginPath();
+        ctx.arc(px, py, icon * 0.95, 0, Math.PI * 2);
+        ctx.fillStyle = '#141414';
+        ctx.fill();
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = '#ff9a3c';
+        ctx.stroke();
+      }
     }
 
     // Units (enemy ones only where visible).

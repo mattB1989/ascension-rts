@@ -20,7 +20,11 @@ export type UnitTask =
   /** Cargo plane: fly over (x, y) and drop everyone by parachute, then fly home. */
   | { kind: 'paradrop'; x: number; y: number }
   /** Aircraft: fly back to an airfield and land. */
-  | { kind: 'return' };
+  | { kind: 'return' }
+  /** Tanker: load oil at a rig's tank, carry it to a Shipyard, repeat. */
+  | { kind: 'haul'; rig: number; phase: 'toRig' | 'loading' | 'toDropOff'; dropId: number }
+  /** Wander towards unexplored ground until the map (reachable by this unit) is explored. */
+  | { kind: 'explore'; tried: number[] };
 
 export interface Unit {
   kind: 'unit';
@@ -97,6 +101,8 @@ export interface Building {
   activeBuilders: number;
   /** True when the front of the queue is done but waiting for housing. */
   waitingForPop: boolean;
+  /** Oil waiting in a rig's tank. */
+  stored: number;
 }
 
 export type Entity = Unit | Building;

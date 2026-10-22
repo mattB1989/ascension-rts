@@ -14,9 +14,9 @@ export const UNITS = {
   sea_engineer: {
     id: 'sea_engineer', name: 'Sea Engineer', domain: 'sea', armor: 'ship', age: 'modern',
     cost: { ore: 120, energy: 0 }, pop: 1, hp: 200, speed: 3.2, turnRate: 2.2, radius: 0.7, vision: 6, move: 'ship',
-    trainedAt: 'shipyard', trainTime: 18, builder: 'sea_engineer',
+    trainedAt: 'shipyard', trainTime: 18, builder: 'sea_engineer', haul: { rate: 10, capacity: 40 },
     strongVs: '—', weakVs: 'everything',
-    description: 'Work boat. Builds Offshore Rigs and Sonar Nets.',
+    description: 'Work boat. Builds Offshore Rigs and Sonar Nets, and hauls oil from rigs to a Shipyard.',
   },
   // --- Modern: infantry -----------------------------------------------------
   rifleman: {

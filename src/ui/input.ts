@@ -377,6 +377,11 @@ export class InputController {
     this.selection.set(this.ownUnits().filter((u) => u.type !== 'engineer').map((u) => u.id));
   }
 
+  exploreSelected(): void {
+    const ids = this.ownSelected().units.map((u) => u.id);
+    if (ids.length) this.game.issue({ kind: 'explore', player: this.game.humanPlayer, units: ids });
+  }
+
   stopSelected(): void {
     const ids = this.selection.list();
     if (ids.length) this.game.issue({ kind: 'stop', player: this.game.humanPlayer, units: ids });
@@ -426,6 +431,12 @@ export class InputController {
         this.renderer.effects.moveMarker(hit.unit.x, 0.1, hit.unit.y);
         return;
       }
+    }
+    // Haul: Sea Engineers onto one of our rigs.
+    if (hit.kind === 'building' && hit.own && hit.building.def.tank && hit.building.complete && sel.units.some((u) => u.def.haul)) {
+      this.game.issue({ kind: 'haul', player, units: sel.units.filter((u) => u.def.haul).map((u) => u.id), building: hit.building.id });
+      this.renderer.effects.moveMarker(hit.building.x, 0.1, hit.building.y);
+      return;
     }
     // Land: aircraft onto one of our airfields.
     if (hit.kind === 'building' && hit.own && hit.building.def.dock && sel.units.some((u) => u.def.fuel)) {
@@ -667,7 +678,7 @@ export class InputController {
     }
     const verb = this.verbFor(hit);
     // Tapping a building selects it, unless the selection has a job to do there (help build).
-    if (hit.kind === 'building' && hit.own && verb !== 'build' && verb !== 'board') {
+    if (hit.kind === 'building' && hit.own && verb !== 'build' && verb !== 'board' && verb !== 'mine') {
       this.selection.set([hit.building.id]);
       return;
     }
@@ -706,6 +717,7 @@ export class InputController {
     const sel = this.ownSelected();
     if (hit.kind === 'unit' && hit.own && hit.unit.def.cargo && sel.units.some((u) => u !== hit.unit && u.def.domain === 'land')) return 'board';
     if (hit.kind === 'building' && hit.own && hit.building.def.dock && sel.units.some((u) => u.def.fuel)) return 'board';
+    if (hit.kind === 'building' && hit.own && hit.building.def.tank && hit.building.complete && sel.units.some((u) => u.def.haul)) return 'mine';
     if (hit.kind === 'ground' && sel.units.some((u) => u.def.cargo && u.def.domain === 'sea' && u.cargo.length > 0) && world.nav.passableAt(NavLayer.Foot, hit.x, hit.y)) return 'unload';
     if (hit.kind === 'resource' && hit.res.kind === 'ore' && gatherers > 0) return 'mine';
     if (hit.kind === 'building' && hit.own && !hit.building.complete && builderKinds.has(hit.building.def.builtBy)) return 'build';

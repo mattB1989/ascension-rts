@@ -30,7 +30,11 @@ export type Command =
   /** Cargo planes drop their passengers by parachute over (x, y). */
   | { kind: 'paradrop'; player: number; units: number[]; x: number; y: number }
   /** Aircraft fly back to an airfield and land. */
-  | { kind: 'returnBase'; player: number; units: number[] };
+  | { kind: 'returnBase'; player: number; units: number[] }
+  /** Sea Engineers haul oil from a rig's tank to a Shipyard. */
+  | { kind: 'haul'; player: number; units: number[]; building: number }
+  /** Units head off into unexplored territory by themselves. */
+  | { kind: 'explore'; player: number; units: number[] };
 
 /** A command stamped with the tick it executes on (for replays). */
 export interface TimedCommand {

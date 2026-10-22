@@ -37,8 +37,8 @@ export const BUILDINGS = {
   offshore_rig: {
     id: 'offshore_rig', name: 'Offshore Rig', category: 'resource', age: 'modern', requires: ['shipyard'],
     cost: { ore: 200, energy: 0 }, buildTime: 40, hp: 1000, size: [3, 3], placement: 'seaOil', pop: 0, vision: 6,
-    builtBy: 'sea_engineer', produces: { resource: 'energy', perSecond: 2.5 },
-    description: 'Built on sea oil by a Sea Engineer. Richer than land oil, exposed to navies.',
+    builtBy: 'sea_engineer', produces: { resource: 'energy', perSecond: 2.5 }, tank: { capacity: 150, pipeline: 1 },
+    description: 'Built on sea oil by a Sea Engineer. Pumps 2.5 oil/s into its tank; 1/s flows ashore by pipeline, Sea Engineers haul the rest to a Shipyard.',
   },
   fusion_plant: {
     id: 'fusion_plant', name: 'Fusion Plant', category: 'resource', age: 'nano', requires: ['research_lab'],
@@ -62,8 +62,8 @@ export const BUILDINGS = {
   shipyard: {
     id: 'shipyard', name: 'Shipyard', category: 'military', age: 'modern', requires: ['barracks'],
     cost: { ore: 300, energy: 100 }, buildTime: 45, hp: 2000, size: [4, 4], placement: 'coast', pop: 0, vision: 7,
-    builtBy: 'engineer',
-    description: 'Builds ships and submarines. Must touch the water.',
+    builtBy: 'engineer', dropOff: ['energy'],
+    description: 'Builds ships and submarines. Must touch the water. Sea Engineers unload oil here.',
   },
   airfield: {
     id: 'airfield', name: 'Airfield', category: 'military', age: 'modern', requires: ['radar_station', 'vehicle_factory'],

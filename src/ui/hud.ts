@@ -60,7 +60,11 @@ const HELP_HTML = `
       </ul>
     </section>
   </div>
-  <p>Forests block vehicles; infantry and engineers can walk through them, slowly. More engineers on one foundation build faster.</p>
+  <p>Forests block vehicles; infantry and engineers can walk through them, slowly. More engineers on one foundation build faster.
+  <b>🧭 Explore</b> sends a unit off to uncover the map by itself.</p>
+  <p><b>Sea:</b> Transport Ships carry land units to other shores (select units, then right click / tap the ship; right click / tap land with the ship selected to unload).
+  Offshore Rigs fill a tank; Sea Engineers haul it to a Shipyard for much more energy than the pipeline alone.</p>
+  <p><b>Air:</b> planes burn fuel and fly home to an Airfield to refuel (4 parking spots each). Cargo Planes carry 8 infantry who board at the Airfield, then <b>🪂 Paradrop</b> anywhere.</p>
   <p class="muted">Milestone 2: economy and base building. Combat, walls and towers arrive in M3, the AI opponent in M4.</p>
 `;
 

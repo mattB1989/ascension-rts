@@ -230,10 +230,10 @@ test('research: Deep Drilling speeds up mining; unfinished techs are refused', (
   const barracks = grant(world, 'barracks');
   run(world, 0.1, [
     { kind: 'research', player: P, building: refinery.id, tech: 'deep_drilling' },
-    { kind: 'research', player: P, building: barracks.id, tech: 'body_armor' },
+    { kind: 'research', player: P, building: barracks.id, tech: 'exoskeletons' },
   ]);
   assert.equal(refinery.queue.length, 1);
-  assert.equal(barracks.queue.length, 0, 'Body Armor needs combat (M3)');
+  assert.equal(barracks.queue.length, 0, 'Exoskeletons needs the Digital Age');
   run(world, 36);
   assert.ok(p.researched.has('deep_drilling'));
   assert.ok(Math.abs(p.mult.gather.ore - 1.15) < 1e-9);

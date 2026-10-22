@@ -10,6 +10,7 @@ import { UNIT_TYPES, UNITS, type UnitTypeId } from '../data/units.ts';
 import type { Game } from '../game.ts';
 import { buildTimeLeft, researchLockReason, trainLockReason } from '../sim/economy.ts';
 import { airfieldLoad } from '../sim/transport.ts';
+import { weaponsOf } from '../data/weapons.ts';
 import { TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
 import { ageIndex, buildLockReason, canAfford } from '../sim/placement.ts';
 import type { Building, Unit } from '../sim/world.ts';
@@ -51,6 +52,8 @@ function costHtml(c: Cost, ok: { ore: boolean; energy: boolean }): string {
 
 export class CommandCard {
   readonly el: HTMLDivElement;
+  /** Which part of the build menu engineers show. */
+  private tab: 'base' | 'defense' = 'base';
   private sig = '';
   private bars: Array<{ el: HTMLElement; get: () => number }> = [];
   private statusEl: HTMLElement | null = null;
@@ -77,11 +80,14 @@ export class CommandCard {
     const ok = (c: Cost) => ({ ore: p.res.ore >= c.ore, energy: p.res.energy >= c.energy });
 
     if (this.input.targeting) {
+      const am = this.input.targeting.kind === 'attackMove';
       return {
-        title: 'Choose the drop zone',
+        title: am ? 'Attack-move: pick a destination' : 'Choose the drop zone',
         status: () => '',
         progress: null,
-        hint: this.input.touchDevice ? 'Tap the map where the paratroopers should land.' : 'Click the map where the paratroopers should land. Right click or Esc to cancel.',
+        hint: am
+          ? `${this.input.touchDevice ? 'Tap' : 'Click'} where to go. Units fight anything they meet on the way.${this.input.touchDevice ? '' : ' Right click or Esc to cancel.'}`
+          : this.input.touchDevice ? 'Tap the map where the paratroopers should land.' : 'Click the map where the paratroopers should land. Right click or Esc to cancel.',
         buttons: [{ key: 'cancelTarget', label: '✕ Cancel', disabled: false, reason: null, title: 'Cancel', onClick: () => this.input.cancelTargeting() }],
         queue: [],
       };
@@ -100,11 +106,16 @@ export class CommandCard {
         });
       }
       buttons.push({ key: 'cancel', label: '✕ Cancel', disabled: false, reason: null, title: 'Cancel (Esc / right click)', onClick: () => this.input.cancelPlacement() });
+      const line = placing.type === 'wall';
       return {
         title: `Place ${def.name}`,
-        status: () => (placing.problem ? `⚠ ${placing.problem}` : costHtml(def.cost, ok(def.cost))),
+        status: () => (placing.problem ? `⚠ ${placing.problem}` : placing.start ? this.input.lineInfo : costHtml(def.cost, ok(def.cost))),
         progress: null,
-        hint: touch ? 'Tap the map to position it, then confirm.' : 'Click to place, Shift+click to place several, right click to cancel.',
+        hint: line
+          ? touch ? 'Tap where the wall starts, then where it ends, then confirm. Walls block enemy ground units; add a Gate to let yours through.' : 'Drag to draw a wall (Shift keeps drawing). Walls block enemy ground units; build a Gate on a wall to let yours through.'
+          : placing.type === 'gate'
+            ? `${touch ? 'Tap' : 'Click'} a segment of your wall to turn it into a gate. It opens for your units only.`
+            : touch ? 'Tap the map to position it, then confirm.' : 'Click to place, Shift+click to place several, right click to cancel.',
         buttons,
         queue: [],
       };
@@ -125,10 +136,14 @@ export class CommandCard {
     if (builders.length > 0) {
       const kinds = new Set(builders.map((u) => u.def.builder));
       const buttons: Btn[] = [];
+      const tab = this.tab;
+      for (const [id, label] of [['base', '🏗 Base'], ['defense', '🛡 Defense']] as const) {
+        buttons.push({ key: `tab:${id}:${tab === id}`, label, disabled: false, reason: null, title: id === 'base' ? 'Economy and production buildings' : 'Walls, gates, towers and turrets', onClick: () => (this.tab = id), cls: `tab${tab === id ? ' on' : ''}` });
+      }
       for (const type of [...BUILD_ORDER, ...BUILDING_TYPES.filter((t) => !BUILD_ORDER.includes(t))]) {
         const def: BuildingDef = BUILDINGS[type];
         if (!kinds.has(def.builtBy)) continue;
-        if (def.category === 'defense' || ageIndex(def.age) > ageIndex(p.age)) continue;
+        if ((def.category === 'defense') !== (tab === 'defense') || ageIndex(def.age) > ageIndex(p.age)) continue;
         const lock = buildLockReason(world, this.player, type);
         const afford = canAfford(p, def.cost);
         buttons.push({
@@ -141,7 +156,7 @@ export class CommandCard {
           onClick: () => this.input.startPlacement(type),
         });
       }
-      buttons.unshift({ key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Wander off and uncover unexplored ground until the map is explored', onClick: () => this.input.exploreSelected(), cls: 'explore' });
+      buttons.splice(2, 0, { key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Wander off and uncover unexplored ground until the map is explored', onClick: () => this.input.exploreSelected(), cls: 'explore' });
       return {
         title: builders.length === 1 ? builders[0]!.def.name : `${builders.length} builders`,
         status: () => {
@@ -149,7 +164,7 @@ export class CommandCard {
           return c > 0 ? `Carrying ◆${Math.floor(c)}` : '';
         },
         progress: null,
-        hint: this.input.touchDevice ? 'Tap ore to mine, a foundation to help build.' : 'Right click ore to mine, a foundation to help build.',
+        hint: this.input.touchDevice ? 'Tap ore to mine, a foundation to help build, a damaged building to repair.' : 'Right click ore to mine, a foundation to help build, a damaged building to repair.',
         buttons,
         queue: [],
       };
@@ -217,6 +232,8 @@ export class CommandCard {
         }
         if (def.pop) parts.push(`Housing +${def.pop}`);
         if (def.dock) parts.push(`Parking ${airfieldLoad(world, b)}/${def.dock}`);
+        if (def.garrison) parts.push(`Garrison ${b.garrison.length}/${def.garrison}`);
+        if (b.hp < b.maxHp - 0.5) parts.push(`${Math.ceil(b.hp)}/${Math.round(b.maxHp)} HP`);
         if (def.tank) {
           const haulers = world.units.filter((x) => x.owner === b.owner && x.task?.kind === 'haul' && x.task.rig === b.id).length;
           parts.push(`Tank ${Math.floor(b.stored)}/${def.tank.capacity} · ${haulers} hauler${haulers === 1 ? '' : 's'}`);
@@ -225,11 +242,18 @@ export class CommandCard {
         return parts.join(' · ');
       };
       const canTrain = buttons.some((x) => x.key.startsWith('t:'));
+      if (def.garrison && b.garrison.length) {
+        buttons.push({ key: `eject:${b.garrison.length}`, label: `⬆ Eject (${b.garrison.length})`, disabled: false, reason: null, title: 'Everyone out (G)', onClick: () => this.game.issue({ kind: 'eject', player: this.player, building: b.id }) });
+      }
       return {
         title: def.name,
         status,
         progress: null,
-        hint: def.tank
+        hint: def.garrison && !canTrain
+          ? `Select infantry and ${this.input.touchDevice ? 'tap' : 'right click'} this to garrison up to ${def.garrison}: they fire from inside with +2 range and can't be hit.${weaponsOf(b.type).length ? ` Own weapon: ${weaponsOf(b.type).map((w) => w.name).join(', ')}.` : ''}`
+          : weaponsOf(b.type).length && !canTrain
+            ? `${weaponsOf(b.type).map((w) => `${w.name}: range ${w.range}`).join(', ')}. Engineers repair it when damaged.`
+            : def.tank
           ? `Pumps ${def.produces?.perSecond ?? 0}/s into its tank; ${def.tank.pipeline}/s flows ashore by pipeline. Select Sea Engineers and ${this.input.touchDevice ? 'tap' : 'right click'} the rig to haul the rest to a Shipyard.`
           : canTrain ? (this.input.touchDevice ? 'Tap the map to set the rally point.' : 'Right click the map to set the rally point.') : '',
         buttons,
@@ -244,7 +268,18 @@ export class CommandCard {
     // Units of one type: stats, plus transport and aircraft orders.
     if (units.length > 0 && buildings.length === 0) {
       const types = new Set(units.map((u) => u.type));
-      if (types.size !== 1) return null;
+      const armed = units.filter((x) => weaponsOf(x.type).length > 0);
+      const amBtn = (): Btn => ({ key: 'attackMove', label: '⚔ Attack-move', disabled: armed.length === 0, reason: armed.length ? null : 'Unarmed', title: 'Pick a destination: fight anything met on the way (F)', onClick: () => this.input.attackMoveSelected(), cls: 'attack' });
+      if (types.size !== 1) {
+        return {
+          title: `${units.length} units`,
+          status: () => `${armed.length} armed`,
+          progress: null,
+          hint: this.input.touchDevice ? 'Tap an enemy to attack it, the ground to move.' : 'Right click an enemy to attack it, the ground to move. F: attack-move.',
+          buttons: [amBtn(), { key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Spread out and uncover the map', onClick: () => this.input.exploreSelected(), cls: 'explore' }],
+          queue: [],
+        };
+      }
       const u = units[0]!;
       const d = u.def;
       const ids = units.map((x) => x.id);
@@ -270,6 +305,7 @@ export class CommandCard {
           onClick: () => this.game.issue({ kind: 'returnBase', player: me, units: ids }),
         });
       }
+      if (weaponsOf(u.type).length) buttons.unshift(amBtn());
       if (!d.cargo || d.domain !== 'air') {
         buttons.push({ key: 'explore', label: '🧭 Explore', disabled: false, reason: null, title: 'Wander off and uncover unexplored ground until the map is explored', onClick: () => this.input.exploreSelected(), cls: 'explore' });
       }
@@ -306,7 +342,9 @@ export class CommandCard {
 
   private unitHint(d: UnitDef): string {
     const moves = d.domain === 'sea' ? 'Ships only sail on water.' : d.domain === 'air' ? 'Flies anywhere.' : d.move === 'infantry' ? 'On foot: can cross forest.' : 'Vehicle: forests block it.';
-    return `Strong vs ${d.strongVs}. Weak vs ${d.weakVs}. ${moves}`;
+    const ws = weaponsOf(d.id);
+    const arms = ws.length ? ` ${ws.map((w) => `${w.name} (range ${w.range}${w.minRange ? `, min ${w.minRange}` : ''})`).join(', ')}.` : ' Unarmed.';
+    return `Strong vs ${d.strongVs}. Weak vs ${d.weakVs}.${arms} ${moves}`;
   }
 
   private infoCard(title: string, status: () => string, hint: string, buttons: Btn[]): CardModel {

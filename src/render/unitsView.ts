@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { groundHeight, surfaceHeight } from '../sim/map.ts';
 import { DT, type Unit, type World } from '../sim/world.ts';
 import { footprintBase } from './buildingsView.ts';
+import { HealthBar } from './healthBar.ts';
 import { buildChute, buildUnitModel } from './models.ts';
 
 interface UnitObject {
@@ -17,6 +18,10 @@ interface UnitObject {
   carry: THREE.Object3D | null;
   props: THREE.Object3D[];
   chute: THREE.Group | null;
+  turret: THREE.Object3D | null;
+  hb: HealthBar;
+  /** Top of the model, for the health bar. */
+  top: number;
   bank: number;
   /** Current height above the ground for aircraft (eased: take-off and landing). */
   alt: number;
@@ -85,6 +90,8 @@ export class UnitsView {
     const root = new THREE.Group();
     const model = buildUnitModel(u.type, color);
     root.add(model);
+    const hb = new HealthBar(Math.max(0.6, u.def.radius * 1.8));
+    this.group.add(hb.group);
     const ring = new THREE.Mesh(ringGeo(u.def.radius * 1.35 + 0.15), ringMat);
     ring.visible = false;
     ring.renderOrder = 2;
@@ -105,6 +112,9 @@ export class UnitsView {
         return out;
       })(),
       chute: null,
+      turret: model.getObjectByName('turret') ?? null,
+      hb,
+      top: new THREE.Box3().setFromObject(model).max.y + 0.35,
       bank: 0,
       alt: this.targetAlt(u, u.x, u.y),
     };
@@ -125,7 +135,7 @@ export class UnitsView {
     return p.visible[ty * this.world.map.width + tx] === 1;
   }
 
-  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0): void {
+  update(alpha: number, time: number, frameDt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0, camera?: THREE.Camera): void {
     const seen = new Set<number>();
     const pos = new THREE.Vector3();
     for (const u of this.world.units) {
@@ -149,9 +159,21 @@ export class UnitsView {
       let da = u.angle - u.pa;
       if (da > Math.PI) da -= Math.PI * 2;
       if (da < -Math.PI) da += Math.PI * 2;
-      const angle = u.pa + da * alpha;
+      let angle = u.pa + da * alpha;
+      // Units without a turret turn to face what they are shooting at.
+      if (!o.turret && u.target && u.state === 'idle' && u.def.domain !== 'air') angle = u.aim;
       o.root.position.copy(pos);
       o.root.rotation.set(0, -angle, 0);
+      if (o.turret) {
+        let want = u.target ? -(u.aim - angle) : 0;
+        let cur = o.turret.rotation.y;
+        while (want - cur > Math.PI) want -= Math.PI * 2;
+        while (want - cur < -Math.PI) want += Math.PI * 2;
+        cur += (want - cur) * Math.min(1, frameDt * 6);
+        o.turret.rotation.y = cur;
+      }
+      // Recoil after a shot.
+      o.model.position.x = u.firedAgo < 4 ? -0.07 * (1 - u.firedAgo / 4) : 0;
 
       const phase = u.id * 1.7;
       if (u.def.domain === 'sea') {
@@ -190,6 +212,8 @@ export class UnitsView {
       o.root.visible = shown;
 
       const isSel = (selected.has(u.id) || u.id === inspected) && shown;
+      if (camera && shown && (u.hp < u.maxHp - 0.5 || isSel)) o.hb.set(o.root.position.x, o.root.position.y + o.top * o.model.scale.y, o.root.position.z, u.hp / u.maxHp, camera);
+      else o.hb.hide();
       if (isSel) o.ring.material = u.owner === viewer ? ringMat : enemyRingMat;
       o.ring.visible = isSel;
       if (isSel) {
@@ -200,7 +224,7 @@ export class UnitsView {
     }
     for (const [id, o] of this.objects) {
       if (seen.has(id)) continue;
-      this.group.remove(o.root, o.ring);
+      this.group.remove(o.root, o.ring, o.hb.group);
       this.objects.delete(id);
     }
   }

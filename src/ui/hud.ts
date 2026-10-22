@@ -3,7 +3,7 @@
 import { AGES } from '../data/ages.ts';
 import { TECHS } from '../data/techs.ts';
 import type { Game } from '../game.ts';
-import type { World } from '../sim/world.ts';
+import type { GameEvent, World } from '../sim/world.ts';
 import { CommandCard } from './commandCard.ts';
 import type { InputController } from './input.ts';
 import type { Minimap } from './minimap.ts';
@@ -40,7 +40,8 @@ const HELP_HTML = `
         <li><b>Left click</b> select your units/buildings, or see what anything else is (ore, oil, terrain, enemies); <b>drag</b> box-select, <b>Shift</b> add</li>
         <li><b>Hover</b> shows names; the cursor shows what a right click will do (move, mine, help build, rally)</li>
         <li><b>Double click</b> select all of that type on screen</li>
-        <li><b>Right click</b>: move · on ore: mine · on a foundation: help build · with a building selected: rally point</li>
+        <li><b>Right click</b>: move · enemy: attack · ore: mine · foundation or damaged building: build / repair · tower or bunker with infantry: garrison · with a building selected: rally point</li>
+        <li><b>F</b> attack-move (fight on the way), <b>G</b> eject a garrison</li>
         <li><b>Right drag</b> pan (flick to glide), <b>wheel</b> zoom towards the cursor, <b>middle drag</b> or <b>Q / E</b> rotate</li>
         <li><b>WASD / arrows</b> or screen edge: pan (speeds up while held, <b>Shift</b> for double)</li>
         <li><b>Minimap</b>: click or drag to jump anywhere</li>
@@ -52,7 +53,8 @@ const HELP_HTML = `
       <h3>Touch</h3>
       <ul>
         <li><b>Tap</b> a unit or building to select, <b>double tap</b> for all of a type; tap anything else to see what it is</li>
-        <li><b>Tap</b> the ground to move, ore to mine, a foundation to help build</li>
+        <li><b>Tap</b> the ground to move, an enemy to attack, ore to mine, a foundation to help build</li>
+        <li><b>➤ Attack</b> then tap a spot: attack-move</li>
         <li>To build: select engineers, pick a building, <b>tap</b> to position it, then <b>✓</b></li>
         <li><b>One finger drag</b> pans, <b>flick</b> to glide (or box-selects in <b>Select</b> mode)</li>
         <li><b>Minimap</b>: tap or drag to jump anywhere</li>
@@ -65,7 +67,11 @@ const HELP_HTML = `
   <p><b>Sea:</b> Transport Ships carry land units to other shores (select units, then right click / tap the ship; right click / tap land with the ship selected to unload).
   Offshore Rigs fill a tank; Sea Engineers haul it to a Shipyard for much more energy than the pipeline alone.</p>
   <p><b>Air:</b> planes burn fuel and fly home to an Airfield to refuel (4 parking spots each). Cargo Planes carry 8 infantry who board at the Airfield, then <b>🪂 Paradrop</b> anywhere.</p>
-  <p class="muted">Milestone 2: economy and base building. Combat, walls and towers arrive in M3, the AI opponent in M4.</p>
+  <p><b>Combat:</b> units fire at enemies they can see. Idle units defend themselves; units on a plain move keep going.
+  Counters matter: rockets beat tanks, tanks beat infantry, anti-air only hits aircraft, artillery beats buildings but can't fire up close.
+  <b>Defense:</b> drag walls (🛡 tab), turn a segment into a Gate for your own units, and garrison infantry in Watchtowers and Bunkers: they fire with +2 range and can't be hit.
+  You win by destroying every enemy Command Center and production building.</p>
+  <p class="muted">Milestone 3: combat and defense. The AI opponent arrives in M4; until then the enemy base just sits there (try <b>?mode=sandbox</b> for two armies).</p>
 `;
 
 export class Hud {
@@ -132,6 +138,7 @@ export class Hud {
     actions.append(
       this.modeBtn,
       button('⚔ Army', 'Select all military units (Ctrl+A)', () => this.input.selectArmy()),
+      button('➤ Attack', 'Attack-move: pick a spot, fight on the way (F)', () => this.input.attackMoveSelected()),
       button('■ Stop', 'Stop (X)', () => this.input.stopSelected()),
       button('✕', 'Deselect (Esc)', () => (this.input.placing ? this.input.cancelPlacement() : this.selection.clear())),
       button('⌂', 'Back to base (H)', () => this.input.goHome()),
@@ -164,9 +171,9 @@ export class Hud {
     this.renderChips();
 
     try {
-      if (!localStorage.getItem('ascension.helpSeen.m2')) {
+      if (!localStorage.getItem('ascension.helpSeen.m3')) {
         this.toggleHelp(true);
-        localStorage.setItem('ascension.helpSeen.m2', '1');
+        localStorage.setItem('ascension.helpSeen.m3', '1');
       }
     } catch {
       // Storage unavailable (private mode): just don't auto-show.
@@ -223,11 +230,19 @@ export class Hud {
     this.chipsEl.appendChild(chips);
   }
 
-  private handleEvents(): void {
+  handleEvents(events: readonly GameEvent[]): void {
     const me = this.game.humanPlayer;
-    for (const e of this.game.drainEvents()) {
-      if (e.player !== me) continue;
+    for (const e of events) {
+      if (e.kind === 'gameOver') {
+        this.showGameOver(e.winner === me);
+        continue;
+      }
+      if (!('player' in e) || (e.player !== me && e.player !== -1)) continue;
       if (e.kind === 'notify') this.toast(e.text);
+      else if (e.kind === 'underAttack') {
+        this.toast('⚠ Under attack!');
+        this.onAlert(e.x, e.y);
+      }
       else if (e.kind === 'buildingComplete') {
         const b = this.world.getBuilding(e.building);
         if (b) this.toast(`${b.def.name} complete`);
@@ -235,8 +250,28 @@ export class Hud {
     }
   }
 
+  /** Called with the location of an attack alert (the minimap pings it). */
+  onAlert: (x: number, y: number) => void = () => {};
+
+  private showGameOver(won: boolean): void {
+    if (this.overEl) return;
+    const o = el('div', 'gameover');
+    const card = el('div', 'gameover-card');
+    card.append(el('h1', won ? 'win' : 'lose', won ? 'Victory' : 'Defeat'), el('p', 'muted', won ? 'The enemy has no Command Center or production buildings left.' : 'You have no Command Center or production buildings left.'));
+    const again = button('Play again', 'Start a new match', () => location.reload(), 'btn primary');
+    const look = button('Keep watching', 'Close this and look around', () => o.remove(), 'btn');
+    const row = el('div', 'gameover-actions');
+    row.append(again, look);
+    card.append(row);
+    o.appendChild(card);
+    o.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.overEl = o;
+    document.getElementById('ui')!.appendChild(o);
+  }
+
+  private overEl: HTMLElement | null = null;
+
   update(frameDt: number, realDt = frameDt): void {
-    this.handleEvents();
     this.card.update();
     const p = this.world.players[this.game.humanPlayer]!;
 

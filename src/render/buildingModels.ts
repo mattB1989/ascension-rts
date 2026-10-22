@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
-import { box, C, cached, cyl, mat, mesh, sphere, teamMats } from './models.ts';
+import { box, C, cached, cyl, cylX, mat, mesh, sphere, teamMats } from './models.ts';
 
 const concrete = () => mat(C.concrete, { rough: 0.95 });
 const concreteDark = () => mat(0x7f7d76, { rough: 0.95 });
@@ -324,6 +324,144 @@ function researchLab(team: number): THREE.Group {
   return g;
 }
 
+// ---------------------------------------------------------------------------
+// Defenses
+
+const sandbag = () => mat(0xb8a173, { rough: 1 });
+
+/** One wall pillar; the pieces between neighbouring segments are drawn by the view. */
+function wallPillar(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  g.add(box(0.62, 1.15, 0.62, mat(0xb8b4aa, { rough: 0.9 }), 0, 0.575, 0));
+  g.add(box(0.7, 0.12, 0.7, mat(0x9c988e, { rough: 0.9 }), 0, 1.2, 0));
+  g.add(box(0.64, 0.08, 0.64, t.main, 0, 0.9, 0));
+  return g;
+}
+
+/** Gate along local x: two posts and a barrier that lifts for friendly units. */
+function gate(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  for (const x of [-0.42, 0.42]) {
+    g.add(box(0.2, 1.4, 0.5, mat(0xb8b4aa, { rough: 0.9 }), x, 0.7, 0));
+    g.add(box(0.24, 0.12, 0.54, t.main, x, 1.42, 0));
+  }
+  const bar = new THREE.Group();
+  bar.name = 'gateBar';
+  bar.position.set(-0.32, 0.75, 0);
+  bar.add(box(0.7, 0.55, 0.12, darkMetal(), 0.35, 0, 0));
+  for (let i = 0; i < 3; i++) bar.add(box(0.12, 0.56, 0.13, hazard(), 0.1 + i * 0.22, 0, 0));
+  g.add(bar);
+  return g;
+}
+
+function watchtower(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const wood = mat(0x7a5a3a, { rough: 0.9 });
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const leg = box(0.09, 2.2, 0.09, wood, sx * 0.3, 1.1, sz * 0.3);
+      leg.rotation.z = -sx * 0.06;
+      leg.rotation.x = sz * 0.06;
+      g.add(leg);
+    }
+  }
+  g.add(box(0.75, 0.04, 0.05, wood, 0, 1.0, 0.3), box(0.75, 0.04, 0.05, wood, 0, 1.0, -0.3));
+  g.add(box(0.9, 0.12, 0.9, wood, 0, 2.2, 0));
+  for (const [x, z, w, d] of [[0, 0.42, 0.9, 0.08], [0, -0.42, 0.9, 0.08], [0.42, 0, 0.08, 0.9], [-0.42, 0, 0.08, 0.9]] as const) g.add(box(w, 0.3, d, sandbag(), x, 2.4, z));
+  g.add(cyl(0.05, 0.05, 0.6, 4, wood, 0.38, 2.6, 0.38), cyl(0.05, 0.05, 0.6, 4, wood, -0.38, 2.6, -0.38));
+  g.add(box(1.0, 0.07, 1.0, t.main, 0, 2.92, 0));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0, 2.45, 0);
+  turret.add(cylX(0.03, 0.45, 5, mat(C.black), 0.3, 0.08, 0));
+  turret.add(box(0.14, 0.12, 0.12, mat(C.dark), 0.06, 0.06, 0));
+  g.add(turret);
+  return g;
+}
+
+function bunker(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const conc = mat(0x8f8b80, { rough: 1 });
+  g.add(box(1.8, 0.5, 1.8, conc, 0, 0.25, 0));
+  g.add(mesh(cached('bunkerTop', () => new THREE.CylinderGeometry(0.62, 0.9, 0.38, 8)), conc, 0, 0.69, 0));
+  g.add(box(1.82, 0.08, 1.82, t.main, 0, 0.5, 0));
+  const slit = mat(0x0c0c0c);
+  for (const [x, z, w, d] of [[0, 0.91, 0.9, 0.04], [0, -0.91, 0.9, 0.04], [0.91, 0, 0.04, 0.9], [-0.91, 0, 0.04, 0.9]] as const) g.add(box(w, 0.1, d, slit, x, 0.32, z));
+  for (let i = 0; i < 6; i++) g.add(box(0.36, 0.18, 0.22, sandbag(), -0.75 + (i % 3) * 0.75, 0.09, i < 3 ? 1.02 : -1.02));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0, 0.9, 0);
+  turret.add(box(0.3, 0.16, 0.3, mat(C.dark)));
+  turret.add(cylX(0.035, 0.5, 5, mat(C.black), 0.32, 0, 0));
+  g.add(turret);
+  return g;
+}
+
+function gunTurret(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  g.add(mesh(cached('turretBase', () => new THREE.CylinderGeometry(0.42, 0.48, 0.5, 8)), mat(0x9c988e, { rough: 0.9 }), 0, 0.25, 0));
+  g.add(cyl(0.44, 0.44, 0.06, 8, t.main, 0, 0.5, 0));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0, 0.68, 0);
+  turret.add(box(0.5, 0.28, 0.42, t.accent));
+  turret.add(box(0.2, 0.14, 0.3, mat(C.steel), -0.18, 0.18, 0));
+  for (const z of [0.09, -0.09]) turret.add(cylX(0.04, 0.62, 6, mat(C.steel, { metal: 0.6 }), 0.5, 0.02, z));
+  g.add(turret);
+  return g;
+}
+
+function samSite(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2);
+  for (let i = 0; i < 4; i++) g.add(box(0.36, 0.2, 0.22, sandbag(), -0.6 + i * 0.4, 0.26, 0.8));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0, 0.3, 0);
+  turret.add(cyl(0.3, 0.36, 0.25, 8, mat(C.dark), 0, 0.12, 0));
+  const rack = new THREE.Group();
+  rack.position.set(0, 0.45, 0);
+  rack.rotation.z = 0.6;
+  rack.add(box(0.9, 0.08, 0.6, t.main, 0, -0.08, 0));
+  for (const z of [-0.2, 0.2]) {
+    for (const y of [0.04, 0.2]) {
+      rack.add(cylX(0.07, 0.85, 8, mat(0xe8e8e0), 0, y, z));
+      rack.add(mesh(cached('samNose', () => new THREE.ConeGeometry(0.07, 0.18, 8).rotateZ(-Math.PI / 2)), mat(0xd04a3a), 0.5, y, z));
+    }
+  }
+  turret.add(rack);
+  g.add(turret);
+  // Radar mast
+  g.add(cyl(0.03, 0.03, 1.2, 4, darkMetal(), -0.75, 0.75, -0.7));
+  const dish = new THREE.Group();
+  dish.name = 'spin';
+  dish.position.set(-0.75, 1.38, -0.7);
+  dish.add(box(0.55, 0.18, 0.04, metal(), 0, 0, 0.05));
+  g.add(dish);
+  return g;
+}
+
+function coastalBattery(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2);
+  const conc = mat(0x8f8b80, { rough: 1 });
+  g.add(box(1.7, 0.55, 1.7, conc, 0, 0.42, 0));
+  g.add(box(1.72, 0.08, 1.72, t.main, 0, 0.72, 0));
+  const turret = new THREE.Group();
+  turret.name = 'turret';
+  turret.position.set(0, 0.95, 0);
+  turret.add(mesh(cached('coastalDome', () => new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), mat(C.hullGrey, { metal: 0.4 }), 0, -0.2, 0));
+  turret.add(cylX(0.09, 1.5, 8, mat(C.steel, { metal: 0.6 }), 0.95, 0.05, 0));
+  turret.add(cylX(0.13, 0.2, 8, mat(C.dark), 1.68, 0.05, 0));
+  g.add(turret);
+  return g;
+}
+
 /** Stand-in for buildings whose models arrive with their milestone. */
 function genericBuilding(type: BuildingTypeId, team: number): THREE.Group {
   const t = teamMats(team);
@@ -348,6 +486,13 @@ export function buildBuildingModel(type: BuildingTypeId, team: number): THREE.Gr
     case 'airfield': return airfield(team);
     case 'radar_station': return radarStation(team);
     case 'research_lab': return researchLab(team);
+    case 'wall': return wallPillar(team);
+    case 'gate': return gate(team);
+    case 'watchtower': return watchtower(team);
+    case 'bunker': return bunker(team);
+    case 'gun_turret': return gunTurret(team);
+    case 'sam_site': return samSite(team);
+    case 'coastal_battery': return coastalBattery(team);
     default: return genericBuilding(type, team);
   }
 }

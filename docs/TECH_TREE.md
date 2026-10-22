@@ -150,20 +150,20 @@ Turtling must be a real strategy, not a delay. Design rules:
 - **Engineers repair** walls and towers (Energy-free, Ore cost proportional to damage).
 
 <!-- gen:defense -->
-| Structure | Age | Requires | Cost | Build time | Garrison | Notes |
-|---|---|---|---|---|---|---|
-| **Wall segment** | Modern | Command Center | 10 / 0 | 4 | — | Drag to draw a line. Concrete → Composite → Nanocrete (self-repairing) → Hardlight (blocks shots). |
-| **Gate** | Modern | Wall segment | 50 / 0 | 12 | — | Opens for your units only; lockable. |
-| **Watchtower** | Modern | Barracks | 125 / 0 | 20 | 4 infantry | Garrison 4 infantry who fire with +2 range. Tall: extra vision and range. |
-| **Bunker** | Modern | Barracks | 200 / 0 | 25 | 6 infantry | Garrison 6 infantry. Very high armor, weak to artillery. |
-| **Gun Turret** | Modern | Barracks | 150 / 25 | 20 | — | Auto-cannon. Good against light vehicles. |
-| **SAM Site** | Modern | Radar Station | 200 / 100 | 25 | — | Long-range anti-air. |
-| **Coastal Battery** | Modern | Shipyard | 300 / 100 | 35 | — | Long-range heavy guns against ships. |
-| **Sonar Net** | Modern | Shipyard | 100 / 50 | 15 | — | Placed on water. Reveals submerged submarines nearby. |
-| **Missile Tower** | Digital | Radar Station | 350 / 200 | 35 | 4 infantry | Garrisonable; hits ground and air. Can upgrade a Watchtower in place. |
-| **Laser Tower** | Nano | Gun Turret | 400 / 300 | 35 | — | Beam ramps up on the same target: shreds mechs and heavy armor. |
-| **Shield Generator** | Nano | Research Lab | 800 / 600 | 60 | — | Dome that absorbs damage to buildings inside until depleted, then recharges. |
-| **Point Defense Array** | Space | SAM Site | 700 / 700 | 45 | — | Shoots down missiles, shells, bombs and incoming nukes in its radius. |
+| Structure | Age | Requires | Cost | Build time | HP | Garrison | Weapons | Notes |
+|---|---|---|---|---|---|---|---|---|
+| **Wall segment** | Modern | Command Center | 10 / 0 | 4 | 800 | — | — | Drag to draw a line. Concrete → Composite → Nanocrete (self-repairing) → Hardlight (blocks shots). |
+| **Gate** | Modern | Wall segment | 50 / 0 | 12 | 1200 | — | — | Opens for your units only; lockable. |
+| **Watchtower** | Modern | Barracks | 125 / 0 | 20 | 900 | 4 infantry | Machine gun: 10 bullet / 0.8s, range 8 | Garrison 4 infantry who fire with +2 range. Tall: extra vision and range. |
+| **Bunker** | Modern | Barracks | 200 / 0 | 25 | 1800 | 6 infantry | Heavy machine gun: 14 bullet / 0.8s, range 6 | Garrison 6 infantry. Very high armor, weak to artillery. |
+| **Gun Turret** | Modern | Barracks | 150 / 25 | 20 | 900 | — | Autocannon: 25 AP / 0.8s, range 8 | Auto-cannon. Good against light vehicles. |
+| **SAM Site** | Modern | Radar Station | 200 / 100 | 25 | 800 | — | SAM battery: 60 AA / 2s, range 11 | Long-range anti-air. |
+| **Coastal Battery** | Modern | Shipyard | 300 / 100 | 35 | 1500 | — | Coastal gun: 110 AP / 4s, range 13, splash 1 | Long-range heavy guns against ships. |
+| **Sonar Net** | Modern | Shipyard | 100 / 50 | 15 | 300 | — | — | Placed on water. Reveals submerged submarines nearby. |
+| **Missile Tower** | Digital | Radar Station | 350 / 200 | 35 | 1400 | 4 infantry | — | Garrisonable; hits ground and air. Can upgrade a Watchtower in place. |
+| **Laser Tower** | Nano | Gun Turret | 400 / 300 | 35 | 1400 | — | — | Beam ramps up on the same target: shreds mechs and heavy armor. |
+| **Shield Generator** | Nano | Research Lab | 800 / 600 | 60 | 1500 | — | — | Dome that absorbs damage to buildings inside until depleted, then recharges. |
+| **Point Defense Array** | Space | SAM Site | 700 / 700 | 45 | 1500 | — | — | Shoots down missiles, shells, bombs and incoming nukes in its radius. |
 <!-- /gen:defense -->
 
 Defense research is listed with all other research in §7.
@@ -178,60 +178,60 @@ Armor classes: **Inf** infantry, **Lt** light vehicle, **Hv** heavy vehicle, **M
 ### Modern age
 
 <!-- gen:units_modern -->
-| Unit | From | Class | Cost | Pop | Train time | Strong vs | Weak vs |
-|---|---|---|---|---|---|---|---|
-| **Engineer** | Command Center | Inf | 50 / 0 | 1 | 12 | — | everything |
-| **Sea Engineer** | Shipyard | Ship | 120 / 0 | 1 | 18 | — | everything |
-| **Rifleman** | Barracks | Inf | 50 / 0 | 1 | 10 | infantry | light vehicles, artillery |
-| **Rocket Trooper** | Barracks | Inf | 80 / 20 | 1 | 13 | light and heavy vehicles | infantry |
-| **Skyguard** | Barracks | Inf | 80 / 30 | 1 | 13 | helicopters | infantry, light vehicles |
-| **Scout Buggy** | Vehicle Factory | Lt | 80 / 20 | 1 | 12 | infantry, scouting | heavy vehicles, turrets |
-| **Battle Tank** | Vehicle Factory | Hv | 250 / 75 | 3 | 25 | light and heavy vehicles | Rocket Troopers, helicopters |
-| **Flak Track** | Vehicle Factory | Lt | 150 / 50 | 2 | 18 | aircraft | heavy vehicles |
-| **Howitzer** | Vehicle Factory | Hv | 300 / 100 | 3 | 28 | structures, infantry (long range) | anything up close |
-| **Patrol Boat** | Shipyard | Ship | 120 / 30 | 2 | 16 | infantry on shore, submarines | Destroyer |
-| **Destroyer** | Shipyard | Ship | 400 / 150 | 4 | 35 | ships, submarines | aircraft |
-| **Frigate** | Shipyard | Ship | 300 / 150 | 3 | 30 | aircraft | ships |
-| **Transport Ship** | Shipyard | Ship | 200 / 50 | 2 | 22 | — | everything |
-| **Fighter Jet** | Airfield | Air | 250 / 150 | 2 | 25 | aircraft | SAM, Flak |
-| **Cargo Plane** | Airfield | Air | 250 / 150 | 2 | 30 | drops 8 paratroopers anywhere | fighters, anti-air |
-| **Attack Helicopter** | Airfield | Air | 300 / 150 | 3 | 28 | light and heavy vehicles | Fighter, Skyguard |
+| Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
+|---|---|---|---|---|---|---|---|---|---|
+| **Engineer** | Command Center | Inf | 50 / 0 | 1 | 60 | 1.7 | — | — | everything |
+| **Sea Engineer** | Shipyard | Ship | 120 / 0 | 1 | 200 | 3.2 | — | — | everything |
+| **Rifleman** | Barracks | Inf | 50 / 0 | 1 | 80 | 1.6 | Assault rifle: 9 bullet / 1s, range 5 | infantry | light vehicles, artillery |
+| **Rocket Trooper** | Barracks | Inf | 80 / 20 | 1 | 80 | 1.5 | Rocket launcher: 45 AP / 2.5s, range 6 | light and heavy vehicles | infantry |
+| **Skyguard** | Barracks | Inf | 80 / 30 | 1 | 80 | 1.5 | Stinger missiles: 40 AA / 2.2s, range 7 | helicopters | infantry, light vehicles |
+| **Scout Buggy** | Vehicle Factory | Lt | 80 / 20 | 1 | 160 | 4.2 | Machine gun: 12 bullet / 0.6s, range 5.5 | infantry, scouting | heavy vehicles, turrets |
+| **Battle Tank** | Vehicle Factory | Hv | 250 / 75 | 3 | 600 | 2.4 | 120 mm cannon: 60 AP / 2.5s, range 7 | light and heavy vehicles | Rocket Troopers, helicopters |
+| **Flak Track** | Vehicle Factory | Lt | 150 / 50 | 2 | 320 | 2.7 | Twin flak: 22 AA / 0.6s, range 8, splash 1 | aircraft | heavy vehicles |
+| **Howitzer** | Vehicle Factory | Hv | 300 / 100 | 3 | 380 | 1.8 | 155 mm howitzer: 90 explosive / 5s, range 14 (min 4), splash 1.5 | structures, infantry (long range) | anything up close |
+| **Patrol Boat** | Shipyard | Ship | 120 / 30 | 2 | 300 | 3.8 | Deck gun: 14 bullet / 0.7s, range 6<br>Depth charges: 40 torpedo / 3s, range 3, splash 1.5 | infantry on shore, submarines | Destroyer |
+| **Destroyer** | Shipyard | Ship | 400 / 150 | 4 | 1200 | 2.6 | 127 mm gun: 70 AP / 2.5s, range 9<br>Depth charges: 60 torpedo / 3s, range 4, splash 1.5 | ships, submarines | aircraft |
+| **Frigate** | Shipyard | Ship | 300 / 150 | 3 | 900 | 2.9 | SAM launcher: 45 AA / 1.5s, range 10<br>Autocannon: 12 bullet / 0.8s, range 6 | aircraft | ships |
+| **Transport Ship** | Shipyard | Ship | 200 / 50 | 2 | 700 | 3 | — | — | everything |
+| **Fighter Jet** | Airfield | Air | 250 / 150 | 2 | 300 | 8 | Air-to-air missiles: 50 AA / 1.8s, range 7 | aircraft | SAM, Flak |
+| **Cargo Plane** | Airfield | Air | 250 / 150 | 2 | 500 | 6 | — | drops 8 paratroopers anywhere | fighters, anti-air |
+| **Attack Helicopter** | Airfield | Air | 300 / 150 | 3 | 450 | 4.2 | Hellfire missiles: 40 AP / 1.6s, range 7 | light and heavy vehicles | Fighter, Skyguard |
 <!-- /gen:units_modern -->
 
 ### Digital age
 
 <!-- gen:units_digital -->
-| Unit | From | Class | Cost | Pop | Train time | Strong vs | Weak vs |
-|---|---|---|---|---|---|---|---|
-| **Exo-Trooper** | Barracks | Inf | 150 / 75 | 2 | 18 | infantry, light vehicles | heavy vehicles |
-| **Rocket Artillery** | Vehicle Factory | Hv | 450 / 250 | 4 | 35 | structures, groups (area damage, huge range) | fast units, aircraft |
-| **Nuclear Submarine** | Shipyard | Sub | 700 / 400 | 5 | 45 | ships (torpedoes); land targets with Cruise Missiles | Destroyer, Patrol Boat, Sonar Net |
-| **Aircraft Carrier** (max 2) | Shipyard | Ship | 1200 / 700 | 8 | 70 | projects air power to any coast (carries 6 Fighter Jets) | submarines; nearly defenceless alone |
-| **Aegis Cruiser** | Shipyard | Ship | 650 / 400 | 5 | 40 | aircraft, missiles | submarines |
-| **Stealth Bomber** | Airfield | Air | 600 / 400 | 4 | 40 | structures, heavy vehicles | fighters once detected |
-| **Warden** | Mech Foundry | Mech | 900 / 500 | 6 | 50 | infantry, light vehicles | massed Rocket Troopers, Laser Tower |
+| Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
+|---|---|---|---|---|---|---|---|---|---|
+| **Exo-Trooper** | Barracks | Inf | 150 / 75 | 2 | 220 | 1.9 | Heavy rifle: 18 bullet / 0.9s, range 6 | infantry, light vehicles | heavy vehicles |
+| **Rocket Artillery** | Vehicle Factory | Hv | 450 / 250 | 4 | 450 | 2 | Rocket salvo: 70 explosive / 6s, range 18 (min 5), splash 2.2 | structures, groups (area damage, huge range) | fast units, aircraft |
+| **Nuclear Submarine** | Shipyard | Sub | 700 / 400 | 5 | 1100 | 2.8 | — | ships (torpedoes); land targets with Cruise Missiles | Destroyer, Patrol Boat, Sonar Net |
+| **Aircraft Carrier** (max 2) | Shipyard | Ship | 1200 / 700 | 8 | 3000 | 2 | — | projects air power to any coast (carries 6 Fighter Jets) | submarines; nearly defenceless alone |
+| **Aegis Cruiser** | Shipyard | Ship | 650 / 400 | 5 | 1600 | 2.5 | — | aircraft, missiles | submarines |
+| **Stealth Bomber** | Airfield | Air | 600 / 400 | 4 | 500 | 6 | — | structures, heavy vehicles | fighters once detected |
+| **Warden** | Mech Foundry | Mech | 900 / 500 | 6 | 2200 | 1.9 | — | infantry, light vehicles | massed Rocket Troopers, Laser Tower |
 <!-- /gen:units_digital -->
 
 ### Nano age
 
 <!-- gen:units_nano -->
-| Unit | From | Class | Cost | Pop | Train time | Strong vs | Weak vs |
-|---|---|---|---|---|---|---|---|
-| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 30 | mechs and vehicles (EMP stun), shields | infantry |
-| **Juggernaut** | Mech Foundry | Mech | 1800 / 1200 | 10 | 75 | structures, heavy vehicles; smashes walls | Disruptor, Arclight, Laser Tower |
-| **Arclight** | Mech Foundry | Mech | 1500 / 1300 | 8 | 65 | mechs, heavy vehicles (eye laser) | infantry swarms, aircraft |
-| **Leviathan** | Mech Foundry | Mech | 2000 / 1500 | 10 | 80 | ships and coasts (walks the seabed, hidden while submerged) | submarines, Disruptor |
-| **Nano Swarm** | Research Lab | Air | 200 / 200 | 2 | 20 | repairs friendly units in an area | everything (fragile) |
+| Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
+|---|---|---|---|---|---|---|---|---|---|
+| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 400 | 2.6 | — | mechs and vehicles (EMP stun), shields | infantry |
+| **Juggernaut** | Mech Foundry | Mech | 1800 / 1200 | 10 | 5000 | 1.5 | — | structures, heavy vehicles; smashes walls | Disruptor, Arclight, Laser Tower |
+| **Arclight** | Mech Foundry | Mech | 1500 / 1300 | 8 | 3500 | 1.8 | — | mechs, heavy vehicles (eye laser) | infantry swarms, aircraft |
+| **Leviathan** | Mech Foundry | Mech | 2000 / 1500 | 10 | 5000 | 1.6 | — | ships and coasts (walks the seabed, hidden while submerged) | submarines, Disruptor |
+| **Nano Swarm** | Research Lab | Air | 200 / 200 | 2 | 150 | 3.5 | — | repairs friendly units in an area | everything (fragile) |
 <!-- /gen:units_nano -->
 
 ### Space age
 
 <!-- gen:units_space -->
-| Unit | From | Class | Cost | Pop | Train time | Strong vs | Weak vs |
-|---|---|---|---|---|---|---|---|
-| **Orbital Fighter** | Spaceport | Orb | 600 / 600 | 3 | 35 | aircraft, orbital units | Point Defense, SAM (reduced) |
-| **Drop Ship** | Spaceport | Orb | 800 / 800 | 4 | 45 | carries 1 mech or 10 infantry anywhere, lands behind walls | anti-air |
-| **Star Lance** (max 1) | Spaceport | Orb | 3000 / 3000 | 15 | 150 | everything below it | Orbital Fighters in numbers, orbital laser |
+| Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
+|---|---|---|---|---|---|---|---|---|---|
+| **Orbital Fighter** | Spaceport | Orb | 600 / 600 | 3 | 600 | 10 | — | aircraft, orbital units | Point Defense, SAM (reduced) |
+| **Drop Ship** | Spaceport | Orb | 800 / 800 | 4 | 1200 | 5 | — | carries 1 mech or 10 infantry anywhere, lands behind walls | anti-air |
+| **Star Lance** (max 1) | Spaceport | Orb | 3000 / 3000 | 15 | 12000 | 1.4 | — | everything below it | Orbital Fighters in numbers, orbital laser |
 <!-- /gen:units_space -->
 
 Unit caps are shown next to the unit name.
@@ -240,17 +240,22 @@ Unit caps are shown next to the unit name.
 
 ## 6. Damage vs armor
 
-Damage multiplier by weapon type (rows) against armor class (columns). `—` = cannot target.
+Damage multiplier by weapon type (rows) against armor class (columns). `—` = no effect.
+In game, a hit does *weapon damage × this multiplier × upgrades*.
 
-| | Inf | Lt | Hv | Mech | Ship | Sub | Air | Orb | Str |
+<!-- gen:damage -->
+|  | Inf | Lt | Hv | Mech | Ship | Sub | Air | Orb | Str |
 |---|---|---|---|---|---|---|---|---|---|
-| Bullet | 1.0 | 0.6 | 0.2 | 0.15 | 0.2 | — | 0.3 | — | 0.15 |
-| Armor-piercing | 0.4 | 1.2 | 1.0 | 0.8 | 0.8 | — | — | — | 0.6 |
-| Explosive (artillery/bombs) | 1.2 | 0.9 | 0.7 | 0.6 | 0.7 | — | — | — | 1.5 |
+| Bullet | 1 | 0.6 | 0.2 | 0.15 | 0.2 | — | 0.3 | — | 0.15 |
+| Armor-piercing | 0.4 | 1.2 | 1 | 0.8 | 0.8 | — | — | — | 0.6 |
+| Explosive | 1.2 | 0.9 | 0.7 | 0.6 | 0.7 | — | — | — | 1.5 |
 | Anti-air missile | — | — | — | — | — | — | 1.5 | 0.8 | — |
-| Torpedo / depth charge | — | — | — | 0.8* | 1.5 | 1.5 | — | — | 0.5* |
-| Laser | 0.8 | 1.0 | 1.3 | 1.5 | 1.0 | — | 1.0 | 1.0 | 0.8 |
-| EMP | stun 0 | stun | stun | stun ×2 | stun | — | — | — | shields |
+| Torpedo / depth charge | — | — | — | 0.8 | 1.5 | 1.5 | — | — | 0.5 |
+| Laser | 0.8 | 1 | 1.3 | 1.5 | 1 | — | 1 | 1 | 0.8 |
+| EMP | — | 0.2 | 0.2 | 0.4 | 0.2 | — | — | — | 0.1 |
+<!-- /gen:damage -->
+
+EMP (Nano Age) also stuns vehicles and mechs and drains shields; that effect arrives with M5.
 
 \* Torpedo vs mech applies to Leviathan in water; vs structures to coastal buildings.
 
@@ -278,7 +283,7 @@ Full list, with what each does and from which milestone it works in game:
 <!-- gen:research -->
 | Research | At | Age | Cost | Time | Effect | In game |
 |---|---|---|---|---|---|---|
-| **Fortified Masonry** | Command Center | Modern | 150 / 0 | 30 | Walls and gates +30% HP | from M3 |
+| **Fortified Masonry** | Command Center | Modern | 150 / 0 | 30 | Walls and gates +30% HP | yes |
 | **Efficient Logistics** | Command Center | Modern | 200 / 50 | 40 | Build speed +20% | yes |
 | **Command Network** | Command Center | Digital | 400 / 300 | 50 | +5 garrison slots in the HQ | from M5 |
 | **Planetary Defense Grid** | Command Center | Space | 1000 / 1000 | 80 | HQ gains a Point Defense Array | from M6 |
@@ -286,27 +291,27 @@ Full list, with what each does and from which milestone it works in game:
 | **Automated Mining** | Ore Refinery | Digital | 300 / 150 | 45 | +20% Ore gathering | yes |
 | **Nano Extraction** | Ore Refinery | Nano | 600 / 400 | 60 | +25% Ore gathering | yes |
 | **Asteroid Capture** | Ore Refinery | Space | 1000 / 1000 | 80 | Passive Ore trickle | from M6 |
-| **Body Armor** | Barracks | Modern | 150 / 50 | 35 | Infantry +20% HP | from M3 |
-| **Murder Holes** | Barracks | Modern | 100 / 50 | 30 | Garrisoned infantry +1 more range | from M3 |
+| **Body Armor** | Barracks | Modern | 150 / 50 | 35 | Infantry +20% HP | yes |
+| **Murder Holes** | Barracks | Modern | 100 / 50 | 30 | Garrisoned infantry +1 more range | yes |
 | **Hardened Garrison** | Barracks | Digital | 300 / 200 | 45 | Garrison damage reduction 50% → 70% | from M5 |
 | **Exoskeletons** | Barracks | Digital | 250 / 150 | 40 | Infantry speed +20% | from M5 |
 | **Nano Weave** | Barracks | Nano | 400 / 300 | 50 | Infantry regenerate HP | from M5 |
-| **Composite Armor** | Vehicle Factory | Modern | 250 / 100 | 45 | Vehicles +15% HP | from M3 |
+| **Composite Armor** | Vehicle Factory | Modern | 250 / 100 | 45 | Vehicles +15% HP | yes |
 | **Reactive Armor** | Vehicle Factory | Digital | 400 / 250 | 55 | Vehicles take -20% missile damage | from M5 |
 | **Railguns** | Vehicle Factory | Digital | 450 / 300 | 55 | Tanks +range | from M5 |
 | **Hover Drives** | Vehicle Factory | Nano | 600 / 500 | 60 | Vehicles cross shallow water | from M5 |
-| **Sonar** | Shipyard | Modern | 150 / 100 | 35 | +Submarine detection range | from M3 |
+| **Sonar** | Shipyard | Modern | 150 / 100 | 35 | +Submarine detection range | from M5 |
 | **Cruise Missiles** | Shipyard | Digital | 500 / 400 | 55 | Submarines can strike land targets | from M5 |
 | **Nuclear Propulsion** | Shipyard | Digital | 400 / 300 | 50 | Ships +15% speed | from M5 |
 | **Supercavitation** | Shipyard | Nano | 500 / 500 | 55 | Faster torpedoes | from M5 |
-| **Afterburners** | Airfield | Modern | 200 / 150 | 40 | Aircraft +15% speed | from M3 |
+| **Afterburners** | Airfield | Modern | 200 / 150 | 40 | Aircraft +15% speed | yes |
 | **Stealth Coating** | Airfield | Digital | 500 / 400 | 55 | Aircraft harder to detect | from M5 |
 | **Precision Munitions** | Airfield | Digital | 400 / 300 | 50 | Aircraft +15% damage | from M5 |
 | **Drone Wingmen** | Airfield | Nano | 600 / 600 | 60 | Fighters launch escort drones | from M5 |
-| **Targeting Radar** | Radar Station | Modern | 200 / 100 | 40 | Towers and turrets +15% range | from M3 |
+| **Targeting Radar** | Radar Station | Modern | 200 / 100 | 40 | Towers and turrets +15% range | yes |
 | **Electronic Warfare** | Radar Station | Digital | 400 / 400 | 50 | Scrambles enemy minimap blips near you | from M5 |
 | **Satellite Network** | Radar Station | Space | 800 / 800 | 70 | Permanent reveal of the enemy HQ | from M6 |
-| **Advanced Ballistics** | Research Lab | Modern | 300 / 200 | 45 | All units +10% accuracy | from M3 |
+| **Advanced Ballistics** | Research Lab | Modern | 300 / 200 | 45 | All weapons +10% damage | yes |
 | **Automated Repair** | Research Lab | Digital | 400 / 300 | 50 | Defenses self-repair out of combat | from M5 |
 | **Shield Tech** | Research Lab | Nano | 600 / 600 | 60 | Unlocks Shield Generator | from M5 |
 | **Overcharged Lasers** | Research Lab | Nano | 600 / 500 | 55 | Laser Tower ramps up twice as fast | from M5 |

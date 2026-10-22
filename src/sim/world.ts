@@ -2,13 +2,16 @@
 // browser and in Node (tests, headless AI-vs-AI). Advances in fixed ticks.
 
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
-import type { UnitDef } from '../data/types.ts';
+import { buildingGroup, unitGroup, type UnitDef, type UpgradeGroup } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import type { Command } from './commands.ts';
 import {
-  cancelConstruction, cancelQueueItem, claimOil, orderBuildAssist, orderGather, orderPlace, orderResearch, orderTrain,
+  cancelConstruction, cancelQueueItem, claimOil, orderBuildAssist, orderGather, orderLine, orderPlace, orderResearch, orderTrain,
   updateBuildings, updateWorker,
 } from './economy.ts';
+import {
+  checkVictory, eject, orderAttack, orderAttackMove, orderGarrison, updateBuildingCombat, updateGarrisonTask, updateProjectiles, updateUnitCombat,
+} from './combat.ts';
 import { orderExplore, updateExplore } from './explore.ts';
 import { FOG_INTERVAL, updateFog } from './fog.ts';
 import { orderHaul } from './haul.ts';
@@ -21,10 +24,12 @@ import { layerFor, NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
 import { Rng } from './rng.ts';
 import { DT } from './time.ts';
-import { POP_LIMIT, type Building, type Entity, type GameEvent, type PlayerState, type ResourceState, type Unit } from './types.ts';
+import { POP_LIMIT, type Building, type Entity, type GameEvent, type PlayerState, type Projectile, type ResourceState, type Unit } from './types.ts';
 
 export { DT, TICK_RATE } from './time.ts';
-export type { Building, Entity, GameEvent, PlayerState, ResourceState, Unit, UnitState } from './types.ts';
+export type { Building, Entity, GameEvent, PlayerState, Projectile, ResourceState, Unit, UnitState } from './types.ts';
+
+const ONES: Record<UpgradeGroup, number> = { infantry: 1, vehicles: 1, aircraft: 1, ships: 1, walls: 1, defenses: 1, buildings: 1 };
 
 export interface PlayerInfo {
   id: number;
@@ -50,6 +55,10 @@ export class World {
   readonly occupancy: Int32Array;
   /** Events raised during the last step (UI notifications, sounds). */
   events: GameEvent[] = [];
+  projectiles: Projectile[] = [];
+  nextProjectileId = 1;
+  /** Set when only one player is left (-1: nobody). */
+  winner: number | null = null;
   private readonly byId = new Map<number, Entity>();
   private nextId = 1;
 
@@ -66,7 +75,18 @@ export class World {
       res: { ore: 0, energy: 0 },
       gathered: { ore: 0, energy: 0 },
       researched: new Set(),
-      mult: { gather: { ore: 1, energy: 1 }, produce: { ore: 1, energy: 1 }, buildSpeed: 1 },
+      mult: {
+        gather: { ore: 1, energy: 1 },
+        produce: { ore: 1, energy: 1 },
+        buildSpeed: 1,
+        hp: { ...ONES },
+        speed: { ...ONES },
+        range: { ...ONES },
+        damage: 1,
+        garrisonRange: 0,
+      },
+      defeated: false,
+      alertAt: -999,
       popUsed: 0,
       popCap: 0,
       visible: new Uint8Array(n),
@@ -154,7 +174,8 @@ export class World {
       layer: layerFor(def),
       x, y, angle,
       px: x, py: y, pa: angle,
-      hp: def.hp,
+      hp: def.hp * this.players[owner]!.mult.hp[unitGroup(def)],
+      maxHp: def.hp * this.players[owner]!.mult.hp[unitGroup(def)],
       state: 'idle',
       path: [],
       pathIdx: 0,
@@ -172,6 +193,14 @@ export class World {
       parked: false,
       home: 0,
       slot: -1,
+      order: null,
+      target: 0,
+      cooldowns: [],
+      anchorX: x,
+      anchorY: y,
+      aim: angle,
+      firedAgo: 999,
+      chaseIn: 0,
     };
     this.units.push(u);
     this.byId.set(u.id, u);
@@ -182,6 +211,7 @@ export class World {
   addBuilding(type: BuildingTypeId, owner: number, tx: number, ty: number, complete: boolean): Building {
     const def = BUILDINGS[type];
     const [w, h] = def.size;
+    const maxHp = def.hp * this.players[owner]!.mult.hp[buildingGroup(def)];
     const b: Building = {
       kind: 'building',
       id: this.nextId++,
@@ -191,8 +221,8 @@ export class World {
       tx, ty, w, h,
       x: tx + w / 2,
       y: ty + h / 2,
-      hp: complete ? def.hp : def.hp * 0.1,
-      maxHp: def.hp,
+      hp: complete ? maxHp : maxHp * 0.1,
+      maxHp,
       progress: complete ? 1 : 0,
       complete,
       queue: [],
@@ -201,6 +231,11 @@ export class World {
       builders: 0,
       activeBuilders: 0,
       stored: 0,
+      garrison: [],
+      target: 0,
+      cooldowns: [],
+      aim: 0,
+      firedAgo: 999,
       waitingForPop: false,
     };
     this.buildings.push(b);
@@ -208,7 +243,9 @@ export class World {
     for (let y = ty; y < ty + h; y++) {
       for (let x = tx; x < tx + w; x++) {
         this.occupancy[y * this.map.width + x] = b.id;
-        this.nav.setBlocked(x, y, true, this.map);
+        // Gates stay walkable, but only for their owner.
+        if (type === 'gate') this.nav.setGate(x, y, owner);
+        else this.nav.setBlocked(x, y, true, this.map);
       }
     }
     claimOil(this, b);
@@ -223,6 +260,7 @@ export class World {
     for (let y = b.ty; y < b.ty + b.h; y++) {
       for (let x = b.tx; x < b.tx + b.w; x++) {
         this.occupancy[y * this.map.width + x] = 0;
+        this.nav.setGate(x, y, null);
         this.nav.setBlocked(x, y, false, this.map);
       }
     }
@@ -232,10 +270,10 @@ export class World {
   }
 
   /** Remove a unit from play (and anyone riding in it). */
-  removeUnit(u: Unit, reason: string): void {
+  removeUnit(u: Unit, reason: string, silent = false): void {
     for (const id of u.cargo) {
       const c = this.getUnit(id);
-      if (c) this.removeUnit(c, reason);
+      if (c) this.removeUnit(c, reason, true);
     }
     u.cargo = [];
     const i = this.units.indexOf(u);
@@ -243,12 +281,13 @@ export class World {
     this.units.splice(i, 1);
     this.byId.delete(u.id);
     if (u.carrier) {
-      const c = this.getUnit(u.carrier);
-      if (c) c.cargo = c.cargo.filter((id) => id !== u.id);
+      const c = this.getEntity(u.carrier);
+      if (c?.kind === 'unit') c.cargo = c.cargo.filter((id) => id !== u.id);
+      else if (c) c.garrison = c.garrison.filter((id) => id !== u.id);
     }
     this.recomputePop(this.players[u.owner]!);
     this.emit({ kind: 'unitLost', player: u.owner, unit: u.id, reason });
-    this.emit({ kind: 'notify', player: u.owner, text: `${u.def.name} lost: ${reason}`, x: u.x, y: u.y });
+    if (!silent) this.emit({ kind: 'notify', player: u.owner, text: `${u.def.name} lost: ${reason}`, x: u.x, y: u.y });
   }
 
   depleteResource(r: ResourceState): void {
@@ -288,12 +327,21 @@ export class World {
       updateWorker(this, u);
       updateTransport(this, u);
       updateExplore(this, u);
+      updateGarrisonTask(this, u);
+    }
+    for (const u of [...this.units]) {
+      if (this.getUnit(u.id)) updateUnitCombat(this, u);
     }
     for (const u of this.units) if (!immobile(u)) moveUnit(this, u);
     for (const u of [...this.units]) updateAir(this, u);
     syncCargo(this);
     separate(this);
+    for (const b of [...this.buildings]) {
+      if (this.getBuilding(b.id)) updateBuildingCombat(this, b);
+    }
+    updateProjectiles(this);
     updateBuildings(this);
+    checkVictory(this);
     if (this.tick % FOG_INTERVAL === 0) updateFog(this);
     this.tick++;
   }
@@ -332,6 +380,9 @@ export class World {
         for (const u of units) {
           u.task = null;
           u.working = false;
+          u.order = null;
+          u.target = 0;
+          u.chaseIn = 0;
           takeOff(u);
         }
         orderMove(this, units, c.x, c.y);
@@ -356,12 +407,43 @@ export class World {
         if (b) orderHaul(this, this.ownedUnits(c.player, c.units), b);
         break;
       }
+      case 'attack': {
+        const t = this.getEntity(c.target);
+        if (t && t.owner !== c.player) {
+          const units = this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0);
+          for (const u of units) takeOff(u);
+          orderAttack(this, units, t);
+        }
+        break;
+      }
+      case 'attackMove': {
+        const units = this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0);
+        for (const u of units) takeOff(u);
+        orderAttackMove(this, units, c.x, c.y);
+        break;
+      }
+      case 'garrison': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) orderGarrison(this, this.ownedUnits(c.player, c.units), b);
+        break;
+      }
+      case 'eject': {
+        const b = this.ownedBuilding(c.player, c.building);
+        if (b) eject(this, b);
+        break;
+      }
+      case 'buildLine':
+        orderLine(this, c.player, this.ownedUnits(c.player, c.units), c.building, c.tiles);
+        break;
       case 'explore':
         orderExplore(this, this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0));
         break;
       case 'stop':
         for (const u of this.ownedUnits(c.player, c.units)) {
           if (u.carrier || u.chute > 0 || u.parked) continue;
+          u.order = null;
+          u.target = 0;
+          u.chaseIn = 0;
           u.task = null;
           u.working = false;
           stopUnit(u);

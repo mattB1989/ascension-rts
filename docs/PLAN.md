@@ -161,7 +161,7 @@ Each milestone ends with a playable build on GitHub Pages and a short release no
 | **M0** ✅ | Repo, plan | This plan and the tech tree committed. (The full data catalog in `src/data` and generated docs moved to M2, where the economy first needs buildings.) |
 | **M1** ✅ | Skeleton | Vite + TS project, CI, Pages deploy, PWA offline, single-file build; Twin Shores terrain with water and bridges, RTS camera (mouse + touch), selection, move orders, land/water/air pathfinding |
 | **M2** ✅ | Economy & base | Full data catalog in `src/data` + generated docs; engineers gather Ore/Energy, build with placement rules, housing/pop, production queues, fog, top bar |
-| **M3** | Modern-age combat & defense | Full Modern roster on land/sea/air, damage types and counters, transports; walls, gates, garrisonable Watchtowers/Bunkers, turrets, SAM, coastal batteries |
+| **M3** ✅ | Modern-age combat & defense | Full Modern roster on land/sea/air, damage types and counters, transports; walls, gates, garrisonable Watchtowers/Bunkers, turrets, SAM, coastal batteries |
 | **M4** | AI v1 + harness | All three difficulty levels play Modern age; headless runner works; you can win and lose |
 | **M5** | Digital & Nano ages | Age-up, nuclear subs (submerge/sonar), carriers (launch/recover fighters), mechs, EMP, shields, nuke silo; AI uses them |
 | **M6** | Space age | Spaceport, orbital units, orbital uplink powers, Space Elevator wonder victory |

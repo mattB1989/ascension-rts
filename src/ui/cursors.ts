@@ -1,7 +1,7 @@
 // Context cursors (desktop): what a right click would do here.
 // Small inline SVGs, so nothing is downloaded.
 
-export type CursorKind = 'default' | 'select' | 'move' | 'mine' | 'build' | 'rally' | 'board' | 'unload' | 'paradrop' | 'place' | 'nope';
+export type CursorKind = 'default' | 'select' | 'move' | 'mine' | 'build' | 'rally' | 'board' | 'unload' | 'paradrop' | 'place' | 'nope' | 'attack' | 'attackMove' | 'garrison';
 
 function svg(body: string, hx: number, hy: number, fallback: string): string {
   const s = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">${body}</svg>`;
@@ -29,6 +29,12 @@ const CURSORS: Record<CursorKind, string> = {
   board: svg(both('M16 3v13M11 11l5 5 5-5M5 20h22l-4 7H9z', '#6fd3ff'), 16, 16, 'pointer'),
   // Arrow out of a hull onto land: unload.
   unload: svg(both('M16 16V3M11 8l5-5 5 5M5 20h22l-4 7H9z', '#6fd3ff'), 16, 16, 'pointer'),
+  // Red crosshair: attack this.
+  attack: svg('<circle cx="16" cy="16" r="9" ' + OUT + '/><circle cx="16" cy="16" r="9" ' + IN('#ff5a4a') + '/>' + both('M16 2v8M16 22v8M2 16h8M22 16h8', '#ff5a4a'), 16, 16, 'crosshair'),
+  // Orange chevrons: attack-move.
+  attackMove: svg(both('M16 4v7M16 21v7M4 16h7M21 16h7M13 8l3 3 3-3M13 24l3-3 3 3M8 13l3 3-3 3M24 13l-3 3 3 3', '#ff9a3c'), 16, 16, 'crosshair'),
+  // Shield: garrison.
+  garrison: svg(both('M16 3l10 4v8c0 7-5 11-10 14C11 26 6 22 6 15V7z', '#7dff8a'), 16, 16, 'pointer'),
   // Parachute.
   paradrop: svg(both('M4 14a12 10 0 0 1 24 0zM4 14l12 13 12-13M16 14v13', '#ffffff'), 16, 27, 'crosshair'),
 };

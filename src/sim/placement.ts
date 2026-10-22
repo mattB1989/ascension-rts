@@ -61,7 +61,11 @@ export function placementProblem(world: World, player: number, type: BuildingTyp
     for (let x = tx; x < tx + w; x++) {
       const i = y * map.width + x;
       if (!p.explored[i]) return 'Unexplored';
-      if (world.occupancy[i] !== 0) return 'Blocked';
+      if (world.occupancy[i] !== 0) {
+        // Gates may replace a segment of the player's own finished wall.
+        const occ = world.getBuilding(world.occupancy[i]!);
+        if (!(type === 'gate' && occ && occ.type === 'wall' && occ.owner === player && occ.complete)) return 'Blocked';
+      }
       const t = map.terrain[i] as TerrainId;
       const wantWater = def.placement === 'seaOil' || def.placement === 'water';
       if (wantWater ? !isOpenWater(t) : !isLand(t)) return wantWater ? 'Must be on open water' : 'Must be on open ground';
@@ -146,4 +150,30 @@ function hasClearance(world: World, tx: number, ty: number, w: number, h: number
     }
   }
   return true;
+}
+
+/**
+ * Tiles from (x0, y0) to (x1, y1), 4-connected (each tile shares an edge with the
+ * next) so a wall drawn on a diagonal has no gaps units could slip through.
+ */
+export function lineTiles(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [[x0, y0]];
+  const nx = Math.abs(x1 - x0);
+  const ny = Math.abs(y1 - y0);
+  const sx = x1 > x0 ? 1 : -1;
+  const sy = y1 > y0 ? 1 : -1;
+  let x = x0;
+  let y = y0;
+  // Walk the grid: always take the step whose crossing comes first along the ideal line.
+  for (let ix = 0, iy = 0; (ix < nx || iy < ny) && out.length < 400; ) {
+    if ((0.5 + ix) * ny < (0.5 + iy) * nx) {
+      x += sx;
+      ix++;
+    } else {
+      y += sy;
+      iy++;
+    }
+    out.push([x, y]);
+  }
+  return out;
 }

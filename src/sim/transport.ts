@@ -154,7 +154,7 @@ function load(world: World, carrier: Unit, u: Unit): boolean {
 }
 
 /** Free tiles of a layer around (x, y), nearest first. */
-function spotsAround(world: World, layer: NavLayerId, x: number, y: number, n: number, maxR: number): Array<[number, number]> {
+export function spotsAround(world: World, layer: NavLayerId, x: number, y: number, n: number, maxR: number, player = -1): Array<[number, number]> {
   const out: Array<[number, number]> = [];
   const cx = Math.floor(x);
   const cy = Math.floor(y);
@@ -163,7 +163,7 @@ function spotsAround(world: World, layer: NavLayerId, x: number, y: number, n: n
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        if (!world.nav.passable(layer, cx + dx, cy + dy)) continue;
+        if (!world.nav.passable(layer, cx + dx, cy + dy, player)) continue;
         ring.push([cx + dx + 0.5, cy + dy + 0.5, dx * dx + dy * dy]);
       }
     }
@@ -181,7 +181,7 @@ function disembark(world: World, carrier: Unit, x: number, y: number, maxR: numb
   for (const id of carrier.cargo) {
     const u = world.getUnit(id);
     if (!u) continue;
-    const spot = spotsAround(world, u.layer, x, y, 40, maxR).find(([px, py]) => !taken.has(`${px},${py}`));
+    const spot = spotsAround(world, u.layer, x, y, 40, maxR, u.owner).find(([px, py]) => !taken.has(`${px},${py}`));
     if (!spot) {
       remaining.push(id);
       continue;

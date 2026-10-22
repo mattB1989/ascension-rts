@@ -56,10 +56,13 @@ export class NavGrid {
   readonly width: number;
   readonly height: number;
   private readonly grids: Uint8Array[];
+  /** Gate owner + 1 per tile (0: no gate). Gates are open for their owner only. */
+  private readonly gates: Uint8Array;
 
   constructor(map: GameMap) {
     this.width = map.width;
     this.height = map.height;
+    this.gates = new Uint8Array(map.width * map.height);
     this.grids = [];
     for (const layer of ALL_LAYERS) {
       const g = new Uint8Array(map.width * map.height);
@@ -68,9 +71,22 @@ export class NavGrid {
     }
   }
 
-  passable(layer: NavLayerId, tx: number, ty: number): boolean {
+  /** Can `player`'s units of this layer enter the tile? (player -1: gates count as closed.) */
+  passable(layer: NavLayerId, tx: number, ty: number, player = -1): boolean {
     if (tx < 0 || ty < 0 || tx >= this.width || ty >= this.height) return false;
-    return this.grids[layer]![ty * this.width + tx] !== 0;
+    const i = ty * this.width + tx;
+    if (this.grids[layer]![i] === 0) return false;
+    const g = this.gates[i]!;
+    return g === 0 || g === player + 1 || layer === NavLayer.Air;
+  }
+
+  setGate(tx: number, ty: number, owner: number | null): void {
+    this.gates[ty * this.width + tx] = owner === null ? 0 : owner + 1;
+  }
+
+  /** Gate owner on a tile, or -1. */
+  gateAt(tx: number, ty: number): number {
+    return (this.gates[ty * this.width + tx] ?? 0) - 1;
   }
 
   /** Movement cost of a tile (0 = blocked). */
@@ -80,8 +96,8 @@ export class NavGrid {
   }
 
   /** Passability at a world position. */
-  passableAt(layer: NavLayerId, x: number, y: number): boolean {
-    return this.passable(layer, Math.floor(x), Math.floor(y));
+  passableAt(layer: NavLayerId, x: number, y: number, player = -1): boolean {
+    return this.passable(layer, Math.floor(x), Math.floor(y), player);
   }
 
   /** Block or unblock a tile on the ground and water layers (buildings, ore). */

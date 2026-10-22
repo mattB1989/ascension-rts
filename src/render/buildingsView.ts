@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { groundHeight, Terrain, type GameMap } from '../sim/map.ts';
 import type { Building, World } from '../sim/world.ts';
 import { buildBuildingModel, buildScaffold } from './buildingModels.ts';
+import { HealthBar } from './healthBar.ts';
 import { box, mat } from './models.ts';
 
 interface BuildingObject {
@@ -16,7 +17,13 @@ interface BuildingObject {
   beams: THREE.Object3D[];
   cranks: THREE.Object3D[];
   flares: THREE.Object3D[];
+  turret: THREE.Object3D | null;
+  gateBar: THREE.Object3D | null;
+  hb: HealthBar;
+  top: number;
 }
+
+const isWallish = (t: string) => t === 'wall' || t === 'gate';
 
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x7dff8a, transparent: true, opacity: 0.9, depthWrite: false });
 const enemyOutlineMat = new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.9, depthWrite: false });
@@ -68,11 +75,60 @@ export function waterFacing(map: GameMap, tx: number, ty: number, w: number, h: 
   return best;
 }
 
+/** The wall pieces between neighbouring wall/gate segments, rebuilt when the walls change. */
+class WallLinks {
+  readonly group = new THREE.Group();
+  private sig = '';
+  private readonly geo = new THREE.BoxGeometry(1, 0.95, 0.42);
+
+  update(world: World, viewer: number): void {
+    const walls = world.buildings.filter((b) => isWallish(b.type));
+    const sig = walls.map((b) => `${b.id}:${Math.floor(b.progress * 5)}`).join(',');
+    if (sig === this.sig) return;
+    this.sig = sig;
+    for (const c of [...this.group.children]) {
+      this.group.remove(c);
+      if (c instanceof THREE.InstancedMesh) c.dispose();
+    }
+    const w = world.map.width;
+    const byOwner = new Map<number, THREE.Matrix4[]>();
+    const explored = world.players[viewer]?.explored;
+    for (const b of walls) {
+      for (const [dx, dy] of [[1, 0], [0, 1]] as const) {
+        const n = world.getBuilding(world.occupancy[(b.ty + dy) * w + b.tx + dx] ?? 0);
+        if (!n || !isWallish(n.type) || n.owner !== b.owner) continue;
+        if (b.owner !== viewer && explored && !explored[b.ty * w + b.tx]) continue;
+        const x = (b.x + n.x) / 2;
+        const y = (b.y + n.y) / 2;
+        const h = Math.max(footprintBase(world.map, b.tx, b.ty, 1, 1), footprintBase(world.map, n.tx, n.ty, 1, 1));
+        const progress = Math.min(b.complete ? 1 : b.progress, n.complete ? 1 : n.progress);
+        const m = new THREE.Matrix4().compose(
+          new THREE.Vector3(x, h + 0.475 * (0.1 + 0.9 * progress), y),
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx ? 0 : Math.PI / 2),
+          new THREE.Vector3(1, 0.1 + 0.9 * progress, 1),
+        );
+        const list = byOwner.get(b.owner) ?? [];
+        list.push(m);
+        byOwner.set(b.owner, list);
+      }
+    }
+    for (const [owner, mats] of byOwner) {
+      const mesh = new THREE.InstancedMesh(this.geo, mat(0xb8b4aa, { rough: 0.9 }), mats.length);
+      mats.forEach((m, i) => mesh.setMatrixAt(i, m));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.userData.owner = owner;
+      this.group.add(mesh);
+    }
+  }
+}
+
 export class BuildingsView {
   readonly group = new THREE.Group();
   private readonly objects = new Map<number, BuildingObject>();
   private readonly world: World;
   private readonly rally: THREE.Group;
+  private readonly walls = new WallLinks();
   /** Called when a building first appears (the terrain clears trees under it). */
   onCreate: (b: Building) => void = () => {};
 
@@ -82,7 +138,7 @@ export class BuildingsView {
     this.rally.add(box(0.05, 1.4, 0.05, mat(0x2b2f33), 0, 0.7, 0));
     this.rally.add(box(0.5, 0.3, 0.03, new THREE.MeshBasicMaterial({ color: 0x7dff8a }), 0.27, 1.25, 0));
     this.rally.visible = false;
-    this.group.add(this.rally);
+    this.group.add(this.rally, this.walls.group);
   }
 
   private create(b: Building): BuildingObject {
@@ -94,8 +150,15 @@ export class BuildingsView {
     root.position.set(b.x, base, b.y);
     const model = buildBuildingModel(b.type, color);
     if (b.type === 'shipyard') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
+    if (b.type === 'gate') {
+      // Turn the gate to run along its wall: N/S neighbours mean the wall runs along y.
+      const at = (dx: number, dy: number) => this.world.getBuilding(this.world.occupancy[(b.ty + dy) * map.width + b.tx + dx] ?? 0);
+      const ns = [at(0, -1), at(0, 1)].some((n) => n && isWallish(n.type));
+      const ew = [at(-1, 0), at(1, 0)].some((n) => n && isWallish(n.type));
+      if (ns && !ew) model.rotation.y = Math.PI / 2;
+    }
     root.add(model);
-    if (!onWater) {
+    if (!onWater && !isWallish(b.type)) {
       // Foundation skirt hides gaps where the ground slopes away.
       const skirt = box(b.w - 0.1, 1.2, b.h - 0.1, mat(0x7f7d76, { rough: 1 }), 0, -0.58, 0);
       skirt.castShadow = false;
@@ -115,13 +178,22 @@ export class BuildingsView {
       model.traverse((o) => o.name === n && out.push(o));
       return out;
     };
-    return { root, model, scaffold, outline, spins: named('spin'), beams: named('beam'), cranks: named('crank'), flares: named('flare') };
+    const hb = new HealthBar(Math.max(0.8, Math.min(3, b.w * 0.8)));
+    this.group.add(hb.group);
+    return {
+      root, model, scaffold, outline, spins: named('spin'), beams: named('beam'), cranks: named('crank'), flares: named('flare'),
+      turret: model.getObjectByName('turret') ?? null,
+      gateBar: model.getObjectByName('gateBar') ?? null,
+      hb,
+      top: base + height + 0.4,
+    };
   }
 
   private viewerId = 0;
 
-  update(time: number, dt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0): void {
+  update(time: number, dt: number, selected: ReadonlySet<number>, viewer: number, inspected = 0, camera?: THREE.Camera): void {
     this.viewerId = viewer;
+    this.walls.update(this.world, viewer);
     const seen = new Set<number>();
     const explored = this.world.players[viewer]?.explored;
     const w = this.world.map.width;
@@ -154,8 +226,32 @@ export class BuildingsView {
         f.scale.set(k, active || b.type === 'airfield' ? k * 1.2 : 0.01, k);
       }
 
+      if (o.turret) {
+        let want = b.target || b.firedAgo < 30 ? -(b.aim - 0) - o.model.rotation.y : o.turret.rotation.y;
+        let cur = o.turret.rotation.y;
+        while (want - cur > Math.PI) want -= Math.PI * 2;
+        while (want - cur < -Math.PI) want += Math.PI * 2;
+        cur += (want - cur) * Math.min(1, dt * 5);
+        o.turret.rotation.y = cur;
+      }
+      if (o.gateBar) {
+        // Lift the barrier when one of the owner's ground units is close.
+        let open = false;
+        for (const u of this.world.units) {
+          if (u.owner !== b.owner || u.def.domain !== 'land' || u.carrier) continue;
+          if ((u.x - b.x) ** 2 + (u.y - b.y) ** 2 < 4) {
+            open = true;
+            break;
+          }
+        }
+        const want = open ? 1.35 : 0;
+        o.gateBar.rotation.z += (want - o.gateBar.rotation.z) * Math.min(1, dt * 6);
+      }
+
       const isSel = selected.has(b.id) || b.id === inspected;
       o.outline.visible = isSel;
+      if (camera && o.root.visible && b.complete && (b.hp < b.maxHp - 0.5 || isSel)) o.hb.set(b.x, o.top, b.y, b.hp / b.maxHp, camera);
+      else o.hb.hide();
       if (isSel && b.rally && b.owner === viewer) {
         this.rally.visible = true;
         rallyShown = true;
@@ -165,7 +261,7 @@ export class BuildingsView {
     if (!rallyShown) this.rally.visible = false;
     for (const [id, o] of this.objects) {
       if (seen.has(id)) continue;
-      this.group.remove(o.root);
+      this.group.remove(o.root, o.hb.group);
       this.objects.delete(id);
     }
   }

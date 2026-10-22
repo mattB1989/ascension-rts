@@ -111,6 +111,13 @@ export class Minimap {
     if (p) this.renderer.rig.lookAt(p.x, p.y);
   }
 
+  private pings: Array<{ x: number; y: number; t: number }> = [];
+
+  /** Flash a spot (attack alerts). */
+  ping(x: number, y: number): void {
+    this.pings.push({ x, y, t: performance.now() });
+  }
+
   draw(now: number): void {
     if (now - this.lastDraw < 100) return; // 10 fps is plenty
     this.lastDraw = now;
@@ -203,6 +210,18 @@ export class Minimap {
       ctx.fillStyle = sel ? '#ffffff' : color;
       const s = u.def.domain === 'air' ? 2 : u.def.armor === 'inf' ? 2 : 3;
       ctx.fillRect(px - s / 2, py - s / 2, s, s);
+    }
+
+    // Alert pings: expanding red rings for a few seconds.
+    this.pings = this.pings.filter((p) => now - p.t < 3000);
+    for (const pg of this.pings) {
+      const k = ((now - pg.t) % 1000) / 1000;
+      const [px, py] = this.project(pg.x, pg.y);
+      ctx.beginPath();
+      ctx.arc(px, py, 3 + k * 12, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 80, 60, ${1 - k})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     // Camera view.

@@ -28,6 +28,7 @@ export class PlacementGhost {
   }
 
   show(type: BuildingTypeId, tx: number, ty: number, valid: boolean): void {
+    this.line.visible = false;
     const def = BUILDINGS[type];
     const [w, h] = def.size;
     if (type !== this.type) {
@@ -65,5 +66,33 @@ export class PlacementGhost {
 
   hide(): void {
     this.group.visible = false;
+    this.line.visible = false;
+  }
+
+  /** Wall line preview: one block per tile, green where it can go, red where it can't. */
+  private readonly line = new THREE.InstancedMesh(new THREE.BoxGeometry(0.7, 1.1, 0.7).translate(0, 0.55, 0), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false }), 120);
+
+  showLine(tiles: ReadonlyArray<readonly [number, number]>, ok: (tx: number, ty: number) => boolean): void {
+    if (!this.line.parent) {
+      this.line.renderOrder = 5;
+      this.line.frustumCulled = false;
+      this.group.parent?.add(this.line);
+    }
+    this.group.visible = false;
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    const n = Math.min(tiles.length, 120);
+    for (let i = 0; i < n; i++) {
+      const [tx, ty] = tiles[i]!;
+      const inMap = tx >= 0 && ty >= 0 && tx < this.map.width && ty < this.map.height;
+      const h = inMap ? Math.max(0, footprintBase(this.map, tx, ty, 1, 1)) : 0;
+      m.makeTranslation(tx + 0.5, h, ty + 0.5);
+      this.line.setMatrixAt(i, m);
+      this.line.setColorAt(i, c.setHex(ok(tx, ty) ? 0x7dff8a : 0xff5a4a));
+    }
+    this.line.count = n;
+    this.line.instanceMatrix.needsUpdate = true;
+    if (this.line.instanceColor) this.line.instanceColor.needsUpdate = true;
+    this.line.visible = true;
   }
 }

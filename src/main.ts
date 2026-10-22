@@ -23,6 +23,7 @@ function start(): void {
   const minimap = new Minimap(world, renderer, input, selection);
   const hud = new Hud(uiRoot, game, selection, input, minimap);
 
+  hud.onAlert = (x, y) => minimap.ping(x, y);
   input.goHome();
   window.addEventListener('resize', () => renderer.resize());
 
@@ -37,6 +38,11 @@ function start(): void {
     input.update(dt);
     const alpha = game.update(dt);
     input.alpha = alpha;
+    const events = game.drainEvents();
+    if (events.length) {
+      hud.handleEvents(events);
+      renderer.effects.handleEvents(events, world);
+    }
     selection.prune();
     const ins = selection.inspect;
     renderer.render(alpha, now / 1000, dt, selection.ids, {

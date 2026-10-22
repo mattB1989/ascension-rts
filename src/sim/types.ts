@@ -2,7 +2,8 @@
 
 import type { BuildingTypeId } from '../data/buildings.ts';
 import type { TechId } from '../data/techs.ts';
-import type { AgeId, BuildingDef, ResourceId, UnitDef } from '../data/types.ts';
+import type { AgeId, BuildingDef, ResourceId, UnitDef, UpgradeGroup } from '../data/types.ts';
+import type { WeaponDef } from '../data/weapons.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import type { NavLayerId } from './nav.ts';
 
@@ -24,7 +25,16 @@ export type UnitTask =
   /** Tanker: load oil at a rig's tank, carry it to a Shipyard, repeat. */
   | { kind: 'haul'; rig: number; phase: 'toRig' | 'loading' | 'toDropOff'; dropId: number }
   /** Wander towards unexplored ground until the map (reachable by this unit) is explored. */
-  | { kind: 'explore'; tried: number[] };
+  | { kind: 'explore'; tried: number[] }
+  /** Infantry walk into a building and fight from inside it. */
+  | { kind: 'garrison'; building: number };
+
+/** What a unit was told to do about enemies. */
+export type CombatOrder =
+  /** Attack this entity until it is dead or out of sight. */
+  | { kind: 'attack'; target: number }
+  /** Move to (x, y), fighting anything met on the way. */
+  | { kind: 'attackMove'; x: number; y: number };
 
 export interface Unit {
   kind: 'unit';
@@ -41,6 +51,7 @@ export interface Unit {
   py: number;
   pa: number;
   hp: number;
+  maxHp: number;
   state: UnitState;
   /** Remaining waypoints, flat [x, y, ...]. */
   path: number[];
@@ -66,6 +77,18 @@ export interface Unit {
   home: number;
   /** Parking spot index at the home airfield. */
   slot: number;
+  /** Combat: explicit order, current target, seconds until each weapon can fire again. */
+  order: CombatOrder | null;
+  target: number;
+  cooldowns: number[];
+  /** Where an idle unit was standing when it started chasing something (it returns there). */
+  anchorX: number;
+  anchorY: number;
+  /** Direction the weapon points (render: turrets), and ticks since the last shot (render: recoil). */
+  aim: number;
+  firedAgo: number;
+  /** Ticks until the next re-path while chasing. */
+  chaseIn: number;
 }
 
 export type QueueItem =
@@ -103,6 +126,35 @@ export interface Building {
   waitingForPop: boolean;
   /** Oil waiting in a rig's tank. */
   stored: number;
+  /** Infantry inside (they fire from it). */
+  garrison: number[];
+  /** Defensive weapons: current target and cooldowns. */
+  target: number;
+  cooldowns: number[];
+  aim: number;
+  firedAgo: number;
+}
+
+/** A shell, missile or torpedo in flight. Damage is applied on impact. */
+export interface Projectile {
+  id: number;
+  owner: number;
+  weapon: WeaponDef;
+  /** Damage after upgrades. */
+  damage: number;
+  /** Homing target (missiles, torpedoes) or the intended target (shells), 0 if none. */
+  target: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  x: number;
+  y: number;
+  /** Aim point for shells (fixed at launch). */
+  tx: number;
+  ty: number;
+  /** Seconds in flight and total flight time (shells). */
+  t: number;
+  dur: number;
 }
 
 export type Entity = Unit | Building;
@@ -131,7 +183,20 @@ export interface PlayerState {
   /** Cumulative totals, for income rates and the post-game report. */
   gathered: Record<ResourceId, number>;
   researched: Set<TechId>;
-  mult: { gather: Record<ResourceId, number>; produce: Record<ResourceId, number>; buildSpeed: number };
+  mult: {
+    gather: Record<ResourceId, number>;
+    produce: Record<ResourceId, number>;
+    buildSpeed: number;
+    hp: Record<UpgradeGroup, number>;
+    speed: Record<UpgradeGroup, number>;
+    range: Record<UpgradeGroup, number>;
+    damage: number;
+    garrisonRange: number;
+  };
+  /** Out of the game (no Command Center or production buildings left). */
+  defeated: boolean;
+  /** Game time of the last "under attack" alert. */
+  alertAt: number;
   popUsed: number;
   popCap: number;
   /** Fog of war, one byte per tile: currently visible / ever explored. */
@@ -144,7 +209,16 @@ export type GameEvent =
   | { kind: 'unitLost'; player: number; unit: number; reason: string }
   | { kind: 'buildingComplete'; player: number; building: number }
   | { kind: 'unitTrained'; player: number; unit: number }
-  | { kind: 'researchComplete'; player: number; tech: TechId };
+  | { kind: 'researchComplete'; player: number; tech: TechId }
+  /** A weapon fired (render: muzzle flash, tracer for instant weapons). */
+  | { kind: 'shot'; source: number; x: number; y: number; z: number; tx: number; ty: number; tz: number; weapon: WeaponDef }
+  /** A projectile landed or a hit was scored (render: explosion size by damage type). */
+  | { kind: 'impact'; x: number; y: number; z: number; weapon: WeaponDef }
+  /** Something was destroyed (render: explosion, wreck). */
+  | { kind: 'died'; entity: 'unit' | 'building'; type: string; owner: number; x: number; y: number; size: number; air: boolean }
+  /** Your stuff is being shot at (throttled). */
+  | { kind: 'underAttack'; player: number; x: number; y: number }
+  | { kind: 'gameOver'; winner: number };
 
 export const POP_LIMIT = 200;
 export const CARRY_CAPACITY = 10;

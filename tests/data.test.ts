@@ -5,6 +5,7 @@ import { AGE_ORDER, AGES } from '../src/data/ages.ts';
 import { BUILDINGS, BUILDING_TYPES } from '../src/data/buildings.ts';
 import { TECH_IDS, TECHS } from '../src/data/techs.ts';
 import { UNIT_TYPES, UNITS } from '../src/data/units.ts';
+import { WEAPONS, weaponsOf } from '../src/data/weapons.ts';
 import { applyTables, DOC_PATH, renderTables } from '../tools/gen-docs.ts';
 
 const isBuilding = (id: string) => (BUILDING_TYPES as string[]).includes(id);
@@ -63,4 +64,14 @@ test('numbers are sane', () => {
 test('docs/TECH_TREE.md tables are generated from the current data', () => {
   const md = readFileSync(DOC_PATH, 'utf8');
   assert.equal(applyTables(md, renderTables()), md, 'run `npm run docs`');
+});
+
+test('every Modern-age combat unit and defense tower has weapons', () => {
+  const unarmed = new Set(['engineer', 'sea_engineer', 'transport_ship', 'cargo_plane']);
+  for (const id of UNIT_TYPES) {
+    if (UNITS[id].age !== 'modern' || unarmed.has(id)) continue;
+    assert.ok(weaponsOf(id).length > 0, `${id} has no weapons`);
+  }
+  for (const id of ['watchtower', 'bunker', 'gun_turret', 'sam_site', 'coastal_battery']) assert.ok(weaponsOf(id).length > 0, id);
+  for (const ws of Object.values(WEAPONS)) for (const w of ws) assert.ok(w.damage > 0 && w.range > 0 && w.cooldown > 0 && w.targets.length > 0, w.name);
 });

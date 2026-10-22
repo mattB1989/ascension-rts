@@ -6,6 +6,7 @@ import type { ResourceId, TechEffect, UnitDef } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { fatan2, fcos, fsin } from './fmath.ts';
 import { evict, orderMove, setDestination, stopUnit } from './movement.ts';
+import { scaleHp } from './combat.ts';
 import { orderHaul, updateHaul } from './haul.ts';
 import { airfieldLoad, dockNew, takeOff } from './transport.ts';
 import { layerFor, NavLayer } from './nav.ts';
@@ -79,8 +80,9 @@ export function orderGather(world: World, units: Unit[], resIndex: number): void
   }
 }
 
+/** Help construct a foundation, or repair a damaged building. */
 export function orderBuildAssist(world: World, units: Unit[], b: Building): void {
-  if (b.complete) return;
+  if (b.complete && b.hp >= b.maxHp) return;
   for (const u of units) {
     if (u.def.builder !== b.def.builtBy) continue;
     u.task = { kind: 'build', building: b.id };
@@ -102,10 +104,50 @@ export function orderPlace(world: World, player: number, units: Unit[], type: Bu
   const p = world.players[player]!;
   if (!canAfford(p, def.cost)) return 'Not enough resources';
   pay(p, def.cost);
+  // A gate can replace a stretch of our own wall.
+  if (type === 'gate') {
+    const old = world.getBuilding(world.occupancy[ty * world.map.width + tx] ?? 0);
+    if (old && old.type === 'wall' && old.owner === player) world.removeBuilding(old);
+  }
   const b = world.addBuilding(type, player, tx, ty, false);
   for (const u of world.units) evict(world, u);
   orderBuildAssist(world, builders, b);
   return b;
+}
+
+/** Place a line of foundations (walls), paying for each, and send the builders to the nearest. */
+export function orderLine(world: World, player: number, units: Unit[], type: BuildingTypeId, tiles: ReadonlyArray<readonly [number, number]>): void {
+  const def = BUILDINGS[type];
+  const builders = units.filter((u) => u.def.builder === def.builtBy);
+  if (!builders.length || buildLockReason(world, player, type)) return;
+  const p = world.players[player]!;
+  const placed: Building[] = [];
+  let short = false;
+  for (const [tx, ty] of tiles.slice(0, 80)) {
+    if (placementProblem(world, player, type, tx, ty)) continue;
+    if (!canAfford(p, def.cost)) {
+      short = true;
+      break;
+    }
+    pay(p, def.cost);
+    placed.push(world.addBuilding(type, player, tx, ty, false));
+  }
+  if (short) world.emit({ kind: 'notify', player, text: `Not enough resources: ${placed.length} of ${tiles.length} segments placed` });
+  if (!placed.length) return;
+  for (const u of world.units) evict(world, u);
+  // Each builder starts at the nearest segment; they work along the line from there.
+  for (const u of builders) {
+    let best = placed[0]!;
+    let bestD = Infinity;
+    for (const b of placed) {
+      const d = dist(u.x, u.y, b.x, b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    orderBuildAssist(world, [u], best);
+  }
 }
 
 export function cancelConstruction(world: World, b: Building): void {
@@ -319,7 +361,7 @@ function startDelivery(world: World, u: Unit, task: Extract<Unit['task'], { kind
 
 function updateBuild(world: World, u: Unit, task: Extract<Unit['task'], { kind: 'build' }>): void {
   const b = world.getBuilding(task.building);
-  if (!b || b.complete || b.owner !== u.owner) {
+  if (!b || b.owner !== u.owner || (b.complete && b.hp >= b.maxHp)) {
     u.task = null;
     afterBuilding(world, u, b ?? null);
     return;
@@ -347,13 +389,18 @@ function afterBuilding(world: World, u: Unit, done: Building | null): void {
       return;
     }
   }
-  // Help with another foundation nearby.
-  for (const b of world.buildingsOf(u.owner)) {
-    if (!b.complete && b.def.builtBy === u.def.builder && dist(b.x, b.y, u.x, u.y) < 12) {
-      orderBuildAssist(world, [u], b);
-      return;
+  // Help with the nearest unfinished foundation close by (walls: along the line).
+  let next: Building | undefined;
+  let nextD = done?.type === 'wall' || done?.type === 'gate' ? 30 : 12;
+  for (const b of world.buildings) {
+    if (b.owner !== u.owner || b.complete || b.def.builtBy !== u.def.builder) continue;
+    const d = dist(b.x, b.y, u.x, u.y);
+    if (d < nextD) {
+      nextD = d;
+      next = b;
     }
   }
+  if (next) orderBuildAssist(world, [u], next);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +432,17 @@ export function updateBuildings(world: World): void {
       b.builders = 0;
       continue;
     }
+    // Repair: engineers restore HP for a share of the building's cost.
+    if (b.builders > 0 && b.hp < b.maxHp) {
+      const amount = Math.min(b.maxHp - b.hp, (buildRate(b.builders) * b.maxHp * 0.6 * DT) / b.def.buildTime);
+      const share = (amount / b.maxHp) * 0.4;
+      const cost = { ore: b.def.cost.ore * share, energy: b.def.cost.energy * share };
+      if (canAfford(p, cost)) {
+        pay(p, cost);
+        b.hp += amount;
+      }
+    }
+    b.activeBuilders = b.builders;
     b.builders = 0;
 
     // Energy production (derricks, rigs, fusion plants).
@@ -455,6 +513,13 @@ function completeResearch(world: World, p: PlayerState, tech: TechId): void {
     if (e.kind === 'gatherRate') p.mult.gather[e.resource] *= e.mult;
     else if (e.kind === 'produceRate') p.mult.produce[e.resource] *= e.mult;
     else if (e.kind === 'buildSpeed') p.mult.buildSpeed *= e.mult;
+    else if (e.kind === 'hp') {
+      p.mult.hp[e.group] *= e.mult;
+      scaleHp(world, p.id, e.group, e.mult);
+    } else if (e.kind === 'speed') p.mult.speed[e.group] *= e.mult;
+    else if (e.kind === 'range') p.mult.range[e.group] *= e.mult;
+    else if (e.kind === 'damage') p.mult.damage *= e.mult;
+    else if (e.kind === 'garrisonRange') p.mult.garrisonRange += e.add;
   }
   world.emit({ kind: 'researchComplete', player: p.id, tech });
 }

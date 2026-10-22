@@ -78,8 +78,14 @@ test('land units reach their destination and stay on land', () => {
   }
 });
 
+/** Remove the other side's units so movement tests are not turned into battles. */
+function pacify(world: World): void {
+  for (const u of [...world.units]) if (u.owner !== 0) world.removeUnit(u, 'test', true);
+}
+
 test('ships stay in water and can cross to the enemy coast', () => {
   const world = createMatch({ seed: 1337, mode: 'sandbox' });
+  pacify(world);
   const ids = playerUnits(world, 0, 'sea');
   assert.ok(ids.length > 0);
   const w = world.map.width;

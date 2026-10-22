@@ -75,6 +75,8 @@ export class Pathfinder {
   private gen = 0;
   private readonly heap = new NodeHeap();
   private readonly nav: NavGrid;
+  /** Player whose gates count as open during the current search (-1: none). */
+  private player = -1;
 
   constructor(nav: NavGrid) {
     this.nav = nav;
@@ -88,14 +90,14 @@ export class Pathfinder {
   }
 
   /** Nearest passable tile to (tx, ty) within maxR, by ring search. */
-  nearestPassable(layer: NavLayerId, tx: number, ty: number, maxR = 16): [number, number] | null {
+  nearestPassable(layer: NavLayerId, tx: number, ty: number, maxR = 16, player = -1): [number, number] | null {
     for (let r = 0; r <= maxR; r++) {
       let best: [number, number] | null = null;
       let bestD = Infinity;
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if (!this.nav.passable(layer, tx + dx, ty + dy)) continue;
+          if (!this.nav.passable(layer, tx + dx, ty + dy, player)) continue;
           const d = dx * dx + dy * dy;
           if (d < bestD) {
             bestD = d;
@@ -112,21 +114,22 @@ export class Pathfinder {
    * Find a path between world positions. Returns waypoints as a flat [x0, y0, x1, y1, ...]
    * array, excluding the start, or null if the start itself is not passable.
    */
-  findPath(layer: NavLayerId, sx: number, sy: number, gx: number, gy: number): number[] | null {
+  findPath(layer: NavLayerId, sx: number, sy: number, gx: number, gy: number, player = -1): number[] | null {
+    this.player = player;
     const w = this.w;
     let stx = Math.floor(sx);
     let sty = Math.floor(sy);
-    if (!this.nav.passable(layer, stx, sty)) {
-      const near = this.nearestPassable(layer, stx, sty, 3);
+    if (!this.nav.passable(layer, stx, sty, player)) {
+      const near = this.nearestPassable(layer, stx, sty, 3, player);
       if (!near) return null;
       [stx, sty] = near;
     }
     let gtx = Math.floor(gx);
     let gty = Math.floor(gy);
     let exactGoal = true;
-    if (!this.nav.passable(layer, gtx, gty)) {
+    if (!this.nav.passable(layer, gtx, gty, player)) {
       exactGoal = false;
-      const near = this.nearestPassable(layer, gtx, gty);
+      const near = this.nearestPassable(layer, gtx, gty, 16, player);
       if (near) [gtx, gty] = near;
     }
 
@@ -174,10 +177,10 @@ export class Pathfinder {
           if (dx === 0 && dy === 0) continue;
           const nx = cx + dx;
           const ny = cy + dy;
-          if (!this.nav.passable(layer, nx, ny)) continue;
+          if (!this.nav.passable(layer, nx, ny, player)) continue;
           if (dx !== 0 && dy !== 0) {
             // No cutting corners past blocked tiles.
-            if (!this.nav.passable(layer, cx + dx, cy) || !this.nav.passable(layer, cx, cy + dy)) continue;
+            if (!this.nav.passable(layer, cx + dx, cy, player) || !this.nav.passable(layer, cx, cy + dy, player)) continue;
           }
           const ni = ny * w + nx;
           if (this.closed[ni] === gen) continue;
@@ -231,7 +234,7 @@ export class Pathfinder {
   }
 
   /** True if a unit can travel in a straight line, checked with a small clearance. */
-  lineClear(layer: NavLayerId, x0: number, y0: number, x1: number, y1: number): boolean {
+  lineClear(layer: NavLayerId, x0: number, y0: number, x1: number, y1: number, player = this.player): boolean {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -245,10 +248,10 @@ export class Pathfinder {
       const t = s / steps;
       const x = x0 + dx * t;
       const y = y0 + dy * t;
-      if (!this.nav.passableAt(layer, x, y)) return false;
+      if (!this.nav.passableAt(layer, x, y, player)) return false;
       if (this.nav.cost(layer, Math.floor(x), Math.floor(y)) > maxCost) return false;
-      if (!this.nav.passableAt(layer, x + nx, y + ny)) return false;
-      if (!this.nav.passableAt(layer, x - nx, y - ny)) return false;
+      if (!this.nav.passableAt(layer, x + nx, y + ny, player)) return false;
+      if (!this.nav.passableAt(layer, x - nx, y - ny, player)) return false;
     }
     return true;
   }

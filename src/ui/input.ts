@@ -15,10 +15,13 @@ import type { Game } from '../game.ts';
 import type { GameRenderer } from '../render/renderer.ts';
 import { Terrain } from '../sim/map.ts';
 import { NavLayer } from '../sim/nav.ts';
+import { canHit } from '../sim/combat.ts';
+import { weaponsOf } from '../data/weapons.ts';
 import type { Building, Unit } from '../sim/world.ts';
 import { cursorCss, type CursorKind } from './cursors.ts';
 import { hitName, Picker, type Hit } from './pick.ts';
 import { placementCheck, snapFootprint } from './placementCheck.ts';
+import { buildLockReason, lineTiles, placementProblem } from '../sim/placement.ts';
 import type { Selection } from './selection.ts';
 
 export interface PlacingState {
@@ -29,9 +32,15 @@ export interface PlacingState {
   problem: string | null;
   /** Touch: the ghost has been positioned at least once. */
   positioned: boolean;
+  /** Walls: the line starts here (tile), and these tiles are in it. */
+  start: [number, number] | null;
+  tiles: Array<[number, number]>;
 }
 
-type DragKind = 'none' | 'box' | 'pan' | 'rotate' | 'gesture';
+/** Buildings placed by dragging a line. */
+const LINE_TYPES = new Set<BuildingTypeId>(['wall']);
+
+type DragKind = 'none' | 'box' | 'pan' | 'rotate' | 'gesture' | 'line';
 
 interface PointerInfo {
   id: number;
@@ -172,6 +181,15 @@ export class InputController {
       id: e.pointerId, type: e.pointerType, button: e.button,
       startX: p.x, startY: p.y, x: p.x, y: p.y, moved: false, drag: 'none',
     });
+    const pl = this.placing;
+    if (pl && LINE_TYPES.has(pl.type) && e.pointerType === 'mouse' && e.button === 0) {
+      const g = this.renderer.pickGround(e.clientX, e.clientY);
+      if (g) {
+        pl.start = [Math.floor(g.x), Math.floor(g.y)];
+        pl.tiles = [pl.start];
+        this.updateGhost();
+      }
+    }
     if (this.pointers.size === 2) {
       for (const pi of this.pointers.values()) {
         pi.drag = 'gesture';
@@ -228,7 +246,7 @@ export class InputController {
       if (Math.hypot(p.x - pi.startX, p.y - pi.startY) < threshold) return;
       pi.moved = true;
       if (pi.type === 'mouse') {
-        pi.drag = pi.button === 0 ? 'box' : pi.button === 1 ? 'rotate' : 'pan';
+        pi.drag = pi.button === 0 ? (this.placing?.start ? 'line' : 'box') : pi.button === 1 ? 'rotate' : 'pan';
       } else {
         pi.drag = this.dragMode === 'select' ? 'box' : 'pan';
       }
@@ -240,6 +258,7 @@ export class InputController {
       while (this.panSamples.length > 2 && now - this.panSamples[0]!.t > 100) this.panSamples.shift();
     }
     else if (pi.drag === 'rotate') rig.rotate(dx * 0.006);
+    else if (pi.drag === 'line') this.extendLine(e.clientX, e.clientY);
     else if (pi.drag === 'box') this.showBox(pi.startX, pi.startY, p.x, p.y);
   }
 
@@ -270,6 +289,10 @@ export class InputController {
       this.panSamples = [];
       return;
     }
+    if (pi.drag === 'line') {
+      this.confirmPlacement(e.shiftKey);
+      return;
+    }
     if (pi.drag === 'box') {
       this.hideBox();
       this.boxSelect(pi.startX, pi.startY, pi.x, pi.y, additive);
@@ -289,6 +312,20 @@ export class InputController {
         else if (pi.button === 0) {
           this.moveGhost(pi.x + rect.left, pi.y + rect.top);
           this.confirmPlacement(e.shiftKey);
+        }
+      } else if (this.placing && LINE_TYPES.has(this.placing.type)) {
+        // Touch walls: first tap starts the line, later taps move its end; the card's button confirms.
+        const g = this.renderer.pickGround(pi.x + rect.left, pi.y + rect.top);
+        if (g) {
+          const pl = this.placing;
+          if (!pl.start) {
+            pl.start = [Math.floor(g.x), Math.floor(g.y)];
+            pl.tiles = [pl.start];
+          } else {
+            pl.tiles = lineTiles(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
+          }
+          pl.positioned = true;
+          this.updateGhost();
         }
       } else {
         // Touch: a tap positions the ghost; the card's button confirms.
@@ -353,6 +390,14 @@ export class InputController {
       case 'Period':
         this.selectNextIdle();
         break;
+      case 'KeyF':
+        this.attackMoveSelected();
+        break;
+      case 'KeyG': {
+        const b = this.ownSelected().buildings.find((x) => x.garrison.length);
+        if (b) this.game.issue({ kind: 'eject', player: this.game.humanPlayer, building: b.id });
+        break;
+      }
       case 'Space':
         e.preventDefault();
         this.centerOnSelection();
@@ -423,6 +468,25 @@ export class InputController {
     const world = this.game.world;
     const player = this.game.humanPlayer;
     const sel = this.ownSelected();
+    // Attack: an enemy we can see, with units that can hurt it.
+    if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own) {
+      const target = hit.kind === 'unit' ? hit.unit : hit.building;
+      const armed = sel.units.filter((u) => weaponsOf(u.type).some((w) => canHit(w, target)));
+      if (armed.length) {
+        this.game.issue({ kind: 'attack', player, units: sel.units.map((u) => u.id), target: target.id });
+        this.renderer.effects.attackMarker(target.x, 0.2, target.y);
+        return;
+      }
+    }
+    // Garrison: infantry into one of our towers, bunkers or the Command Center.
+    if (hit.kind === 'building' && hit.own && hit.building.complete && (hit.building.def.garrison ?? 0) > 0) {
+      const inf = sel.units.filter((u) => u.def.armor === 'inf' && u.def.domain === 'land' && !u.def.builder);
+      if (inf.length) {
+        this.game.issue({ kind: 'garrison', player, units: inf.map((u) => u.id), building: hit.building.id });
+        this.renderer.effects.moveMarker(hit.building.x, 0.2, hit.building.y);
+        return;
+      }
+    }
     // Board: land units onto one of our transports.
     if (hit.kind === 'unit' && hit.own && hit.unit.def.cargo) {
       const riders = sel.units.filter((u) => u !== hit.unit && u.def.domain === 'land');
@@ -473,12 +537,18 @@ export class InputController {
   // -------------------------------------------------------------------------
   // Targeted orders (paradrop): the next click / tap on the map picks the spot.
 
-  targeting: { kind: 'paradrop'; units: number[] } | null = null;
+  targeting: { kind: 'paradrop' | 'attackMove'; units: number[] } | null = null;
 
-  startTargeting(kind: 'paradrop', units: number[]): void {
+  startTargeting(kind: 'paradrop' | 'attackMove', units: number[]): void {
+    if (!units.length) return;
     this.cancelPlacement();
     this.targeting = { kind, units };
-    this.toast(this.touchDevice ? 'Tap where to drop the paratroopers' : 'Click where to drop the paratroopers (right click to cancel)');
+    if (kind === 'paradrop') this.toast(this.touchDevice ? 'Tap where to drop the paratroopers' : 'Click where to drop the paratroopers (right click to cancel)');
+  }
+
+  /** Attack-move with the current selection: the next click picks the destination. */
+  attackMoveSelected(): void {
+    this.startTargeting('attackMove', this.ownSelected().units.map((u) => u.id));
   }
 
   cancelTargeting(): void {
@@ -490,8 +560,9 @@ export class InputController {
     if (!t) return;
     const g = this.picker.ground(sx, sy);
     if (!g) return;
-    this.game.issue({ kind: 'paradrop', player: this.game.humanPlayer, units: t.units, x: g.x, y: g.y });
-    this.renderer.effects.moveMarker(g.x, Math.max(0, g.h), g.y);
+    this.game.issue({ kind: t.kind, player: this.game.humanPlayer, units: t.units, x: g.x, y: g.y });
+    if (t.kind === 'attackMove') this.renderer.effects.attackMarker(g.x, Math.max(0, g.h), g.y);
+    else this.renderer.effects.moveMarker(g.x, Math.max(0, g.h), g.y);
     this.targeting = null;
   }
 
@@ -517,7 +588,7 @@ export class InputController {
     const ore = gatherers.length ? world.oreNear(x, y, 1.3) : -1;
     const tile = Math.floor(y) * world.map.width + Math.floor(x);
     const target = world.getBuilding(world.occupancy[tile] ?? 0);
-    const builders = target && target.owner === player && !target.complete ? units.filter((u) => u.def.builder === target.def.builtBy) : [];
+    const builders = target && target.owner === player && (!target.complete || target.hp < target.maxHp - 0.5) ? units.filter((u) => u.def.builder === target.def.builtBy) : [];
     const used = new Set<number>();
     if (ore >= 0) {
       this.game.issue({ kind: 'gather', player, units: gatherers.map((u) => u.id), resource: ore });
@@ -537,7 +608,7 @@ export class InputController {
   startPlacement(type: BuildingTypeId): void {
     const s = this.renderer.rig.target;
     const [tx, ty] = snapFootprint(this.game.world, type, s.x, s.y);
-    this.placing = { type, tx, ty, valid: false, problem: null, positioned: false };
+    this.placing = { type, tx, ty, valid: false, problem: null, positioned: false, start: null, tiles: [] };
     this.updateGhost();
   }
 
@@ -546,8 +617,18 @@ export class InputController {
     this.renderer.ghost.hide();
   }
 
+  private extendLine(clientX: number, clientY: number): void {
+    const pl = this.placing;
+    if (!pl?.start) return;
+    const g = this.renderer.pickGround(clientX, clientY);
+    if (!g) return;
+    pl.tiles = lineTiles(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
+    this.updateGhost();
+  }
+
   private moveGhost(clientX: number, clientY: number): void {
     if (!this.placing) return;
+    if (this.placing.start) return; // a wall line is being drawn
     const g = this.renderer.pickGround(clientX, clientY);
     if (!g) return;
     const [tx, ty] = snapFootprint(this.game.world, this.placing.type, g.x, g.y);
@@ -561,15 +642,51 @@ export class InputController {
   updateGhost(): void {
     const pl = this.placing;
     if (!pl) return;
+    if (pl.start) {
+      const world = this.game.world;
+      const me = this.game.humanPlayer;
+      const lock = buildLockReason(world, me, pl.type);
+      const ok = (tx: number, ty: number) => !lock && placementProblem(world, me, pl.type, tx, ty) === null;
+      const good = pl.tiles.filter(([tx, ty]) => ok(tx, ty)).length;
+      const cost = BUILDINGS[pl.type].cost.ore * good;
+      pl.problem = lock ?? (good === 0 ? 'Nothing can be built along this line' : world.players[me]!.res.ore < BUILDINGS[pl.type].cost.ore ? 'Not enough resources' : null);
+      pl.valid = pl.problem === null;
+      this.lineInfo = `${good} segment${good === 1 ? '' : 's'} · ◆${cost}`;
+      this.renderer.ghost.showLine(pl.tiles, ok);
+      return;
+    }
     pl.problem = placementCheck(this.game.world, this.game.humanPlayer, pl.type, pl.tx, pl.ty);
     if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = 'Tap the map to choose a spot';
     pl.valid = pl.problem === null;
     this.renderer.ghost.show(pl.type, pl.tx, pl.ty, pl.valid);
   }
 
+  /** Summary of the wall line being drawn (for the card). */
+  lineInfo = '';
+
   confirmPlacement(keepPlacing = false): void {
     const pl = this.placing;
     if (!pl) return;
+    if (pl.start) {
+      this.updateGhost();
+      if (!pl.valid) {
+        if (pl.problem) this.toast(pl.problem);
+        return;
+      }
+      const builders = this.ownSelected().units.filter((u) => u.def.builder === BUILDINGS[pl.type].builtBy);
+      if (!builders.length) {
+        this.toast('Select an Engineer');
+        return;
+      }
+      this.game.issue({ kind: 'buildLine', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: pl.type, tiles: pl.tiles });
+      if (keepPlacing) {
+        pl.start = null;
+        pl.tiles = [];
+      } else {
+        this.cancelPlacement();
+      }
+      return;
+    }
     this.updateGhost();
     if (!pl.valid) {
       if (pl.problem) this.toast(pl.problem);
@@ -677,13 +794,13 @@ export class InputController {
       return;
     }
     const verb = this.verbFor(hit);
-    // Tapping a building selects it, unless the selection has a job to do there (help build).
-    if (hit.kind === 'building' && hit.own && verb !== 'build' && verb !== 'board' && verb !== 'mine') {
+    // Tapping a building selects it, unless the selection has a job to do there (help build, garrison...).
+    if (hit.kind === 'building' && hit.own && verb !== 'build' && verb !== 'board' && verb !== 'mine' && verb !== 'garrison') {
       this.selection.set([hit.building.id]);
       return;
     }
-    // Enemies are inspected for now (attacking arrives with combat in M3).
-    if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own) {
+    // Enemies: attack them if the selection can, otherwise just look.
+    if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own && verb !== 'attack') {
       this.inspect(hit);
       return;
     }
@@ -715,12 +832,17 @@ export class InputController {
     }
     if (units === 0) return buildings > 0 && hit.kind !== 'none' ? 'rally' : null;
     const sel = this.ownSelected();
+    if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own) {
+      const target = hit.kind === 'unit' ? hit.unit : hit.building;
+      if (sel.units.some((u) => weaponsOf(u.type).some((w) => canHit(w, target)))) return 'attack';
+    }
+    if (hit.kind === 'building' && hit.own && hit.building.complete && (hit.building.def.garrison ?? 0) > 0 && sel.units.some((u) => u.def.armor === 'inf' && u.def.domain === 'land' && !u.def.builder)) return 'garrison';
     if (hit.kind === 'unit' && hit.own && hit.unit.def.cargo && sel.units.some((u) => u !== hit.unit && u.def.domain === 'land')) return 'board';
     if (hit.kind === 'building' && hit.own && hit.building.def.dock && sel.units.some((u) => u.def.fuel)) return 'board';
     if (hit.kind === 'building' && hit.own && hit.building.def.tank && hit.building.complete && sel.units.some((u) => u.def.haul)) return 'mine';
     if (hit.kind === 'ground' && sel.units.some((u) => u.def.cargo && u.def.domain === 'sea' && u.cargo.length > 0) && world.nav.passableAt(NavLayer.Foot, hit.x, hit.y)) return 'unload';
     if (hit.kind === 'resource' && hit.res.kind === 'ore' && gatherers > 0) return 'mine';
-    if (hit.kind === 'building' && hit.own && !hit.building.complete && builderKinds.has(hit.building.def.builtBy)) return 'build';
+    if (hit.kind === 'building' && hit.own && (!hit.building.complete || hit.building.hp < hit.building.maxHp - 0.5) && builderKinds.has(hit.building.def.builtBy)) return 'build';
     if (hit.kind === 'none') return null;
     return 'move';
   }
@@ -743,7 +865,7 @@ export class InputController {
     let cursor: CursorKind = 'default';
     let label: { title: string; sub: string } | null = null;
     if (this.targeting) {
-      cursor = 'paradrop';
+      cursor = this.targeting.kind === 'paradrop' ? 'paradrop' : 'attackMove';
     } else if (this.placing) {
       cursor = this.placing.valid ? 'place' : 'nope';
     } else if (this.mouse.inside && !this.touchDevice) {

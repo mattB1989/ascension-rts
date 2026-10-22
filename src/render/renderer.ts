@@ -127,9 +127,10 @@ export class GameRenderer {
     }
     this.water.update(time);
     this.resources.update(inspect.resource, time);
-    this.buildings.update(time, frameDt, selected, this.viewer, inspect.entity);
-    this.units.update(alpha, time, frameDt, selected, this.viewer, inspect.entity);
-    this.effects.update(frameDt);
+    this.buildings.update(time, frameDt, selected, this.viewer, inspect.entity, this.rig.camera);
+    this.units.update(alpha, time, frameDt, selected, this.viewer, inspect.entity, this.rig.camera);
+    this.effects.viewer = this.viewer;
+    this.effects.update(frameDt, this.world, alpha);
     this.renderer.render(this.scene, this.rig.camera);
   }
 

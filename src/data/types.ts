@@ -118,10 +118,18 @@ export interface UnitDef {
   description: string;
 }
 
+/** Groups that research upgrades apply to. */
+export type UpgradeGroup = 'infantry' | 'vehicles' | 'aircraft' | 'ships' | 'walls' | 'defenses' | 'buildings';
+
 export type TechEffect =
   | { kind: 'gatherRate'; resource: ResourceId; mult: number }
   | { kind: 'produceRate'; resource: ResourceId; mult: number }
   | { kind: 'buildSpeed'; mult: number }
+  | { kind: 'hp'; group: UpgradeGroup; mult: number }
+  | { kind: 'speed'; group: UpgradeGroup; mult: number }
+  | { kind: 'range'; group: UpgradeGroup; mult: number }
+  | { kind: 'damage'; mult: number }
+  | { kind: 'garrisonRange'; add: number }
   /** Effect not implemented yet: the tech is listed but cannot be researched. */
   | { kind: 'pending'; milestone: string };
 
@@ -139,6 +147,17 @@ export interface TechDef {
 // Ids are plain strings in the defs (so the data files can reference each other
 // without circular types); the catalog checks every reference in a test.
 export type BuildingId = string;
+
+export function unitGroup(def: Pick<UnitDef, 'domain' | 'armor'>): UpgradeGroup {
+  if (def.domain === 'air') return 'aircraft';
+  if (def.domain === 'sea') return 'ships';
+  return def.armor === 'inf' ? 'infantry' : 'vehicles';
+}
+
+export function buildingGroup(def: Pick<BuildingDef, 'id' | 'category'>): UpgradeGroup {
+  if (def.id === 'wall' || def.id === 'gate') return 'walls';
+  return def.category === 'defense' ? 'defenses' : 'buildings';
+}
 
 /** Cargo slots a unit takes in a transport (0 = cannot be carried). */
 export function cargoSize(def: Pick<UnitDef, 'domain' | 'armor' | 'pop'>): number {

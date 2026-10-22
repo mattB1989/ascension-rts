@@ -10,6 +10,7 @@ import { BUILDINGS, BUILDING_TYPES } from '../src/data/buildings.ts';
 import { TECH_IDS, TECHS, techImplemented } from '../src/data/techs.ts';
 import type { AgeId, BuildingDef, Cost } from '../src/data/types.ts';
 import { UNIT_TYPES, UNITS } from '../src/data/units.ts';
+import { DAMAGE, DAMAGE_TYPE_NAMES, weaponsOf, type DamageType } from '../src/data/weapons.ts';
 
 const ARMOR: Record<string, string> = { inf: 'Inf', lt: 'Lt', hv: 'Hv', mech: 'Mech', ship: 'Ship', sub: 'Sub', air: 'Air', orb: 'Orb', str: 'Str' };
 const CATEGORY: Record<string, string> = {
@@ -20,6 +21,16 @@ const CATEGORY: Record<string, string> = {
 const cost = (c: Cost) => `${c.ore} / ${c.energy}`;
 const bname = (id: string) => (BUILDINGS as Record<string, BuildingDef>)[id]?.name ?? id;
 const ageName = (a: AgeId) => AGES[a].name.replace(' Age', '');
+
+const SHORT: Record<DamageType, string> = { bullet: 'bullet', ap: 'AP', explosive: 'explosive', aa: 'AA', torpedo: 'torpedo', laser: 'laser', emp: 'EMP' };
+
+function weaponsText(id: string): string {
+  const ws = weaponsOf(id);
+  if (!ws.length) return '—';
+  return ws
+    .map((w) => `${w.name}: ${w.damage} ${SHORT[w.type]} / ${w.cooldown}s, range ${w.range}${w.minRange ? ` (min ${w.minRange})` : ''}${w.splash ? `, splash ${w.splash}` : ''}`)
+    .join('<br>');
+}
 
 function table(head: string[], rows: string[][]): string {
   return [`| ${head.join(' | ')} |`, `|${head.map(() => '---').join('|')}|`, ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n');
@@ -66,21 +77,27 @@ export function renderTables(): Record<string, string> {
 
   const defense = BUILDING_TYPES.filter((id) => BUILDINGS[id].category === 'defense');
   out.defense = table(
-    ['Structure', 'Age', 'Requires', 'Cost', 'Build time', 'Garrison', 'Notes'],
+    ['Structure', 'Age', 'Requires', 'Cost', 'Build time', 'HP', 'Garrison', 'Weapons', 'Notes'],
     defense.map((id) => {
       const b: BuildingDef = BUILDINGS[id];
-      return [`**${b.name}**`, ageName(b.age), b.requires.map(bname).join(' + '), cost(b.cost), String(b.buildTime), b.garrison ? `${b.garrison} infantry` : '—', b.description];
+      return [`**${b.name}**`, ageName(b.age), b.requires.map(bname).join(' + '), cost(b.cost), String(b.buildTime), String(b.hp), b.garrison ? `${b.garrison} infantry` : '—', weaponsText(id), b.description];
     }),
+  );
+
+  const armors = ['inf', 'lt', 'hv', 'mech', 'ship', 'sub', 'air', 'orb', 'str'] as const;
+  out.damage = table(
+    ['', 'Inf', 'Lt', 'Hv', 'Mech', 'Ship', 'Sub', 'Air', 'Orb', 'Str'],
+    (Object.keys(DAMAGE) as DamageType[]).map((t) => [DAMAGE_TYPE_NAMES[t], ...armors.map((a) => (DAMAGE[t][a] ? String(DAMAGE[t][a]) : '—'))]),
   );
 
   for (const age of AGE_ORDER) {
     const units = UNIT_TYPES.filter((id) => UNITS[id].age === age);
     out[`units_${age}`] = table(
-      ['Unit', 'From', 'Class', 'Cost', 'Pop', 'Train time', 'Strong vs', 'Weak vs'],
+      ['Unit', 'From', 'Class', 'Cost', 'Pop', 'HP', 'Speed', 'Weapons', 'Strong vs', 'Weak vs'],
       units.map((id) => {
         const u = UNITS[id];
         const name = 'limit' in u && u.limit ? `**${u.name}** (max ${u.limit})` : `**${u.name}**`;
-        return [name, bname(u.trainedAt), ARMOR[u.armor]!, cost(u.cost), String(u.pop), String(u.trainTime), u.strongVs, u.weakVs];
+        return [name, bname(u.trainedAt), ARMOR[u.armor]!, cost(u.cost), String(u.pop), String(u.hp), String(u.speed), weaponsText(id), u.strongVs, u.weakVs];
       }),
     );
   }

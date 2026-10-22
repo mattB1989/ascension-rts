@@ -34,7 +34,17 @@ export type Command =
   /** Sea Engineers haul oil from a rig's tank to a Shipyard. */
   | { kind: 'haul'; player: number; units: number[]; building: number }
   /** Units head off into unexplored territory by themselves. */
-  | { kind: 'explore'; player: number; units: number[] };
+  | { kind: 'explore'; player: number; units: number[] }
+  /** Attack one enemy unit or building. */
+  | { kind: 'attack'; player: number; units: number[]; target: number }
+  /** Move, fighting anything met on the way. */
+  | { kind: 'attackMove'; player: number; units: number[]; x: number; y: number }
+  /** Infantry enter a building and fire from it. */
+  | { kind: 'garrison'; player: number; units: number[]; building: number }
+  /** Everyone out of a building. */
+  | { kind: 'eject'; player: number; building: number }
+  /** Place a line of foundations (walls) and send the builders along it. */
+  | { kind: 'buildLine'; player: number; units: number[]; building: BuildingTypeId; tiles: Array<[number, number]> };
 
 /** A command stamped with the tick it executes on (for replays). */
 export interface TimedCommand {

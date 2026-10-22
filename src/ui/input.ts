@@ -44,6 +44,8 @@ interface PointerInfo {
 
 export type DragMode = 'pan' | 'select';
 
+const EDGE = 16; // px: edge-scroll margin
+
 export class InputController {
   dragMode: DragMode = 'pan';
   /** Interpolation factor of the last rendered frame, so picking matches what is on screen. */
@@ -51,6 +53,9 @@ export class InputController {
   private readonly pointers = new Map<number, PointerInfo>();
   private gesture: { cx: number; cy: number; dist: number; angle: number } | null = null;
   private readonly keys = new Set<string>();
+  private panHeld = 0;
+  /** Recent pan-drag samples, for fling velocity. */
+  private panSamples: Array<{ t: number; x: number; y: number }> = [];
   private readonly mouse = { x: 0, y: 0, inside: false };
   private lastClick = { time: 0, unitId: -1 };
   private lastGroupKey = { n: -1, time: 0 };
@@ -101,7 +106,14 @@ export class InputController {
   update(frameDt: number): void {
     if (this.placing) this.updateGhost();
     const rig = this.renderer.rig;
-    const speed = rig.distance * 1.1 * frameDt;
+    rig.tick(frameDt);
+    // Pan speed scales with zoom, ramps up while held, Shift doubles it.
+    const panning = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some((k) => this.keys.has(k));
+    const atEdge = this.mouse.inside && !this.touchDevice && this.pointers.size === 0 && document.hasFocus() && this.mouseAtEdge();
+    this.panHeld = panning || atEdge ? this.panHeld + frameDt : 0;
+    const ramp = 1 + Math.min(1.5, this.panHeld * 1.5);
+    const boost = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 2 : 1;
+    const speed = rig.distance * 1.9 * ramp * boost * frameDt;
     let r = 0;
     let f = 0;
     if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) f += speed;
@@ -110,12 +122,12 @@ export class InputController {
     if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) r -= speed;
     if (this.keys.has('KeyQ')) rig.rotate(-1.6 * frameDt);
     if (this.keys.has('KeyE')) rig.rotate(1.6 * frameDt);
-    if (this.keys.has('Equal') || this.keys.has('NumpadAdd')) rig.zoom(Math.exp(-1.5 * frameDt));
-    if (this.keys.has('Minus') || this.keys.has('NumpadSubtract')) rig.zoom(Math.exp(1.5 * frameDt));
+    if (this.keys.has('Equal') || this.keys.has('NumpadAdd') || this.keys.has('PageUp')) rig.zoom(Math.exp(-2.2 * frameDt));
+    if (this.keys.has('Minus') || this.keys.has('NumpadSubtract') || this.keys.has('PageDown')) rig.zoom(Math.exp(2.2 * frameDt));
 
     // Edge scrolling, only with a mouse that is over the game and not dragging.
-    if (this.mouse.inside && !this.touchDevice && this.pointers.size === 0 && document.hasFocus()) {
-      const m = 12;
+    if (atEdge) {
+      const m = EDGE;
       const w = this.canvas.clientWidth;
       const h = this.canvas.clientHeight;
       if (this.mouse.x < m) r -= speed;
@@ -124,6 +136,12 @@ export class InputController {
       if (this.mouse.y > h - m) f -= speed;
     }
     if (r !== 0 || f !== 0) rig.pan(r, f);
+  }
+
+  private mouseAtEdge(): boolean {
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    return this.mouse.x < EDGE || this.mouse.x > w - EDGE || this.mouse.y < EDGE || this.mouse.y > h - EDGE;
   }
 
   // -------------------------------------------------------------------------
@@ -136,6 +154,8 @@ export class InputController {
 
   private onDown(e: PointerEvent): void {
     e.preventDefault();
+    this.renderer.rig.stopFling();
+    this.panSamples = [];
     this.canvas.setPointerCapture(e.pointerId);
     const p = this.local(e);
     this.pointers.set(e.pointerId, {
@@ -203,7 +223,12 @@ export class InputController {
         pi.drag = this.dragMode === 'select' ? 'box' : 'pan';
       }
     }
-    if (pi.drag === 'pan') rig.panPixels(dx, dy, this.renderer.viewportHeight);
+    if (pi.drag === 'pan') {
+      rig.panPixels(dx, dy, this.renderer.viewportHeight);
+      const now = performance.now();
+      this.panSamples.push({ t: now, x: p.x, y: p.y });
+      while (this.panSamples.length > 2 && now - this.panSamples[0]!.t > 100) this.panSamples.shift();
+    }
     else if (pi.drag === 'rotate') rig.rotate(dx * 0.006);
     else if (pi.drag === 'box') this.showBox(pi.startX, pi.startY, p.x, p.y);
   }
@@ -222,6 +247,19 @@ export class InputController {
       return;
     }
     const additive = e.shiftKey || e.ctrlKey;
+    if (pi.drag === 'pan') {
+      // Fling: keep gliding in the direction of a quick swipe.
+      const s0 = this.panSamples[0];
+      const s1 = this.panSamples[this.panSamples.length - 1];
+      const now = performance.now();
+      if (s0 && s1 && s1 !== s0 && now - s1.t < 60) {
+        const dt = Math.max(0.016, (s1.t - s0.t) / 1000);
+        const [r, f] = this.renderer.rig.pixelsToWorld((s1.x - s0.x) / dt, (s1.y - s0.y) / dt, this.renderer.viewportHeight);
+        if (Math.hypot(s1.x - s0.x, s1.y - s0.y) / dt > 250) this.renderer.rig.fling(r, f);
+      }
+      this.panSamples = [];
+      return;
+    }
     if (pi.drag === 'box') {
       this.hideBox();
       this.boxSelect(pi.startX, pi.startY, pi.x, pi.y, additive);
@@ -260,7 +298,10 @@ export class InputController {
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
     const scale = e.deltaMode === 1 ? 40 : 1;
-    this.renderer.rig.zoom(Math.exp(e.deltaY * scale * 0.0012));
+    const factor = Math.exp(Math.max(-0.5, Math.min(0.5, e.deltaY * scale * 0.0018)));
+    const g = this.renderer.pickGround(e.clientX, e.clientY);
+    if (g) this.renderer.rig.zoomAt(factor, g.x, g.y);
+    else this.renderer.rig.zoom(factor);
   }
 
   // -------------------------------------------------------------------------

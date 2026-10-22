@@ -8,9 +8,11 @@ export class CameraRig {
   readonly target = new THREE.Vector2();
   yaw = -2.356; // looking from player 1's base towards the enemy
   pitch = 0.95;
-  distance = 32;
+  distance = 42;
   readonly minDistance = 10;
-  readonly maxDistance = 110;
+  readonly maxDistance = 140;
+  /** Pan velocity in world units per second (fling / inertia after a drag). */
+  private readonly vel = new THREE.Vector2();
   private bounds: { w: number; h: number };
 
   constructor(aspect: number, mapW: number, mapH: number) {
@@ -33,14 +35,53 @@ export class CameraRig {
     this.clamp();
   }
 
+  /** Screen pixels -> world (right, forward) amounts at the current zoom. */
+  pixelsToWorld(dx: number, dy: number, viewportHeight: number): [number, number] {
+    const worldPerPixel = (2 * this.distance * Math.tan((this.camera.fov * Math.PI) / 360)) / viewportHeight;
+    return [-dx * worldPerPixel, (dy * worldPerPixel) / Math.sin(this.pitch)];
+  }
+
   /** Pan so that a screen drag of (dx, dy) pixels moves the ground under the finger. */
   panPixels(dx: number, dy: number, viewportHeight: number): void {
-    const worldPerPixel = (2 * this.distance * Math.tan((this.camera.fov * Math.PI) / 360)) / viewportHeight;
-    this.pan(-dx * worldPerPixel, (dy * worldPerPixel) / Math.sin(this.pitch));
+    const [r, f] = this.pixelsToWorld(dx, dy, viewportHeight);
+    this.pan(r, f);
+  }
+
+  /** Keep gliding after a drag is released, at (right, forward) world units per second. */
+  fling(rightPerSec: number, forwardPerSec: number): void {
+    const { right, forward } = this.basis();
+    this.vel.set(right.x * rightPerSec + forward.x * forwardPerSec, right.y * rightPerSec + forward.y * forwardPerSec);
+    const max = this.distance * 5;
+    if (this.vel.length() > max) this.vel.setLength(max);
+  }
+
+  stopFling(): void {
+    this.vel.set(0, 0);
+  }
+
+  /** Per-frame: apply fling inertia with friction. */
+  tick(dt: number): void {
+    if (this.vel.lengthSq() < 0.25) {
+      this.vel.set(0, 0);
+      return;
+    }
+    this.target.x += this.vel.x * dt;
+    this.target.y += this.vel.y * dt;
+    this.clamp();
+    this.vel.multiplyScalar(Math.exp(-4.5 * dt));
   }
 
   zoom(factor: number): void {
     this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance * factor));
+  }
+
+  /** Zoom keeping the ground point (x, z) fixed on screen (zoom towards the cursor). */
+  zoomAt(factor: number, x: number, z: number): void {
+    const before = this.distance;
+    this.zoom(factor);
+    const k = this.distance / before;
+    this.target.set(x + (this.target.x - x) * k, z + (this.target.y - z) * k);
+    this.clamp();
   }
 
   rotate(dYaw: number): void {

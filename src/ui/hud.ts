@@ -40,8 +40,9 @@ const HELP_HTML = `
         <li><b>Left click</b> select (units or buildings), <b>drag</b> box-select, <b>Shift</b> add</li>
         <li><b>Double click</b> select all of that type on screen</li>
         <li><b>Right click</b>: move · on ore: mine · on a foundation: help build · with a building selected: rally point</li>
-        <li><b>Right drag</b> pan, <b>middle drag</b> or <b>Q / E</b> rotate, <b>wheel</b> zoom</li>
-        <li><b>WASD / arrows</b> or screen edge: pan</li>
+        <li><b>Right drag</b> pan (flick to glide), <b>wheel</b> zoom towards the cursor, <b>middle drag</b> or <b>Q / E</b> rotate</li>
+        <li><b>WASD / arrows</b> or screen edge: pan (speeds up while held, <b>Shift</b> for double)</li>
+        <li><b>Minimap</b>: click or drag to jump anywhere</li>
         <li><b>Ctrl+1..9</b> assign group, <b>1..9</b> recall (twice: jump)</li>
         <li><b>.</b> next idle engineer, <b>Ctrl+A</b> army, <b>X</b> stop, <b>Esc</b> cancel/deselect, <b>H</b> home</li>
       </ul>
@@ -52,7 +53,8 @@ const HELP_HTML = `
         <li><b>Tap</b> a unit or building to select, <b>double tap</b> for all of a type</li>
         <li><b>Tap</b> the ground to move, ore to mine, a foundation to help build</li>
         <li>To build: select engineers, pick a building, <b>tap</b> to position it, then <b>✓</b></li>
-        <li><b>One finger drag</b> pans (or box-selects in <b>Select</b> mode)</li>
+        <li><b>One finger drag</b> pans, <b>flick</b> to glide (or box-selects in <b>Select</b> mode)</li>
+        <li><b>Minimap</b>: tap or drag to jump anywhere</li>
         <li><b>Two fingers</b> pan, pinch zoom, twist rotate</li>
       </ul>
     </section>

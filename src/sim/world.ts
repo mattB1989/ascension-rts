@@ -12,7 +12,7 @@ import {
 import { FOG_INTERVAL, updateFog } from './fog.ts';
 import type { GameMap } from './map.ts';
 import { moveUnit, orderMove, separate, stopUnit } from './movement.ts';
-import { layerForDomain, NavGrid } from './nav.ts';
+import { layerFor, NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
 import { Rng } from './rng.ts';
 import { DT } from './time.ts';
@@ -146,7 +146,7 @@ export class World {
       owner,
       type,
       def,
-      layer: layerForDomain(def.domain),
+      layer: layerFor(def),
       x, y, angle,
       px: x, py: y, pa: angle,
       hp: def.hp,

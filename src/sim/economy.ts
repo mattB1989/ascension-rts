@@ -6,7 +6,7 @@ import type { ResourceId, TechEffect, UnitDef } from '../data/types.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { fatan2 } from './fmath.ts';
 import { evict, orderMove, setDestination, stopUnit } from './movement.ts';
-import { NavLayer } from './nav.ts';
+import { layerFor, NavLayer } from './nav.ts';
 import { ageIndex, buildLockReason, canAfford, oilUnder, pay, placementProblem, refund } from './placement.ts';
 import { DT } from './time.ts';
 import { CARRY_CAPACITY, MAX_QUEUE, POP_LIMIT, type Building, type PlayerState, type ResourceState, type Unit } from './types.ts';
@@ -418,7 +418,7 @@ function completeResearch(world: World, p: PlayerState, tech: TechId): void {
 /** Spawn a freshly trained unit beside its building, then send it to the rally point. */
 function spawnFromBuilding(world: World, b: Building, type: UnitTypeId): void {
   const def = UNITS[type];
-  const layer = def.domain === 'land' ? NavLayer.Land : def.domain === 'sea' ? NavLayer.Water : NavLayer.Air;
+  const layer = layerFor(def);
   const toward = b.rally ?? { x: world.map.width / 2, y: world.map.height / 2 };
   let sx = b.x;
   let sy = b.y;

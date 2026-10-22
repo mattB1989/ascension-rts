@@ -67,7 +67,7 @@ test('land units reach their destination and stay on land', () => {
     world.step();
     for (const id of ids) {
       const u = world.getUnit(id)!;
-      assert.ok(world.nav.passableAt(NavLayer.Land, u.x, u.y), `unit ${id} left the land at ${u.x},${u.y}`);
+      assert.ok(world.nav.passableAt(u.layer, u.x, u.y), `${u.type} ${id} on impassable ground at ${u.x},${u.y}`);
     }
   }
   for (const id of ids) {
@@ -108,6 +108,41 @@ test('ordering a tank onto an island takes it to the nearest reachable shore', (
   assert.ok(world.nav.passableAt(NavLayer.Land, tank.x, tank.y));
   assert.ok(Math.hypot(tank.x - c, tank.y - c) < 40, 'tank should have moved towards the island');
   assert.equal(tank.state, 'idle');
+});
+
+test('forest: vehicles go around, infantry go through', () => {
+  const world = createMatch({ seed: 1337, mode: 'sandbox' });
+  const m = world.map;
+  // Find a forest tile with open ground on both sides along x.
+  let fx = -1;
+  let fy = -1;
+  for (let y = 10; y < m.height / 2 && fx < 0; y++) {
+    for (let x = 10; x < m.width / 2 - 10; x++) {
+      const t = (dx: number) => m.terrain[y * m.width + x + dx];
+      if (t(0) === Terrain.Forest && t(1) === Terrain.Forest && t(-6) === Terrain.Grass && t(7) === Terrain.Grass) {
+        fx = x;
+        fy = y;
+        break;
+      }
+    }
+  }
+  assert.ok(fx > 0, 'found a forest strip');
+  assert.ok(!world.nav.passable(NavLayer.Land, fx, fy), 'vehicles blocked by forest');
+  assert.ok(world.nav.passable(NavLayer.Foot, fx, fy), 'infantry can enter forest');
+  const tank = world.units.find((u) => u.owner === 0 && u.type === 'battle_tank')!;
+  const rifle = world.units.find((u) => u.owner === 0 && u.type === 'rifleman')!;
+  for (const u of [tank, rifle]) {
+    u.x = u.px = fx - 5.5;
+    u.y = u.py = fy + 0.5;
+  }
+  world.step([{ kind: 'move', player: 0, units: [rifle.id], x: fx + 0.5, y: fy + 0.5 }]);
+  world.step([{ kind: 'move', player: 0, units: [tank.id], x: fx + 0.5, y: fy + 0.5 }]);
+  for (let t = 0; t < 15 * 20; t++) {
+    world.step();
+    assert.ok(world.nav.passableAt(NavLayer.Land, tank.x, tank.y), 'tank never enters forest');
+  }
+  assert.ok(Math.hypot(rifle.x - fx - 0.5, rifle.y - fy - 0.5) < 1.5, 'rifleman reached the forest tile');
+  assert.equal(terrainAt(world.map, Math.floor(tank.x), Math.floor(tank.y)) === Terrain.Forest, false);
 });
 
 test('players cannot command enemy units', () => {

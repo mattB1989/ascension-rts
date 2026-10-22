@@ -4,6 +4,7 @@ import { AGE_ORDER } from '../data/ages.ts';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { BuildingDef, Cost } from '../data/types.ts';
 import { Terrain, type TerrainId } from './map.ts';
+import { NavLayer } from './nav.ts';
 import type { PlayerState } from './types.ts';
 import type { World } from './world.ts';
 
@@ -89,7 +90,7 @@ export function placementProblem(world: World, player: number, type: BuildingTyp
 
   // Units standing in the footprint (other than the player's own, which step aside).
   for (const u of world.units) {
-    if (u.layer === 2) continue; // air
+    if (u.layer === NavLayer.Air) continue;
     if (u.owner === player) continue;
     if (u.x >= tx && u.x < tx + w && u.y >= ty && u.y < ty + h) return 'Units in the way';
   }

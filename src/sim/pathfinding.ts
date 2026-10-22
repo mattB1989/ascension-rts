@@ -181,7 +181,8 @@ export class Pathfinder {
           }
           const ni = ny * w + nx;
           if (this.closed[ni] === gen) continue;
-          const ng = cg + (dx !== 0 && dy !== 0 ? SQRT2 : 1);
+          const slow = this.nav.cost(layer, nx, ny) > 1 ? 1.6 : 1;
+          const ng = cg + (dx !== 0 && dy !== 0 ? SQRT2 : 1) * slow;
           if (this.stamp[ni] !== gen || ng < this.g[ni]!) {
             this.stamp[ni] = gen;
             this.g[ni] = ng;
@@ -238,11 +239,14 @@ export class Pathfinder {
     // Offset sample lines either side of the centre so paths keep clear of walls.
     const nx = len > 0 ? (-dy / len) * 0.3 : 0;
     const ny = len > 0 ? (dx / len) * 0.3 : 0;
+    // Shortcuts may not cut through slower ground (forest) than either end stands on.
+    const maxCost = Math.max(this.nav.cost(layer, Math.floor(x0), Math.floor(y0)), this.nav.cost(layer, Math.floor(x1), Math.floor(y1)), 1);
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
       const x = x0 + dx * t;
       const y = y0 + dy * t;
       if (!this.nav.passableAt(layer, x, y)) return false;
+      if (this.nav.cost(layer, Math.floor(x), Math.floor(y)) > maxCost) return false;
       if (!this.nav.passableAt(layer, x + nx, y + ny)) return false;
       if (!this.nav.passableAt(layer, x - nx, y - ny)) return false;
     }

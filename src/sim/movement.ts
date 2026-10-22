@@ -1,7 +1,7 @@
 // Unit movement: destinations and paths, group formations, steering, jets, separation.
 
 import { fatan2, fcos, fsin, PI, TAU, wrapAngle } from './fmath.ts';
-import { NavLayer, type NavLayerId } from './nav.ts';
+import { FOREST_SPEED, isGroundLayer, NavLayer, type NavLayerId } from './nav.ts';
 import type { Unit } from './types.ts';
 import { DT } from './time.ts';
 import type { World } from './world.ts';
@@ -34,27 +34,46 @@ export function stopUnit(u: Unit): void {
 
 /** Group move: give each unit its own slot in a loose formation around the target. */
 export function orderMove(world: World, units: Unit[], x: number, y: number): void {
-  const byLayer = new Map<NavLayerId, Unit[]>();
+  // Ground units (vehicles and infantry) share one formation; ships and aircraft get their own.
+  const groups = new Map<string, Unit[]>();
   for (const u of units) {
-    const list = byLayer.get(u.layer) ?? [];
+    const key = isGroundLayer(u.layer) ? 'ground' : String(u.layer);
+    const list = groups.get(key) ?? [];
     list.push(u);
-    byLayer.set(u.layer, list);
+    groups.set(key, list);
   }
-  for (const layer of [NavLayer.Land, NavLayer.Water, NavLayer.Air] as const) {
-    const group = byLayer.get(layer);
+  for (const key of ['ground', String(NavLayer.Water), String(NavLayer.Air)]) {
+    const group = groups.get(key);
     if (!group) continue;
+    const air = key === String(NavLayer.Air);
+    // Slots are laid out on the most permissive layer present; each unit takes the
+    // first free slot it can actually stand on.
+    const slotLayer: NavLayerId = key === 'ground' ? (group.some((u) => u.layer === NavLayer.Foot) ? NavLayer.Foot : NavLayer.Land) : group[0]!.layer;
     let spacing = 0;
     for (const u of group) spacing = Math.max(spacing, u.def.radius * 2 + 0.25);
-    if (layer === NavLayer.Air) spacing = Math.max(spacing, 1.6);
-    const slots = formationSlots(world, layer, x, y, group.length, spacing);
+    if (air) spacing = Math.max(spacing, 1.6);
+    const slots = formationSlots(world, slotLayer, x, y, group.length * 2, spacing);
+    const used = new Array<boolean>(slots.length).fill(false);
     // Closest units take the closest slots: fewer crossing paths.
     const ordered = group
       .map((u) => ({ u, d: (u.x - x) * (u.x - x) + (u.y - y) * (u.y - y) }))
       .sort((a, b) => a.d - b.d || a.u.id - b.u.id);
-    ordered.forEach(({ u }, i) => {
-      const [sx, sy] = slots[i]!;
+    for (const { u } of ordered) {
+      let pick = -1;
+      for (let i = 0; i < slots.length; i++) {
+        if (used[i]) continue;
+        const [sx, sy] = slots[i]!;
+        if (air || world.nav.passableAt(u.layer, sx, sy)) {
+          pick = i;
+          break;
+        }
+      }
+      if (pick < 0) pick = used.indexOf(false);
+      if (pick < 0) pick = 0;
+      used[pick] = true;
+      const [sx, sy] = slots[pick]!;
       setDestination(world, u, sx, sy);
-    });
+    }
   }
 }
 
@@ -125,6 +144,7 @@ export function moveUnit(world: World, u: Unit): void {
     factor = absDiff > PI / 2 ? 0.2 : 1;
   }
   if (isLast) factor *= Math.min(1, 0.35 + dist / 1.5);
+  if (u.layer === NavLayer.Foot && world.nav.cost(NavLayer.Foot, Math.floor(u.x), Math.floor(u.y)) > 1) factor *= FOREST_SPEED;
   const accel = def.move === 'ship' ? 0.6 : 3;
   const target = def.speed * factor;
   u.speed += Math.max(-accel * 2 * DT * def.speed, Math.min(accel * DT * def.speed, target - u.speed));
@@ -181,7 +201,12 @@ function moveJet(world: World, u: Unit): void {
   u.y = Math.max(1, Math.min(world.map.height - 1, u.y));
 }
 
-/** Push overlapping units apart (per layer), using a coarse spatial hash. */
+/** Units on the same surface collide: vehicles and infantry share the ground. */
+function surface(u: Unit): number {
+  return isGroundLayer(u.layer) ? NavLayer.Land : u.layer;
+}
+
+/** Push overlapping units apart (per surface), using a coarse spatial hash. */
 export function separate(world: World): void {
   const cell = 2;
   const cols = Math.ceil(world.map.width / cell);
@@ -189,7 +214,7 @@ export function separate(world: World): void {
   const units = world.units;
   for (const u of units) {
     if (u.def.move === 'jet') continue;
-    const key = u.layer * 100000 + Math.floor(u.y / cell) * cols + Math.floor(u.x / cell);
+    const key = surface(u) * 100000 + Math.floor(u.y / cell) * cols + Math.floor(u.x / cell);
     const b = buckets.get(key);
     if (b) b.push(u);
     else buckets.set(key, [u]);
@@ -202,7 +227,7 @@ export function separate(world: World): void {
     let pushY = 0;
     for (let oy = -1; oy <= 1; oy++) {
       for (let ox = -1; ox <= 1; ox++) {
-        const b = buckets.get(u.layer * 100000 + (cy + oy) * cols + (cx + ox));
+        const b = buckets.get(surface(u) * 100000 + (cy + oy) * cols + (cx + ox));
         if (!b) continue;
         for (const o of b) {
           if (o === u || o.def.move === 'jet') continue;

@@ -3,7 +3,7 @@
 // prices drift a little over time. Rival and neighbour markets arrive in E5.
 
 import { OVERSEAS } from '../../data/city.ts';
-import { GOOD_IDS, GOODS, type GoodId } from '../../data/goods.ts';
+import { GOOD_IDS, GOODS, YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
 import { fatan2 } from '../fmath.ts';
 import { Terrain, type GameMap } from '../map.ts';
 import { NavLayer } from '../nav.ts';
@@ -243,7 +243,14 @@ export function moveShips(world: World): void {
       if (s.pos >= s.length) {
         s.phase = 'docked';
         s.dock = OVERSEAS.dock;
-        trade(world, s, port);
+        if (raided(world, port)) {
+          // Pirates: no trade this voyage, and repairs to pay.
+          const pc = city.players[port.owner]!;
+          pc.credits -= PIRATES.repairs;
+          pc.year.upkeep += PIRATES.repairs;
+          s.cargo = {};
+          world.emit({ kind: 'notify', player: port.owner, text: '🏴‍☠️ Pirates raided a cargo ship: no trade this voyage. A Coast Guard station keeps them away.', x: port.x, y: port.y });
+        } else trade(world, s, port);
       }
     } else if (s.phase === 'docked') {
       s.dock -= DT;
@@ -256,6 +263,20 @@ export function moveShips(world: World): void {
       }
     }
   }
+}
+
+/** Pirates prey on cargo ships from 1955, unless a Coast Guard station watches the port. */
+export const PIRATES = { fromYear: 5, chance: 0.1, guarded: 0.01, guardRadius: 40, repairs: 300 } as const;
+
+/** Is the port guarded by a working Coast Guard station of its owner? */
+export function portGuarded(world: World, port: Building): boolean {
+  const r2 = PIRATES.guardRadius * PIRATES.guardRadius;
+  return world.buildings.some((b) => b.type === 'coast_guard' && b.owner === port.owner && b.complete && (b.city?.workers ?? 0) > 0 && (b.x - port.x) * (b.x - port.x) + (b.y - port.y) * (b.y - port.y) <= r2);
+}
+
+function raided(world: World, port: Building): boolean {
+  if (world.time < PIRATES.fromYear * YEAR_SECONDS) return false;
+  return world.rng.next() < (portGuarded(world, port) ? PIRATES.guarded : PIRATES.chance);
 }
 
 /** At the dock: sell what is waiting for export, buy what is wanted. */

@@ -195,6 +195,24 @@ function railStation(team: number): THREE.Group {
   return g;
 }
 
+function coastGuard(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, paving());
+  // Station house with a lookout, a radio mast, and a patrol boat at the jetty (+x faces the water).
+  g.add(box(1.3, 0.7, 1.0, white(), -0.6, 0.47, -0.4));
+  g.add(box(1.34, 0.1, 1.04, mat(0xd04030), -0.6, 0.86, -0.4));
+  g.add(box(0.5, 0.5, 0.5, white(), -0.9, 1.15, -0.6));
+  g.add(box(0.54, 0.06, 0.54, t.main, -0.9, 1.42, -0.6));
+  g.add(cyl(0.025, 0.025, 1.6, 4, darkMetal(), -0.2, 1.6, -0.7));
+  g.add(box(1.0, 0.06, 0.4, timber(), 1.0, 0.12, 0.6));
+  const boat = new THREE.Group();
+  boat.position.set(1.05, 0.12, 1.05);
+  boat.add(box(0.9, 0.18, 0.32, white(), 0, 0.09, 0));
+  boat.add(box(0.3, 0.16, 0.24, mat(0xd04030), -0.1, 0.26, 0));
+  g.add(boat);
+  return g;
+}
+
 function tradePort(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(4, 3, mat(0x8c8a84, { rough: 1 }));
@@ -1015,6 +1033,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'warehouse': return warehouse(team);
     case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
+    case 'coast_guard': return coastGuard(team);
     case 'rail_station': return railStation(team);
     case 'airport': return airport(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team);

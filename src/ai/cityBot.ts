@@ -432,6 +432,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('water_tower') && has('water_well') > 0, 'water_tower'],
     [!has('quarry') && pop >= 30, 'quarry'],
     [!has('trade_port') && pop >= 100, 'trade_port'],
+    [has('trade_port') > 0 && !has('coast_guard') && world.time >= 5 * YEAR_SECONDS && credits > 3000, 'coast_guard'],
     [!has('oil_well') && pop >= 40, 'oil_well'],
     [!has('power_plant') && (has('oil_well') > 0 || bot.noLand.includes('oil_well')), 'power_plant'],
     [!has('hydro_plant') && pop >= 60 && bot.noLand.includes('oil_well'), 'hydro_plant'],

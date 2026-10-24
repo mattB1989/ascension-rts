@@ -682,3 +682,27 @@ test('cargo airports fly goods between each other, no track needed', async () =>
   assert.ok((a.city!.stock.timber ?? 0) < 100, 'timber left airport A');
   assert.ok(b.complete);
 });
+
+test('pirates raid unguarded trade ports from 1955; a coast guard keeps them away', async () => {
+  const { PIRATES, portGuarded } = await import('../src/sim/city/trade.ts');
+  const { addCityBuilding } = await import('../src/sim/city/place.ts');
+  assert.ok(PIRATES.chance > PIRATES.guarded);
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  // A port and a coast guard placed by hand on the first coast tile pair that fits.
+  const map = world.map;
+  const city = world.city!;
+  const reg = city.regionOwner.findIndex((o) => o === 0);
+  let port = null as ReturnType<typeof addCityBuilding> | null;
+  for (let i = 0; i < map.region.length && !port; i++) {
+    const tx = i % map.width;
+    const ty = Math.floor(i / map.width);
+    if (map.region[i] !== reg) continue;
+    const { cityPlacementProblem } = await import('../src/sim/city/place.ts');
+    if (cityPlacementProblem(world, 0, 'trade_port', tx, ty) === null) port = addCityBuilding(world, 'trade_port', 0, tx, ty, true);
+  }
+  if (!port) return; // no coast in this region: nothing to check
+  assert.equal(portGuarded(world, port), false);
+  const guard = addCityBuilding(world, 'coast_guard', 0, port.tx, port.ty - 4 > 0 ? port.ty - 4 : port.ty + 4, true);
+  guard.city!.workers = 6;
+  assert.ok(portGuarded(world, port));
+});

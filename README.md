@@ -14,7 +14,7 @@ The start screen offers a **new nation** (map size, landscape, seed), **continue
 original **Twin Shores** skirmish.
 
 **Economy game (E1–E3):**
-- **Generated worlds**: four landscapes (temperate, great river desert, alpine, archipelago),
+- **Generated worlds**: five landscapes (temperate, great river desert, alpine, archipelago, lakeland),
   256² or 512² tiles, rivers that drain to the sea, lakes, floodplains, forests, mountains, ore,
   stone and oil deposits, and 10–50 named regions. Terrain is drawn in chunks with levels of
   detail so big maps stay smooth.

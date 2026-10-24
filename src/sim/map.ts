@@ -45,7 +45,7 @@ export const Deposit = { None: 0, Ore: 1, Oil: 2, Stone: 3, Rare: 4, Uranium: 5 
 export type DepositId = (typeof Deposit)[keyof typeof Deposit];
 export const DEPOSIT_NAMES: Record<DepositId, string> = { 0: '', 1: 'Iron ore', 2: 'Oil', 3: 'Stone', 4: 'Rare earths', 5: 'Uranium' };
 
-export type Biome = 'twin' | 'temperate' | 'arid' | 'alpine' | 'archipelago';
+export type Biome = 'twin' | 'temperate' | 'arid' | 'alpine' | 'archipelago' | 'lakeland';
 
 /** A province: the unit of ownership on generated maps. */
 export interface RegionInfo {

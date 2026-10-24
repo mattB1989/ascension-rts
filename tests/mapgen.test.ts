@@ -5,7 +5,7 @@ import { generateMap, type GenBiome } from '../src/sim/mapgen.ts';
 import { NavGrid, NavLayer } from '../src/sim/nav.ts';
 import { Pathfinder } from '../src/sim/pathfinding.ts';
 
-const BIOMES: GenBiome[] = ['temperate', 'arid', 'alpine', 'archipelago'];
+const BIOMES: GenBiome[] = ['temperate', 'arid', 'alpine', 'archipelago', 'lakeland'];
 const maps = BIOMES.map((biome) => generateMap({ seed: 7, size: 256, biome }));
 
 test('generation is deterministic', () => {

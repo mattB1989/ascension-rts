@@ -34,6 +34,7 @@ export const BIOMES: Record<GenBiome, { name: string; blurb: string }> = {
   arid: { name: 'Great River', blurb: 'Desert cut by one great river with fertile banks.' },
   alpine: { name: 'Alpine', blurb: 'Mountains, lakes and narrow valleys.' },
   archipelago: { name: 'Archipelago', blurb: 'Islands of every size: trade goes by sea.' },
+  lakeland: { name: 'Lakeland', blurb: 'Rolling country full of lakes and rivers: barges and hydro power.' },
 };
 
 interface BiomeParams {
@@ -55,6 +56,9 @@ interface BiomeParams {
   /** Fraction of total rain that makes a river. */
   river: number;
   dry: boolean;
+  /** Lakes: how big they may grow (x the usual cap) and how shallow a basin still fills. */
+  lakes?: number;
+  lakeDepth?: number;
 }
 
 const PARAMS: Record<GenBiome, BiomeParams> = {
@@ -62,6 +66,7 @@ const PARAMS: Record<GenBiome, BiomeParams> = {
   arid: { range: 0.6, slope: 2.5, mountain: 0.7, mountainHeight: 5, hills: 0.8, rockLine: 5, snowLine: 99, forest: 0.68, fertile: 7, valley: 16, river: 0.05, dry: true },
   alpine: { range: 0.3, slope: 4, mountain: 0.56, mountainHeight: 9, hills: 1.4, rockLine: 5.4, snowLine: 8, forest: 0.5, fertile: 2, valley: 8, river: 0.01, dry: false },
   archipelago: { range: 0.48, slope: 3, mountain: 0.66, mountainHeight: 5, hills: 1.0, rockLine: 4.6, snowLine: 99, forest: 0.55, fertile: 3, valley: 8, river: 0.012, dry: false },
+  lakeland: { range: 0.5, slope: 1.6, mountain: 0.68, mountainHeight: 5, hills: 2.2, rockLine: 5.6, snowLine: 99, forest: 0.54, fertile: 4, valley: 8, river: 0.009, dry: false, lakes: 4, lakeDepth: 0.18 },
 };
 
 const smoothstep = (a: number, b: number, x: number) => {
@@ -152,6 +157,8 @@ function landness(biome: GenBiome, seed: number, u: number, v: number, s: number
   switch (biome) {
     case 'temperate':
       return 0.24 - d + coastNoise;
+    case 'lakeland':
+      return 0.36 - d + coastNoise * 0.8;
     case 'arid':
       return 0.33 - d + coastNoise * 0.6;
     case 'alpine':
@@ -273,8 +280,8 @@ export function generateMap(opts: MapGenOptions): GameMap {
   for (let i = 0; i < n; i++) if (isSea(i)) water[i] = 1;
   // Lakes: depressions the flood had to fill. Big basins stay land (the river crosses them).
   const lakeCand = new Uint8Array(n);
-  for (let i = 0; i < n; i++) if (!water[i] && filled[i]! - e0[i]! > 0.3) lakeCand[i] = 1;
-  const maxLake = Math.round(n * 0.0022);
+  for (let i = 0; i < n; i++) if (!water[i] && filled[i]! - e0[i]! > (P.lakeDepth ?? 0.3)) lakeCand[i] = 1;
+  const maxLake = Math.round(n * 0.0022 * (P.lakes ?? 1));
   const seen = new Uint8Array(n);
   const comp: number[] = [];
   for (let i0 = 0; i0 < n; i0++) {

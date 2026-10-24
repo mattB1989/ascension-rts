@@ -22,7 +22,7 @@ import { Minimap } from './ui/minimap.ts';
 import { loadFromBrowser, saveInfo, saveToBrowser } from './ui/saves.ts';
 import { Selection } from './ui/selection.ts';
 
-const BIOME_IDS: GenBiome[] = ['temperate', 'arid', 'alpine', 'archipelago'];
+const BIOME_IDS: GenBiome[] = ['temperate', 'arid', 'alpine', 'archipelago', 'lakeland'];
 
 function loading(root: HTMLElement, text: string): HTMLElement {
   const d = document.createElement('div');

@@ -6,13 +6,14 @@ import * as THREE from 'three';
 import { GOODS } from '../data/goods.ts';
 import { surfaceHeight, groundHeight, type GameMap } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
-import { applyFow } from './fog.ts';
+import { applyFow, applyOverlay } from './fog.ts';
 
 const RCHUNK = 32;
 const ROAD_W = 0.36; // half width
 const LIFT = 0.05;
 
 const roadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+applyOverlay(roadMat);
 applyFow(roadMat);
 
 const ASPHALT = new THREE.Color(0x4a4a47);
@@ -319,4 +320,43 @@ export class RegionBorders {
 
 export function mapIsGenerated(map: GameMap): boolean {
   return map.regions.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Overlay marks: translucent coloured boxes around buildings (info views).
+
+const markGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+
+export class OverlayMarks {
+  readonly group = new THREE.Group();
+  private mesh: THREE.InstancedMesh | null = null;
+  private readonly map: GameMap;
+
+  constructor(map: GameMap) {
+    this.map = map;
+  }
+
+  set(marks: ReadonlyArray<{ x: number; y: number; w: number; h: number; color: number }>): void {
+    if (this.mesh) {
+      this.group.remove(this.mesh);
+      this.mesh.dispose();
+      this.mesh = null;
+    }
+    if (!marks.length) return;
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false });
+    const mesh = new THREE.InstancedMesh(markGeo, mat, marks.length);
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    marks.forEach((k, i) => {
+      const base = groundHeight(this.map, k.x + k.w / 2, k.y + k.h / 2);
+      const height = 1.2 + Math.min(k.w, k.h) * 0.45;
+      m.makeScale(k.w + 0.1, height, k.h + 0.1).setPosition(k.x + k.w / 2, Math.max(0, base), k.y + k.h / 2);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, c.setHex(k.color));
+    });
+    mesh.renderOrder = 6;
+    mesh.frustumCulled = false;
+    this.mesh = mesh;
+    this.group.add(mesh);
+  }
 }

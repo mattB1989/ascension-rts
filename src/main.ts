@@ -86,6 +86,7 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
     hud.onLoad = () => (location.search = 'load=manual');
     hud.onNew = () => (location.search = '');
     hud.hasSave = () => !!saveInfo('manual');
+    hud.onMarks = (m) => renderer.marks.set(m);
     handleEvents = (ev) => hud.handleEvents(ev);
     updateHud = () => {
       hud.update();

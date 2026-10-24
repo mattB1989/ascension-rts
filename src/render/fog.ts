@@ -108,3 +108,65 @@ export function applyFowTree(root: THREE.Object3D): void {
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// Ground overlays (economy game): one RGBA texel per tile, blended over the
+// ground and roads only. Alpha 0 leaves the ground as it is.
+
+export const overlayUniforms = {
+  uOverlay: { value: null as THREE.DataTexture | null },
+  uOverlaySize: { value: new THREE.Vector2(1, 1) },
+  uOverlayOn: { value: 0 },
+};
+
+let overlayData: Uint8Array | null = null;
+let overlayTex: THREE.DataTexture | null = null;
+
+export function initOverlay(width: number, height: number): void {
+  overlayData = new Uint8Array(width * height * 4);
+  overlayTex = new THREE.DataTexture(overlayData, width, height, THREE.RGBAFormat);
+  overlayTex.magFilter = THREE.NearestFilter;
+  overlayTex.minFilter = THREE.NearestFilter;
+  overlayTex.needsUpdate = true;
+  overlayUniforms.uOverlay.value = overlayTex;
+  overlayUniforms.uOverlaySize.value.set(width, height);
+}
+
+/** Show an overlay (RGBA per tile), or hide it with null. */
+export function setOverlay(rgba: Uint8Array | null): void {
+  if (!overlayData || !overlayTex) return;
+  if (rgba) overlayData.set(rgba);
+  overlayUniforms.uOverlayOn.value = rgba ? 1 : 0;
+  overlayTex.needsUpdate = true;
+}
+
+const overlayPatched = new WeakSet<THREE.Material>();
+
+/** Make a ground material show the overlay (call before applyFow so fog darkens it too). */
+export function applyOverlay(material: THREE.Material): void {
+  if (overlayPatched.has(material)) return;
+  overlayPatched.add(material);
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev.call(material, shader, renderer);
+    shader.uniforms.uOverlay = overlayUniforms.uOverlay;
+    shader.uniforms.uOverlaySize = overlayUniforms.uOverlaySize;
+    shader.uniforms.uOverlayOn = overlayUniforms.uOverlayOn;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vOvXZ;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvOvXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vOvXZ;\nuniform sampler2D uOverlay;\nuniform vec2 uOverlaySize;\nuniform float uOverlayOn;')
+      .replace(
+        '#include <tonemapping_fragment>',
+        `if (uOverlayOn > 0.5) {
+          vec4 ov = texture2D(uOverlay, vOvXZ / uOverlaySize);
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, ov.rgb, ov.a * 0.75);
+        }
+        #include <tonemapping_fragment>`,
+      );
+  };
+  const prevKey = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = () => prevKey() + '|overlay';
+  material.needsUpdate = true;
+}

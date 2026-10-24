@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { fbm, hash2 } from '../sim/rng.ts';
 import { Deposit, groundHeight, Terrain, type GameMap, type TerrainId } from '../sim/map.ts';
 import { buildBridges } from './bridges.ts';
+import { applyOverlay } from './fog.ts';
 
 /** Two colours per terrain; large-scale noise blends between them. */
 const TERRAIN_COLORS: Record<TerrainId, [number, number]> = {
@@ -55,6 +56,7 @@ const sharedMaterials = {
   stone: new THREE.MeshStandardMaterial({ color: 0xc9c4ba, flatShading: true, roughness: 0.9 }),
   oil: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.3 }),
 };
+applyOverlay(sharedMaterials.ground);
 
 const canopyGeo = new THREE.ConeGeometry(0.42, 1.1, 6).translate(0, 0.95, 0);
 const trunkGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.45, 5).translate(0, 0.22, 0);

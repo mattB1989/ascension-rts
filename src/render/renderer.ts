@@ -4,10 +4,10 @@ import * as THREE from 'three';
 import { surfaceHeight } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import { CameraRig } from './camera.ts';
-import { RegionBorders, RoadsView, TrucksView } from './cityView.ts';
+import { OverlayMarks, RegionBorders, RoadsView, TrucksView } from './cityView.ts';
 import { Effects } from './effects.ts';
 import { BuildingsView } from './buildingsView.ts';
-import { applyFowTree, initFog, updateFogTexture } from './fog.ts';
+import { applyFowTree, initFog, initOverlay, updateFogTexture } from './fog.ts';
 import { PlacementGhost } from './ghost.ts';
 import { ResourcesView } from './resourcesView.ts';
 import { TerrainView } from './terrain.ts';
@@ -30,6 +30,7 @@ export class GameRenderer {
   readonly roads: RoadsView | null = null;
   readonly trucks: TrucksView | null = null;
   readonly borders: RegionBorders | null = null;
+  readonly marks: OverlayMarks;
   /** Whose eyes we see the world through (fog of war). */
   viewer: number;
   private lastFogTick = -1;
@@ -47,6 +48,7 @@ export class GameRenderer {
     this.viewer = viewer;
     const map = world.map;
     initFog(map.width, map.height, fogOn);
+    initOverlay(map.width, map.height);
     this.lowPower = matchMedia('(pointer: coarse)').matches;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: window.devicePixelRatio < 2, powerPreference: 'high-performance' });
@@ -93,6 +95,8 @@ export class GameRenderer {
       this.trucks = new TrucksView(world);
       this.scene.add(this.roads.group, this.trucks.group);
     }
+    this.marks = new OverlayMarks(map);
+    this.scene.add(this.marks.group);
     if (map.regions.length) {
       this.borders = new RegionBorders(world);
       this.scene.add(this.borders.group);

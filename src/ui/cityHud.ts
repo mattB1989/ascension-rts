@@ -15,6 +15,8 @@ import { materialsText, type PlaceType } from './cityTools.ts';
 import type { InputController } from './input.ts';
 import type { Minimap } from './minimap.ts';
 import type { Selection } from './selection.ts';
+import { setOverlay } from '../render/fog.ts';
+import { computeOverlay, OVERLAYS, overlayFor, type OverlayKind, type OverlayMark } from './overlays.ts';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -53,6 +55,11 @@ export class CityHud {
   private readonly toastsEl: HTMLDivElement;
   private readonly panel: HTMLDivElement;
   private tab = 0;
+  /** Overlay picked by the player (null: automatic while placing). */
+  private overlay: OverlayKind | null = null;
+  private shownOverlay: OverlayKind | null = null;
+  private overlayAt = 0;
+  private readonly overlayBar: HTMLDivElement;
   private panelKind: 'goods' | 'budget' | 'menu' | 'help' | null = null;
   private lastTop = '';
   private lastInfo = '';
@@ -64,6 +71,8 @@ export class CityHud {
   onLoad: () => void = () => {};
   onNew: () => void = () => {};
   hasSave: () => boolean = () => false;
+  /** Tint buildings for the current overlay (set by main: renderer.marks.set). */
+  onMarks: (marks: OverlayMark[]) => void = () => {};
 
   constructor(root: HTMLElement, game: Game, selection: Selection, input: InputController, minimap: Minimap) {
     this.world = game.world;
@@ -84,6 +93,7 @@ export class CityHud {
     }
     const right = el('div', 'top-actions');
     right.append(
+      this.btn('🗺', 'Overlays: land, water, power, services, happiness, pollution', () => this.overlayBar.classList.toggle('hidden')),
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
       this.btn('☰', 'Save, load, new game', () => this.togglePanel('menu')),
@@ -101,11 +111,13 @@ export class CityHud {
     bottom.append(mm, this.info, this.palette);
 
     this.panel = el('div', 'city-panel hidden');
+    this.overlayBar = el('div', 'overlay-bar hidden');
 
-    root.append(top, this.toastsEl, bottom, this.panel);
+    root.append(top, this.overlayBar, this.toastsEl, bottom, this.panel);
+    this.renderOverlayBar();
 
     // Clicks inside re-rendered areas use data-action attributes.
-    for (const area of [this.info, this.palette, this.panel]) {
+    for (const area of [this.info, this.palette, this.panel, this.overlayBar]) {
       area.addEventListener('pointerdown', (e) => e.stopPropagation());
       area.addEventListener('click', (e) => {
         const t = (e.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
@@ -176,6 +188,11 @@ export class CityHud {
       case 'tab':
         this.tab = Number(arg);
         this.renderPalette();
+        break;
+      case 'overlay':
+        this.overlay = this.overlay === arg ? null : (arg as OverlayKind);
+        this.overlayAt = 0;
+        this.renderOverlayBar();
         break;
       case 'build':
         this.selection.clear();
@@ -253,8 +270,36 @@ export class CityHud {
 
   // -------------------------------------------------------------------------
 
+  private renderOverlayBar(): void {
+    const active = this.overlay;
+    const info = OVERLAYS.find((o) => o.id === (active ?? this.shownOverlay));
+    this.overlayBar.innerHTML = `<div class="ov-btns">${OVERLAYS.map((o) => `<button class="ov ${o.id === active ? 'on' : ''}" data-action="overlay" data-arg="${o.id}" title="${o.name}">${o.icon}<span>${o.name}</span></button>`).join('')}</div>${info ? `<div class="ov-legend">${info.legend}</div>` : ''}`;
+  }
+
+  /** Show the chosen overlay, or the one that fits what is being placed; refresh once a second. */
+  private updateOverlay(now: number): void {
+    const placing = this.input.placing?.type;
+    const want = this.overlay ?? (placing ? overlayFor(placing) : null);
+    if (want !== this.shownOverlay) {
+      this.shownOverlay = want;
+      this.overlayAt = 0;
+      if (!want) {
+        setOverlay(null);
+        this.onMarks([]);
+      }
+      this.renderOverlayBar();
+    }
+    if (want && now - this.overlayAt > 1000) {
+      this.overlayAt = now;
+      const r = computeOverlay(this.world, want, this.game.humanPlayer);
+      setOverlay(r.tiles);
+      this.onMarks(r.marks);
+    }
+  }
+
   update(): void {
     const now = performance.now();
+    this.updateOverlay(now);
     if (now - this.refreshAt < 250) return;
     this.refreshAt = now;
     this.renderTop();

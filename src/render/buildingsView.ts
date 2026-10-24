@@ -163,7 +163,7 @@ export class BuildingsView {
     const base = onWater ? 0 : footprintBase(map, b.tx, b.ty, b.w, b.h);
     root.position.set(b.x, base, b.y);
     const level = b.city?.level ?? 0;
-    const model = buildBuildingModel(b.type, color, level);
+    const model = buildBuildingModel(b.type, color, level, b.id);
     if (b.type === 'shipyard' || b.type === 'fishing_harbour' || b.type === 'trade_port' || b.type === 'coast_guard' || b.type === 'hydro_plant' || b.type === 'pumping_station') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
     if (b.type === 'gate') {
       // Turn the gate to run along its wall: N/S neighbours mean the wall runs along y.

@@ -474,8 +474,8 @@ function genericBuilding(type: BuildingTypeId, team: number): THREE.Group {
   return g;
 }
 
-export function buildBuildingModel(type: BuildingTypeId, team: number, level = 0): THREE.Group {
-  const city = buildCityModel(type, team, level);
+export function buildBuildingModel(type: BuildingTypeId, team: number, level = 0, variant = 0): THREE.Group {
+  const city = buildCityModel(type, team, level, variant);
   if (city) return city;
   switch (type) {
     case 'command_center': return commandCenter(team);

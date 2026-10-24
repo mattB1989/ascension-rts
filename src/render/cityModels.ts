@@ -246,10 +246,19 @@ function tradePort(team: number): THREE.Group {
 // ---------------------------------------------------------------------------
 // Houses: four levels
 
-function cottage(team: number): THREE.Group {
+// Houses vary a little (roof, walls, brick) so streets don't look stamped out.
+const ROOFS = [0xa8442f, 0x7d4433, 0x5b6168, 0x4f6b4a, 0x8a6a4a, 0x6a4a5a, 0x9a5a3a];
+const WALLS = [0xe6dfcf, 0xd8c8a8, 0xc9d0d6, 0xe8d8c4, 0xcdbfa6, 0xdcd4e0];
+const BRICKS = [0xa65a3e, 0x8a5040, 0xb87850, 0x7d4433, 0x9a6a50];
+const pick = (list: number[], v: number, salt: number) => list[Math.abs((v * 2654435761 + salt * 40503) >>> 0) % list.length]!;
+const roofOf = (v: number) => mat(pick(ROOFS, v, 1), { rough: 0.8 });
+const wallOf = (v: number) => mat(pick(WALLS, v, 2), { rough: 0.85 });
+const brickOf = (v: number, k = 0) => mat(pick(BRICKS, v, 3 + k), { rough: 0.9 });
+
+function cottage(team: number, v = 0): THREE.Group {
   const g = pad(2, 2, grassMat());
-  g.add(box(1.0, 0.6, 0.8, plaster(), -0.2, 0.42, -0.2));
-  g.add(gable(1.1, 0.95, 0.72, 0.4, roofRed(), -0.2, -0.2));
+  g.add(box(1.0, 0.6, 0.8, wallOf(v), -0.2, 0.42, -0.2));
+  g.add(gable(1.1, 0.95, 0.72, 0.4, roofOf(v), -0.2, -0.2));
   g.add(box(0.18, 0.32, 0.03, timber(), -0.2, 0.28, 0.21));
   g.add(box(0.14, 0.14, 0.03, windowGlow(), 0.1, 0.48, 0.21));
   g.add(box(0.06, 0.25, 0.06, brick(), 0.15, 1.0, -0.3));
@@ -258,10 +267,10 @@ function cottage(team: number): THREE.Group {
   return g;
 }
 
-function house(team: number): THREE.Group {
+function house(team: number, v = 0): THREE.Group {
   const g = pad(2, 2, grassMat());
-  g.add(box(1.3, 1.05, 1.0, plaster(), 0, 0.64, -0.2));
-  g.add(gable(1.4, 1.15, 1.16, 0.5, roofRed(), 0, -0.2));
+  g.add(box(1.3, 1.05, 1.0, wallOf(v), 0, 0.64, -0.2));
+  g.add(gable(1.4, 1.15, 1.16, 0.5, roofOf(v), 0, -0.2));
   windowRow(g, 3, 0.8, 0.45, 'x', 0.31);
   windowRow(g, 3, 0.8, 0.88, 'x', 0.31);
   g.add(box(0.08, 0.35, 0.08, brick(), 0.4, 1.5, -0.35));
@@ -270,27 +279,28 @@ function house(team: number): THREE.Group {
   return g;
 }
 
-function terrace(team: number): THREE.Group {
+function terrace(team: number, v = 0): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2, paving());
   for (const x of [-0.45, 0.45]) {
     const unit = new THREE.Group();
     unit.position.x = x;
-    unit.add(box(0.82, 1.5, 1.5, x < 0 ? brick() : darkBrick(), 0, 0.87, 0));
+    unit.add(box(0.82, 1.5, 1.5, brickOf(v, x < 0 ? 0 : 1), 0, 0.87, 0));
     windowRow(unit, 2, 0.4, 0.55, 'x', 0.76);
     windowRow(unit, 2, 0.4, 1.05, 'x', 0.76);
     unit.add(box(0.2, 0.36, 0.03, timber(), 0, 0.28, 0.76));
     g.add(unit);
   }
-  g.add(box(1.75, 0.1, 1.55, t.accent, 0, 1.66, 0));
+  g.add(box(1.75, 0.1, 1.55, roofOf(v), 0, 1.66, 0));
+  g.add(box(1.77, 0.04, 0.06, t.accent, 0, 1.6, 0.77)); // a strip of the nation's colour
   g.add(box(0.3, 0.2, 0.3, darkMetal(), 0.5, 1.8, -0.3));
   return g;
 }
 
-function apartment(team: number): THREE.Group {
+function apartment(team: number, v = 0): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2, paving());
-  g.add(box(1.6, 3.0, 1.5, mat(0xd6d0c4, { rough: 0.8 }), 0, 1.6, 0));
+  g.add(box(1.6, 3.0, 1.5, wallOf(v), 0, 1.6, 0));
   for (const y of [0.5, 1.1, 1.7, 2.3, 2.85]) {
     windowRow(g, 4, 1.2, y, 'x', 0.76);
     windowRow(g, 3, 1.0, y, 'z', 0.81);
@@ -1054,7 +1064,7 @@ function spaceElevator(team: number): THREE.Group {
   return g;
 }
 
-export function buildCityModel(type: string, team: number, level = 0): THREE.Group | null {
+export function buildCityModel(type: string, team: number, level = 0, variant = 0): THREE.Group | null {
   switch (type) {
     case 'town_hall': return townHall(team);
     case 'regional_office': return regionalOffice(team);
@@ -1065,7 +1075,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'coast_guard': return coastGuard(team);
     case 'rail_station': return railStation(team);
     case 'airport': return airport(team);
-    case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team);
+    case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team, variant);
     case 'rare_earth_mine': return rareEarthMine(team);
     case 'uranium_mine': return uraniumMine(team);
     case 'electronics_plant': return electronicsPlant(team);

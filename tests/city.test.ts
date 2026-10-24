@@ -876,3 +876,23 @@ test('river docks: a barge carries goods between docks on the same water', async
   }
   assert.ok(barges > 0, 'a barge set off');
 });
+
+test('enemy warships off a trade port blockade it', async () => {
+  const { addCityBuilding, cityPlacementProblem } = await import('../src/sim/city/place.ts');
+  const { blockadedBy, dockTile } = await import('../src/sim/city/trade.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1 });
+  const map = world.map;
+  let port = null as ReturnType<typeof addCityBuilding> | null;
+  for (let i = 0; i < map.region.length && !port; i++) {
+    const tx = i % map.width;
+    const ty = Math.floor(i / map.width);
+    if (cityPlacementProblem(world, 0, 'trade_port', tx, ty) === null) port = addCityBuilding(world, 'trade_port', 0, tx, ty, true);
+  }
+  if (!port) return;
+  assert.equal(blockadedBy(world, port), -1);
+  const dock = dockTile(map, port.tx, port.ty, port.w, port.h);
+  world.spawnUnit('destroyer', 1, (dock % map.width) + 0.5, Math.floor(dock / map.width) + 0.5);
+  assert.equal(blockadedBy(world, port), -1, 'not at war: no blockade');
+  world.step([{ kind: 'declareWar', player: 1, target: 0 }]);
+  assert.equal(blockadedBy(world, port), 1, 'blockaded');
+});

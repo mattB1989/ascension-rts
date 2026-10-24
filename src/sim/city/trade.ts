@@ -3,6 +3,8 @@
 // prices drift a little over time. Rival and neighbour markets arrive in E5.
 
 import { OVERSEAS } from '../../data/city.ts';
+import { weaponsOf } from '../../data/weapons.ts';
+import { atWar } from './military.ts';
 import { GOOD_IDS, GOODS, YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
 import { fatan2 } from '../fmath.ts';
 import { Terrain, type GameMap } from '../map.ts';
@@ -243,7 +245,14 @@ export function moveShips(world: World): void {
       if (s.pos >= s.length) {
         s.phase = 'docked';
         s.dock = OVERSEAS.dock;
-        if (raided(world, port)) {
+        const blockader = blockadedBy(world, port);
+        if (blockader >= 0) {
+          // Enemy warships off the port: the ship turns back without trading.
+          s.cargo = {};
+          s.dock = 0;
+          if (port.city) port.city.status = `Blockaded by ${world.players[blockader]?.name ?? 'the enemy'}`;
+          world.emit({ kind: 'notify', player: port.owner, text: `⚓ Your trade port is blockaded by ${world.players[blockader]?.name ?? 'enemy'} warships`, x: port.x, y: port.y });
+        } else if (raided(world, port)) {
           // Pirates: no trade this voyage, and repairs to pay.
           const pc = city.players[port.owner]!;
           pc.credits -= PIRATES.repairs;
@@ -272,6 +281,20 @@ export const PIRATES = { fromYear: 5, chance: 0.1, guarded: 0.01, guardRadius: 4
 export function portGuarded(world: World, port: Building): boolean {
   const r2 = PIRATES.guardRadius * PIRATES.guardRadius;
   return world.buildings.some((b) => b.type === 'coast_guard' && b.owner === port.owner && b.complete && (b.city?.workers ?? 0) > 0 && (b.x - port.x) * (b.x - port.x) + (b.y - port.y) * (b.y - port.y) <= r2);
+}
+
+/** Enemy warships within this many tiles of a port stop its trade. */
+export const BLOCKADE_RANGE = 14;
+
+/** The player whose armed warships blockade this port (-1: none). */
+export function blockadedBy(world: World, port: Building): number {
+  const r2 = BLOCKADE_RANGE * BLOCKADE_RANGE;
+  for (const u of world.units) {
+    if (u.def.domain !== 'sea' || u.carrier || !weaponsOf(u.type).length) continue;
+    if (!atWar(world, u.owner, port.owner)) continue;
+    if ((u.x - port.x) * (u.x - port.x) + (u.y - port.y) * (u.y - port.y) <= r2) return u.owner;
+  }
+  return -1;
 }
 
 function raided(world: World, port: Building): boolean {

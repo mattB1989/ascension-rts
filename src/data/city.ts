@@ -328,7 +328,7 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'river_dock', 'airport', 'trade_port', 'coast_guard', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_well', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
-  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'supply_depot', 'watchtower', 'bunker', 'gun_turret', 'shield_generator'] },
+  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'shipyard', 'airfield', 'mech_foundry', 'supply_depot', 'watchtower', 'bunker', 'gun_turret', 'shield_generator'] },
 ];
 
 /** Economy-game costs for the skirmish's military buildings (DESIGN.md §9: war is paid for by the economy). */
@@ -339,6 +339,8 @@ export const MILITARY_ECON: Record<string, EconDef> = {
   watchtower: { credits: 300, materials: { lumber: 10, concrete: 5 }, upkeep: 20 },
   bunker: { credits: 500, materials: { concrete: 30 }, upkeep: 30 },
   gun_turret: { credits: 600, materials: { concrete: 10, steel: 10 }, upkeep: 40 },
+  shipyard: { credits: 3000, materials: { concrete: 30, steel: 30 }, upkeep: 250, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 40, fuel: 20 } },
+  airfield: { credits: 4000, materials: { concrete: 60, steel: 20 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 6, supplies: { steel: 20, fuel: 30 } },
   shield_generator: { credits: 6000, materials: { concrete: 40, steel: 30, nano: 10 }, upkeep: 400, jobs: { tier: 2, count: 4 }, power: 40 },
 };
 
@@ -351,6 +353,14 @@ export const UNIT_ECON: Record<string, UnitEcon> = {
   battle_tank: { credits: 700, goods: { steel: 10, fuel: 4 }, upkeep: 60 },
   flak_track: { credits: 500, goods: { steel: 7, fuel: 3 }, upkeep: 45 },
   howitzer: { credits: 800, goods: { steel: 10, fuel: 3 }, upkeep: 60 },
+  // Navy and air force
+  patrol_boat: { credits: 500, goods: { steel: 6, fuel: 3 }, upkeep: 40 },
+  destroyer: { credits: 1400, goods: { steel: 20, fuel: 8 }, upkeep: 100 },
+  frigate: { credits: 1200, goods: { steel: 16, fuel: 6 }, upkeep: 90 },
+  transport_ship: { credits: 700, goods: { steel: 10, fuel: 4 }, upkeep: 50 },
+  fighter_jet: { credits: 1200, goods: { steel: 8, fuel: 10 }, upkeep: 90 },
+  attack_helicopter: { credits: 1000, goods: { steel: 6, fuel: 8 }, upkeep: 80 },
+  cargo_plane: { credits: 900, goods: { steel: 8, fuel: 8 }, upkeep: 60 },
   // Digital age
   exo_trooper: { credits: 320, goods: { steel: 2, electronics: 1 }, upkeep: 30 },
   rocket_artillery: { credits: 1200, goods: { steel: 12, fuel: 4, electronics: 3 }, upkeep: 90 },

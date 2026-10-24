@@ -16,7 +16,7 @@ import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { GOOD_IDS, GOODS, sumTiers, TIERS, type GoodId } from '../data/goods.ts';
 import type { Game } from '../game.ts';
-import { houseCapacity, gameMonth, gameYear } from '../sim/city/economy.ts';
+import { houseCapacity, gameMonth, gameYear, roadsByOwner } from '../sim/city/economy.ts';
 import { stockTotal } from '../sim/city/logistics.ts';
 import { automated, get, jobsOf } from '../sim/city/state.ts';
 import { buyPrice, sellPrice } from '../sim/city/trade.ts';
@@ -562,7 +562,35 @@ export class CityHud {
     if (b?.city) return this.buildingHtml(b);
     const ins = this.selection.inspect;
     if (ins?.kind === 'ground') return this.groundHtml(ins.x, ins.y);
-    return `<div class="muted">${this.input.touchDevice ? 'Tap a building to see how it is doing.' : 'Click a building to see how it is doing.'} Start with roads (<b>R</b>), then houses and a Logging Camp + Sawmill.</div>`;
+    return this.nextStepsHtml();
+  }
+
+  /** With nothing selected: the next few things to do, ticked off as the town grows. */
+  private nextStepsHtml(): string {
+    const w = this.world;
+    const me = this.game.humanPlayer;
+    const pc = w.city!.players[me]!;
+    const has = (t: string, n = 1) => w.buildings.filter((b) => b.owner === me && b.type === t && b.complete).length >= n;
+    const pop = sumTiers(pc.population);
+    const steps: Array<[boolean, string]> = [
+      [roadsByOwner(w)[me]! > 14, 'Draw a street from the Town Hall (🛣 Road, <b>R</b>)'],
+      [w.buildings.filter((b) => b.owner === me && b.type === 'house').length >= 4, 'Line the street with houses (🏠 Housing)'],
+      [has('logging_camp') && has('sawmill'), 'A Logging Camp by the forest and a Sawmill: lumber (⛏ Raw, 🏭 Industry)'],
+      [(has('farm') && has('food_plant')) || has('fishing_harbour'), 'Food: a Farm and a Food Plant, or a Fishing Harbour'],
+      [has('market'), 'A Market among the houses (🏛 Services)'],
+      [(has('pumping_station') || has('water_well')) && has('water_tower'), 'Water: a Pumping Station (or a Well) and a Water Tower (⚡ Utilities)'],
+      [has('quarry') && has('cement_works'), 'Concrete: a Quarry and a Cement Works'],
+      [has('power_plant') || has('hydro_plant'), 'Power: an Oil Power Plant or a Hydro Plant'],
+      [pc.population[1] >= 20, 'Terraces: houses with police, power, food and water grow into technicians'],
+      [has('research_institute'), 'A Research Institute towards the Digital age (🔬)'],
+      [pc.age >= 1, 'Reach the Digital age (🔬 Ages)'],
+    ];
+    const todo = steps.filter(([done]) => !done).slice(0, 3);
+    const done = steps.length - steps.filter(([d]) => !d).length;
+    const hint = this.input.touchDevice ? 'Tap a building to see how it is doing.' : 'Click a building to see how it is doing.';
+    if (!todo.length || pop > 1500) return `<div class="muted">${hint} Your nation is on its way: see 🔬 for the next age and the ways to win.</div>`;
+    return `<div class="card-head"><div class="card-title">Next steps</div><div class="card-status">${done}/${steps.length}</div></div>
+      <ul class="next-steps">${todo.map(([, t]) => `<li>${t}</li>`).join('')}</ul><div class="muted">${hint}</div>`;
   }
 
   private placingHtml(type: PlaceType, problem: string | null, info: string): string {

@@ -13,6 +13,7 @@ import { MAP_SIZES, type GenBiome } from './sim/mapgen.ts';
 import { createMatch } from './sim/scenario.ts';
 import type { World } from './sim/world.ts';
 import { CityHud } from './ui/cityHud.ts';
+import { Sound } from './ui/sound.ts';
 import { Hud } from './ui/hud.ts';
 import { InputController } from './ui/input.ts';
 import { showMenu } from './ui/menu.ts';
@@ -78,6 +79,17 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
   let handleEvents: (events: ReturnType<Game['drainEvents']>) => void;
   let updateHud: (dt: number, realDt: number) => void;
   let lastYear = -1;
+  const sound = new Sound();
+  // The player's own orders make a sound; so do button clicks.
+  const issue = game.issue.bind(game);
+  game.issue = (c) => {
+    sound.command(c);
+    issue(c);
+  };
+  uiRoot.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('button')) sound.click();
+  });
+  (window as unknown as { ascensionSound: Sound }).ascensionSound = sound;
 
   if (world.city) {
     const hud = new CityHud(uiRoot, game, selection, input, minimap);
@@ -90,6 +102,7 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
     hud.onNew = () => (location.search = '');
     hud.hasSave = () => !!saveInfo('manual');
     hud.onMarks = (m) => renderer.marks.set(m);
+    hud.sound = sound;
     hud.onAlert = (x, y) => minimap.ping(x, y);
     handleEvents = (ev) => hud.handleEvents(ev);
     updateHud = () => {
@@ -125,7 +138,10 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
     if (events.length) {
       handleEvents(events);
       renderer.effects.handleEvents(events, world);
+      sound.handleEvents(events, game.humanPlayer);
     }
+    sound.listener = { x: renderer.rig.target.x, y: renderer.rig.target.y, zoom: renderer.rig.distance };
+    sound.update();
     selection.prune();
     const ins = selection.inspect;
     renderer.render(alpha, now / 1000, dt, selection.ids, {

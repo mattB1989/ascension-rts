@@ -7,6 +7,7 @@ import { AGES } from '../data/ages.ts';
 import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
 import { nextAge } from '../sim/city/ages.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
+import type { Sound } from './sound.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { GOOD_IDS, GOODS, sumTiers, TIERS, type GoodId } from '../data/goods.ts';
@@ -80,6 +81,8 @@ export class CityHud {
   private lastPalette = '';
   private paletteAge = 0;
   private refreshAt = 0;
+  /** Sound settings (set by main). */
+  sound: Sound | null = null;
   /** Save / load / new game, provided by main. */
   onSave: () => void = () => {};
   onLoad: () => void = () => {};
@@ -144,6 +147,13 @@ export class CityHud {
         }
       });
     }
+    this.panel.addEventListener('input', (e) => {
+      const r = e.target as HTMLInputElement;
+      if (r.dataset.volume && this.sound) {
+        this.sound.settings.volume = Number(r.value) / 100;
+        this.sound.apply();
+      }
+    });
     input.toast = (t) => this.toast(t);
     input.cityKeys = (e) => this.onKey(e);
     selection.onChange(() => (this.lastInfo = ''));
@@ -300,6 +310,10 @@ export class CityHud {
         this.lastPanel = '';
         break;
       }
+      case 'sound':
+        this.sound?.toggle(arg as 'sfx' | 'music');
+        this.lastPanel = '';
+        break;
       case 'close':
         this.panelKind = null;
         this.panel.classList.add('hidden');
@@ -724,6 +738,18 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
       ${this.goalsHtml()}`;
   }
 
+  /** Yearly population and GDP: you and the rival nations. */
+  private historyHtml(): string {
+    const w = this.world;
+    const who = w.players.filter((p) => p.id === this.game.humanPlayer || p.role === 'nation');
+    const series = (key: 'population' | 'gdp') =>
+      who.map((p) => ({ name: p.name, color: '#' + p.color.toString(16).padStart(6, '0'), values: w.city!.players[p.id]!.history.map((h) => h[key]) }));
+    const years = w.city!.players[this.game.humanPlayer]!.history.map((h) => h.year);
+    if (years.length < 2) return `<h3>History</h3><p class="muted">Graphs of population and GDP appear after two game years.</p>`;
+    const legend = `<div class="chart-legend">${who.map((p) => `<span style="--c:#${p.color.toString(16).padStart(6, '0')}">${esc(p.name)}</span>`).join('')}</div>`;
+    return `<h3>History</h3>${legend}<div class="muted">Population</div>${lineChart(series('population'), years)}<div class="muted">GDP per year</div>${lineChart(series('gdp'), years)}`;
+  }
+
   private goalsHtml(): string {
     const v = this.world.city!.victory;
     if (!v.on) return `<h3>Ways to win</h3><p class="muted">Sandbox game: nobody wins, play as long as you like.</p>`;
@@ -792,13 +818,18 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
           <tr class="total"><td>Net</td><td>${sign(net(y))}</td><td>${sign(net(l))}</td></tr></table>
           <div class="tax-row">Taxes <button class="btn" data-action="tax" data-arg="-0.1">−</button><b>${Math.round(pc.taxRate * 100)}%</b><button class="btn" data-action="tax" data-arg="0.1">+</button>
           <span class="muted">Higher taxes bring money but make people unhappy.</span></div>
-          <p class="muted">GDP (goods made, at reference prices): this year ₡${fmt(pc.gdp)}, last year ₡${fmt(pc.lastGdp)}.</p>`;
+          <p class="muted">GDP (goods made, at reference prices): this year ₡${fmt(pc.gdp)}, last year ₡${fmt(pc.lastGdp)}.</p>
+          ${this.historyHtml()}`;
       }
       case 'menu':
         return `${close}<h3>Game</h3><div class="menu-col">
           <button class="btn" data-action="save">💾 Save</button>
           <button class="btn ${this.hasSave() ? '' : 'disabled'}" data-action="load">📂 Load last save</button>
           <button class="btn" data-action="new">✨ New game…</button></div>
+          <h3>Sound</h3><div class="menu-col">
+          <button class="btn ${this.sound?.settings.sfx ? 'active' : ''}" data-action="sound" data-arg="sfx">🔊 Sound effects: ${this.sound?.settings.sfx ? 'on' : 'off'}</button>
+          <button class="btn ${this.sound?.settings.music ? 'active' : ''}" data-action="sound" data-arg="music">🎵 Music: ${this.sound?.settings.music ? 'on' : 'off'}</button>
+          <div class="vol-row">Volume <input type="range" min="0" max="100" value="${Math.round((this.sound?.settings.volume ?? 0.7) * 100)}" data-volume="1"></div></div>
           <p class="muted">The game also saves itself every game year. Saves stay in this browser.</p>`;
       case 'help':
         return `${close}${CITY_HELP}<button class="btn primary" data-action="close">Got it</button>`;
@@ -806,6 +837,24 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
         return '';
     }
   }
+}
+
+/** A small SVG line chart: one line per series over the years. */
+function lineChart(series: Array<{ name: string; color: string; values: number[] }>, years: number[]): string {
+  const W = 300;
+  const H = 90;
+  const L = 34;
+  const n = Math.max(...series.map((s) => s.values.length), 2);
+  const max = Math.max(1, ...series.flatMap((s) => s.values));
+  const x = (i: number) => L + ((W - L - 4) * i) / (n - 1);
+  const y = (v: number) => H - 12 - ((H - 18) * v) / max;
+  const lines = series
+    .filter((s) => s.values.length > 1)
+    .map((s) => `<polyline fill="none" stroke="${s.color}" stroke-width="1.8" points="${s.values.map((v, i) => `${x(i + n - s.values.length).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`)
+    .join('');
+  const grid = [0, 0.5, 1].map((k) => `<line x1="${L}" x2="${W - 4}" y1="${y(max * k)}" y2="${y(max * k)}" stroke="rgba(255,255,255,0.08)"/><text x="${L - 4}" y="${y(max * k) + 3}" text-anchor="end">${fmt(max * k)}</text>`).join('');
+  const ticks = `<text x="${L}" y="${H - 1}">${years[0]}</text><text x="${W - 4}" y="${H - 1}" text-anchor="end">${years[years.length - 1]}</text>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">${grid}${lines}${ticks}</svg>`;
 }
 
 function bar(v: number, min: number, max: number, cls: string): string {

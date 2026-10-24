@@ -59,6 +59,9 @@ original **Twin Shores** skirmish.
   for 10 years), federation (half the regions, at least half of them joined peacefully), space
   (keep the Space Elevator running for 5 years) or conquest (every rival nation defeated).
   🔬 shows your progress. Or choose Sandbox in the menu and play forever.
+- **Sound and graphs (E10)**: procedural sound effects (building, roads, battles, alerts) and
+  a slow generative music pad, all made in the browser; on/off and volume in ☰. ₡ Budget shows
+  population and GDP over the years against the rival nations.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.

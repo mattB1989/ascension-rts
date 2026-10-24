@@ -1347,3 +1347,9 @@ table.age-req .bar { width: 100%; }
 .goal { margin: 6px 0; }
 .goal-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .goal-head .bar { flex: 0 0 45%; }
+.vol-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.vol-row input { flex: 1; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 8px; }
+.chart text { font-size: 9px; fill: var(--muted, #9aa4b2); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
+.chart-legend span::before { content: ''; display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; background: var(--c); }

@@ -151,7 +151,7 @@ Each milestone ends with a playable build on GitHub Pages.
 | **E7** ◐ | Digital age | ✅ ages reached by research, people, GDP and a price; Engineers tier and towers, rare earths and uranium, electronics, pharmaceuticals and hospitals, nuclear power, data network, exo-troopers, rocket artillery, the Warden mech; AI nations advance too. Still to do: airports, research pacts, Digital navy and air force in the economy game |
 | **E8** ◐ | Nano age | ✅ Scientists tier and spires, universities, nanomaterials, robotics and automation, fusion, Disruptor, Juggernaut, Arclight. Still to do: maglev, EMP stun, shields |
 | **E9** ✅ | Space age | Launch sites and orbital alloys, orbital solar relays, the Space Elevator; economic, federation, space and conquest victories (or sandbox) |
-| **E10** | Polish and content | Graphics pass, sound and music, post-game report, more biomes, scenarios, AI personalities, AI-vs-AI spectator, replays |
+| **E10** ◐ | Polish and content | ✅ sound effects and generative music (WebAudio, no files), history graphs. Still to do: graphics pass, post-game report, more biomes, scenarios, AI personalities, AI-vs-AI spectator, replays |
 | Later | Multiplayer | Lockstep over a relay or WebRTC, on the command system |
 
 Graphics improve alongside each milestone (buildings and tier upgrades are the first

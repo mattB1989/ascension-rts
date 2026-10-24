@@ -70,6 +70,8 @@ export interface CityBuildingState {
   trainsOut?: number;
   /** Pipeline network it touches (0: none). */
   pipe?: number;
+  /** Shield generators: seconds knocked out by an EMP. */
+  stun?: number;
 }
 
 export interface Truck {

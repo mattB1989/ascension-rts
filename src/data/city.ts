@@ -316,7 +316,7 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'airport', 'trade_port', 'coast_guard', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_well', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
-  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret'] },
+  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret', 'shield_generator'] },
 ];
 
 /** Economy-game costs for the skirmish's military buildings (DESIGN.md §9: war is paid for by the economy). */
@@ -327,6 +327,7 @@ export const MILITARY_ECON: Record<string, EconDef> = {
   watchtower: { credits: 300, materials: { lumber: 10, concrete: 5 }, upkeep: 20 },
   bunker: { credits: 500, materials: { concrete: 30 }, upkeep: 30 },
   gun_turret: { credits: 600, materials: { concrete: 10, steel: 10 }, upkeep: 40 },
+  shield_generator: { credits: 6000, materials: { concrete: 40, steel: 30, nano: 10 }, upkeep: 400, jobs: { tier: 2, count: 4 }, power: 40 },
 };
 
 /** What units cost in the economy game: credits now, goods from the building's stock, upkeep. */

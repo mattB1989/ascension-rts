@@ -193,7 +193,7 @@ const RTS_BUILDINGS = {
     id: 'shield_generator', name: 'Shield Generator', category: 'defense', age: 'nano', requires: ['research_lab'],
     cost: { ore: 800, energy: 600 }, buildTime: 60, hp: 1500, size: [2, 2], placement: 'land', pop: 0, vision: 6,
     builtBy: 'engineer',
-    description: 'Dome that absorbs damage to buildings inside until depleted, then recharges.',
+    description: 'Nano age. Buildings within 12 tiles take only a quarter of the damage while it is staffed and powered. An EMP knocks it out for a few seconds.',
   },
   point_defense_array: {
     id: 'point_defense_array', name: 'Point Defense Array', category: 'defense', age: 'space', requires: ['sam_site'],

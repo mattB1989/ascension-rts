@@ -91,6 +91,7 @@ export function updateMilitary(world: World): void {
     pc.credits -= up;
     pc.year.military += up;
   }
+  for (const b of world.buildings) if (b.city?.stun) b.city.stun = Math.max(0, b.city.stun - 1);
   updateCapture(world);
 }
 

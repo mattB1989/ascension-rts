@@ -746,3 +746,24 @@ test("a Disruptor's EMP stuns vehicles: they stop moving and firing for a while"
   assert.ok(stunned > 0 && stunned <= EMP_STUN, `tank stunned (${stunned})`);
   assert.ok(d.hp > 0);
 });
+
+test('a shield generator takes most of the damage to buildings near it; an EMP knocks it out', async () => {
+  const { addCityBuilding } = await import('../src/sim/city/place.ts');
+  const { hit, SHIELD } = await import('../src/sim/combat.ts');
+  const { WEAPONS } = await import('../src/data/weapons.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const hall = world.buildings[0]!;
+  const mill = addCityBuilding(world, 'sawmill', 0, hall.tx + 8, hall.ty, true);
+  const gen = addCityBuilding(world, 'shield_generator', 0, hall.tx + 8, hall.ty + 4, true);
+  const shell = WEAPONS.battle_tank![0]!;
+  const before = mill.hp;
+  hit(world, 1, shell, 100, mill);
+  const open = before - mill.hp;
+  gen.city!.workers = 4;
+  gen.city!.powered = true;
+  const mid = mill.hp;
+  hit(world, 1, shell, 100, mill);
+  assert.ok(Math.abs(mid - mill.hp - open * SHIELD.pass) < 1e-6, 'shielded damage');
+  hit(world, 1, WEAPONS.disruptor![0]!, 90, mill);
+  assert.ok((gen.city!.stun ?? 0) > 0, 'EMP knocked the shield out');
+});

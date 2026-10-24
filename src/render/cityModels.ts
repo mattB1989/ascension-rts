@@ -1001,6 +1001,21 @@ function orbitalRelay(team: number): THREE.Group {
   return g;
 }
 
+function shieldGenerator(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2, paving());
+  g.add(cyl(0.6, 0.7, 0.3, 12, mat(0x5a6068, { metal: 0.6 }), 0, 0.27, 0));
+  g.add(cyl(0.12, 0.18, 1.1, 8, metal(), 0, 0.95, 0));
+  const orb = sphere(0.28, mat(0x80c0ff, { emissive: 0x3070ff, rough: 0.2 }), 0, 1.6, 0, 12);
+  orb.name = 'flare';
+  g.add(orb);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    g.add(box(0.08, 0.7, 0.08, t.main, Math.cos(a) * 0.5, 0.75, Math.sin(a) * 0.5));
+  }
+  return g;
+}
+
 function spaceElevator(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(6, 6, paving());
@@ -1053,6 +1068,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'launch_site': return launchSite(team);
     case 'orbital_relay': return orbitalRelay(team);
     case 'space_elevator': return spaceElevator(team);
+    case 'shield_generator': return shieldGenerator(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
     case 'logging_camp': return loggingCamp(team);

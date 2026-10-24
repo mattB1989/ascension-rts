@@ -159,7 +159,7 @@ Turtling must be a real strategy, not a delay. Design rules:
 | **Sonar Net** | Modern | Shipyard | 100 / 50 | 15 | 300 | — | — | Placed on water. Reveals submerged submarines nearby. |
 | **Missile Tower** | Digital | Radar Station | 350 / 200 | 35 | 1400 | 4 infantry | — | Garrisonable; hits ground and air. Can upgrade a Watchtower in place. |
 | **Laser Tower** | Nano | Gun Turret | 400 / 300 | 35 | 1400 | — | — | Beam ramps up on the same target: shreds mechs and heavy armor. |
-| **Shield Generator** | Nano | Research Lab | 800 / 600 | 60 | 1500 | — | — | Dome that absorbs damage to buildings inside until depleted, then recharges. |
+| **Shield Generator** | Nano | Research Lab | 800 / 600 | 60 | 1500 | — | — | Nano age. Buildings within 12 tiles take only a quarter of the damage while it is staffed and powered. An EMP knocks it out for a few seconds. |
 | **Point Defense Array** | Space | SAM Site | 700 / 700 | 45 | 1500 | — | — | Shoots down missiles, shells, bombs and incoming nukes in its radius. |
 <!-- /gen:defense -->
 

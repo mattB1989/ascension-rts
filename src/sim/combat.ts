@@ -153,12 +153,27 @@ function fire(world: World, owner: number, w: WeaponDef, t: Entity, sx: number, 
   world.projectiles.push(p);
 }
 
+/** Shield generators: damage that still gets through, and their reach. */
+export const SHIELD = { pass: 0.25, radius: 12, empStun: 5 } as const;
+
+/** A working shield generator of the building's owner that covers it, if any. */
+function shieldFor(world: World, e: Building): Building | undefined {
+  const r2 = SHIELD.radius * SHIELD.radius;
+  return world.buildings.find((s) => s.type === 'shield_generator' && s.owner === e.owner && s.complete && s.city && s.city.powered && s.city.workers > 0 && (s.city.stun ?? 0) <= 0 && (s.x - e.x) * (s.x - e.x) + (s.y - e.y) * (s.y - e.y) <= r2);
+}
+
 /** Seconds an EMP hit stuns a vehicle or mech. */
 export const EMP_STUN = 3;
 
 /** Damage one entity. */
 export function hit(world: World, owner: number, w: WeaponDef, damage: number, e: Entity): void {
-  const amount = damage * DAMAGE[w.type][armorOf(e)];
+  let amount = damage * DAMAGE[w.type][armorOf(e)];
+  // Economy game, Nano age: a shield generator nearby takes most of the damage to buildings (an EMP knocks it out for a while).
+  if (world.city && e.kind === 'building' && amount > 0) {
+    const shield = shieldFor(world, e);
+    if (shield && w.type === 'emp') shield.city!.stun = SHIELD.empStun;
+    else if (shield) amount *= SHIELD.pass;
+  }
   // EMP: vehicles and mechs are stunned for a few seconds.
   if (w.type === 'emp' && e.kind === 'unit' && ['lt', 'hv', 'mech'].includes(armorOf(e))) e.stun = Math.max(e.stun ?? 0, EMP_STUN);
   if (amount <= 0) return;

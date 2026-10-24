@@ -6,6 +6,7 @@
 //   ground: R grass, G rock, B sand/snow, A soil (forest floor, fields)
 //   walls:  R brick, G roof tiles, B concrete, A timber planks
 //   finish: R plaster, G metal panels, B glass curtain wall, A grass/lawn
+//   nature: R broadleaf foliage, G conifer needles, B bark, A boulder rock
 
 import * as THREE from 'three';
 
@@ -308,6 +309,134 @@ function glassWall(): Float32Array {
   return out;
 }
 
+// --- Nature (trees, boulders) ---------------------------------------------------
+
+/** Broadleaf foliage: overlapping leaf clumps, each lit from above and shadowed at its rim. */
+function foliage(): Float32Array {
+  const clumps = strokes((ctx, wrap) => {
+    const r = mulberry(131);
+    for (let i = 0; i < 520; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const rad = 5 + r() * 12;
+      const lit = 0.55 + r() * 0.3;
+      wrap(() => {
+        const g = ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.35, rad * 0.1, x, y, rad);
+        g.addColorStop(0, grey(lit));
+        g.addColorStop(0.65, grey(lit - 0.22));
+        g.addColorStop(1, grey(0.12));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, rad, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }, 40);
+  const n = fbm(16, 3, 137);
+  return centre(clumps.map((v, i) => v * 0.85 + n[i]! * 0.25), 1.1);
+}
+
+/** Conifer needles: drooping branch sprays (chevrons) in layers, dark gaps between. */
+function needles(): Float32Array {
+  const sprays = strokes((ctx, wrap) => {
+    const r = mulberry(139);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 900; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const l = 6 + r() * 10;
+      const droop = 0.45 + r() * 0.5;
+      ctx.lineWidth = 1.5 + r() * 2.5;
+      ctx.strokeStyle = grey(r() < 0.35 ? 0.2 + r() * 0.15 : 0.55 + r() * 0.35);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.moveTo(x - l, y + l * droop);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x + l, y + l * droop);
+        ctx.stroke();
+      });
+    }
+  }, 70);
+  const n = fbm(8, 3, 149);
+  return centre(sprays.map((v, i) => v * 0.8 + n[i]! * 0.3), 1.5);
+}
+
+/** Bark: long vertical ridges with dark furrows and the odd horizontal crack. */
+function bark(): Float32Array {
+  const ridges = strokes((ctx, wrap) => {
+    const r = mulberry(151);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 420; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const l = 20 + r() * 70;
+      ctx.lineWidth = 1 + r() * 3;
+      ctx.strokeStyle = grey(r() < 0.5 ? 0.15 + r() * 0.15 : 0.6 + r() * 0.3);
+      const wob = (r() - 0.5) * 6;
+      wrap(() => {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.quadraticCurveTo(x + wob, y + l / 2, x, y + l);
+        ctx.stroke();
+      });
+    }
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 40; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      ctx.strokeStyle = grey(0.12);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 4 + r() * 8, y + (r() - 0.5) * 2);
+        ctx.stroke();
+      });
+    }
+  });
+  return centre(ridges, 1.2);
+}
+
+/** Boulders: lumpy stone with cracks and pale lichen spots. */
+function boulder(): Float32Array {
+  const base = fbm(4, 5, 157);
+  const fine = fbm(32, 2, 163);
+  const marks = strokes((ctx, wrap) => {
+    const r = mulberry(167);
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 30; i++) {
+      let x = r() * SIZE;
+      let y = r() * SIZE;
+      let a = r() * Math.PI * 2;
+      const pts: Array<[number, number]> = [[x, y]];
+      for (let k = 0; k < 7; k++) {
+        a += (r() - 0.5) * 1.4;
+        x += Math.cos(a) * (5 + r() * 9);
+        y += Math.sin(a) * (5 + r() * 9);
+        pts.push([x, y]);
+      }
+      ctx.strokeStyle = grey(0.1 + r() * 0.15);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0]![0], pts[0]![1]);
+        for (const [px, py] of pts) ctx.lineTo(px, py);
+        ctx.stroke();
+      });
+    }
+    for (let i = 0; i < 260; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const s = 1 + r() * 4;
+      ctx.fillStyle = grey(0.85 + r() * 0.15);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.arc(x, y, s, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  });
+  return centre(base.map((v, i) => 0.55 * v + 0.25 * fine[i]! + 0.5 * (marks[i]! - 0.5)), 1.3);
+}
+
 // --- Packing ------------------------------------------------------------------
 
 function pack(chans: Float32Array[], name: string): THREE.DataTexture {
@@ -327,6 +456,7 @@ function pack(chans: Float32Array[], name: string): THREE.DataTexture {
 let ground: THREE.DataTexture | null = null;
 let walls: THREE.DataTexture | null = null;
 let finish: THREE.DataTexture | null = null;
+let nature: THREE.DataTexture | null = null;
 
 export function groundTexture(): THREE.DataTexture {
   return (ground ??= pack([grass(), rock(), sand(), soil()], 'ground'));
@@ -338,12 +468,18 @@ function buildingTextures(): [THREE.DataTexture, THREE.DataTexture] {
   return [walls, finish];
 }
 
+/** Detail texture by index: 0 walls, 1 finish, 2 nature (built on first use). */
+function detailTexture(i: 0 | 1 | 2): THREE.DataTexture {
+  if (i === 2) return (nature ??= pack([foliage(), needles(), bark(), boulder()], 'nature'));
+  return buildingTextures()[i];
+}
+
 // --- Materials ----------------------------------------------------------------
 
-export type DetailKind = 'brick' | 'tiles' | 'concrete' | 'planks' | 'plaster' | 'panels' | 'glass' | 'lawn';
+export type DetailKind = 'brick' | 'tiles' | 'concrete' | 'planks' | 'plaster' | 'panels' | 'glass' | 'lawn' | 'foliage' | 'needles' | 'bark' | 'rock';
 
 /** Which texture and channel, world units per texture repeat, and how strongly it shows. */
-const KINDS: Record<DetailKind, { tex: 0 | 1; chan: number; size: number; strength: number }> = {
+const KINDS: Record<DetailKind, { tex: 0 | 1 | 2; chan: number; size: number; strength: number }> = {
   brick: { tex: 0, chan: 0, size: 1.6, strength: 0.85 },
   tiles: { tex: 0, chan: 1, size: 1.4, strength: 0.8 },
   concrete: { tex: 0, chan: 2, size: 2, strength: 0.7 },
@@ -352,6 +488,10 @@ const KINDS: Record<DetailKind, { tex: 0 | 1; chan: number; size: number; streng
   panels: { tex: 1, chan: 1, size: 1.2, strength: 0.6 },
   glass: { tex: 1, chan: 2, size: 1.2, strength: 0.9 },
   lawn: { tex: 1, chan: 3, size: 3, strength: 0.6 },
+  foliage: { tex: 2, chan: 0, size: 0.9, strength: 0.85 },
+  needles: { tex: 2, chan: 1, size: 0.8, strength: 0.9 },
+  bark: { tex: 2, chan: 2, size: 0.45, strength: 0.8 },
+  rock: { tex: 2, chan: 3, size: 1.3, strength: 0.8 },
 };
 
 const MASKS = [new THREE.Vector4(1, 0, 0, 0), new THREE.Vector4(0, 1, 0, 0), new THREE.Vector4(0, 0, 1, 0), new THREE.Vector4(0, 0, 0, 1)];
@@ -369,7 +509,7 @@ export function applyDetail(material: THREE.MeshStandardMaterial, kind: DetailKi
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
-    shader.uniforms.uDetail = { value: buildingTextures()[k.tex] };
+    shader.uniforms.uDetail = { value: detailTexture(k.tex) };
     shader.uniforms.uDetailMask = { value: MASKS[k.chan] };
     shader.uniforms.uDetailScale = { value: 1 / k.size };
     shader.uniforms.uDetailStrength = { value: k.strength };

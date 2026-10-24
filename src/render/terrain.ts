@@ -8,7 +8,8 @@ import { fbm, hash2 } from '../sim/rng.ts';
 import { Deposit, groundHeight, Terrain, type GameMap, type TerrainId } from '../sim/map.ts';
 import { buildBridges } from './bridges.ts';
 import { applyOverlay } from './fog.ts';
-import { applyGroundDetail } from './textures.ts';
+import { applyDetail, applyGroundDetail } from './textures.ts';
+import { canopyGeometry, TREE_KINDS, treeMaterials, TRUNK_HEIGHT, trunkGeometry, type TreeKind } from './trees.ts';
 
 /** Two colours per terrain; large-scale noise blends between them. */
 const TERRAIN_COLORS: Record<TerrainId, [number, number]> = {
@@ -47,13 +48,13 @@ interface Chunk {
   lod: THREE.LOD;
   props: THREE.Group;
   treeSpots: Array<[number, number, number]>;
-  treeMeshes: THREE.InstancedMesh[];
+  /** Per tree spot: its canopy mesh and index there (the trunk shares the spot's index). */
+  treeSlots: Array<[THREE.InstancedMesh, number]>;
+  trunks: THREE.InstancedMesh | null;
 }
 
 const sharedMaterials = {
   ground: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }),
-  canopy: new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 }),
-  trunk: new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 1, flatShading: true }),
   rock: new THREE.MeshStandardMaterial({ color: 0x8a8378, flatShading: true, roughness: 0.95 }),
   ore: new THREE.MeshStandardMaterial({ color: 0x9a4a32, flatShading: true, roughness: 0.8, metalness: 0.2 }),
   stone: new THREE.MeshStandardMaterial({ color: 0xc9c4ba, flatShading: true, roughness: 0.9 }),
@@ -62,11 +63,30 @@ const sharedMaterials = {
   uranium: new THREE.MeshStandardMaterial({ color: 0x9cc83a, flatShading: true, roughness: 0.6, emissive: 0x3a5a10, emissiveIntensity: 0.5 }),
 };
 applyOverlay(sharedMaterials.ground);
+applyDetail(sharedMaterials.rock, 'rock');
+applyDetail(sharedMaterials.ore, 'rock');
+applyDetail(sharedMaterials.stone, 'rock');
 
-const canopyGeo = new THREE.ConeGeometry(0.42, 1.1, 6).translate(0, 0.95, 0);
-const trunkGeo = new THREE.CylinderGeometry(0.07, 0.09, 0.45, 5).translate(0, 0.22, 0);
-const rockGeo = new THREE.DodecahedronGeometry(0.6, 0);
-const lumpGeo = new THREE.DodecahedronGeometry(0.28, 0);
+/** A dodecahedron with its corners pushed about, so boulders aren't all the same regular solid. */
+function lumpy(r: number, amount: number, seed: number): THREE.BufferGeometry {
+  const g = new THREE.DodecahedronGeometry(r, 0);
+  const p = g.getAttribute('position') as THREE.BufferAttribute;
+  const h = (x: number, y: number, z: number, k: number) => {
+    const s = Math.sin(Math.round(x * 1000) * 12.9898 + Math.round(y * 1000) * 78.233 + Math.round(z * 1000) * 37.719 + (seed + k) * 4.581) * 43758.5453;
+    return s - Math.floor(s) - 0.5;
+  };
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    p.setXYZ(i, x + h(x, y, z, 0) * r * amount, y + h(x, y, z, 1) * r * amount, z + h(x, y, z, 2) * r * amount);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+const rockGeo = lumpy(0.6, 0.42, 1);
+const lumpGeo = lumpy(0.28, 0.5, 2);
 const poolGeo = new THREE.CircleGeometry(0.42, 8).rotateX(-Math.PI / 2);
 
 export class TerrainView {
@@ -186,7 +206,7 @@ export class TerrainView {
     }
     this.group.add(lod);
     const props = new THREE.Group();
-    const chunk: Chunk = { x0, y0, size, cx, cz, lod, props, treeSpots: [], treeMeshes: [] };
+    const chunk: Chunk = { x0, y0, size, cx, cz, lod, props, treeSpots: [], treeSlots: [], trunks: null };
     this.buildTrees(chunk);
     this.buildScatter(chunk);
     this.group.add(props);
@@ -326,10 +346,17 @@ export class TerrainView {
     return g;
   }
 
+  /**
+   * Trees, instanced per chunk: one mesh per kind for the canopies and one for all
+   * the trunks. Forests grow in groves (conifer stands and broadleaf woods, picked by
+   * large-scale noise and height); lone trees on open ground are mostly broadleaf.
+   */
   private buildTrees(chunk: Chunk): void {
     const map = this.map;
     const spots = chunk.treeSpots;
+    const kinds: TreeKind[] = [];
     const dry = map.biome === 'arid';
+    const alpine = map.biome === 'alpine';
     for (let ty = chunk.y0; ty < chunk.y0 + chunk.size; ty++) {
       for (let tx = chunk.x0; tx < chunk.x0 + chunk.size; tx++) {
         const i = ty * map.width + tx;
@@ -338,40 +365,82 @@ export class TerrainView {
         const r = hash2(map.seed + 31, tx, ty);
         const scatter = t === Terrain.Grass ? 0.012 : t === Terrain.Fertile ? 0.006 : 0;
         const n = t === Terrain.Forest ? (r < 0.5 ? 2 : 1) : r < scatter ? 1 : 0;
+        if (!n) continue;
+        // Groves: conifers where the noise is high (more of them uphill and on alpine maps).
+        const grove = fbm(map.seed + 77, tx * 0.045, ty * 0.045, 2) + Math.min(0.25, map.elev[i]! * 0.04) + (alpine ? 0.2 : 0) - (dry ? 0.12 : 0);
         for (let k = 0; k < n; k++) {
           const x = tx + 0.15 + hash2(map.seed + 32 + k, tx, ty) * 0.7;
           const y = ty + 0.15 + hash2(map.seed + 33 + k, tx, ty) * 0.7;
-          spots.push([x, y, hash2(map.seed + 34 + k, tx, ty)]);
+          const rr = hash2(map.seed + 34 + k, tx, ty);
+          const pick = hash2(map.seed + 35 + k, tx, ty);
+          let kind: TreeKind;
+          if (t === Terrain.Forest) {
+            // Mixed woodland where the groves meet.
+            const conifer = Math.max(0, Math.min(1, (grove - 0.45) / 0.2));
+            kind = pick < conifer ? 'conifer' : pick > 0.9 ? 'poplar' : 'broadleaf';
+          } else {
+            kind = pick < 0.2 ? 'conifer' : pick < 0.45 ? 'poplar' : 'broadleaf';
+          }
+          spots.push([x, y, rr]);
+          kinds.push(kind);
         }
       }
     }
     if (!spots.length) return;
-    const canopy = new THREE.InstancedMesh(canopyGeo, sharedMaterials.canopy, spots.length);
-    const trunk = new THREE.InstancedMesh(trunkGeo, sharedMaterials.trunk, spots.length);
-    canopy.castShadow = true;
-    canopy.receiveShadow = true;
-    trunk.castShadow = true;
+    const mats = treeMaterials();
+    const counts = new Map<TreeKind, number>();
+    for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
+    const canopies = new Map<TreeKind, THREE.InstancedMesh>();
+    for (const kind of TREE_KINDS) {
+      const c = counts.get(kind);
+      if (!c) continue;
+      const mesh = new THREE.InstancedMesh(canopyGeometry(kind), kind === 'conifer' ? mats.needles : mats.foliage, c);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      canopies.set(kind, mesh);
+    }
+    const trunk = new THREE.InstancedMesh(trunkGeometry(), mats.bark, spots.length);
+    // Trunks are thin and mostly under the canopy: no shadow pass for them.
+    trunk.castShadow = false;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
     const v = new THREE.Vector3();
     const sc = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
     const color = new THREE.Color();
-    const greens = dry ? [0x5f7a34, 0x6f8a3a, 0x4f6a2c, 0x7a8f40] : [0x2f6b34, 0x3b7a3a, 0x27592c, 0x4a8a3c];
+    const greens: Record<TreeKind, number[]> = dry
+      ? { conifer: [0x4f6e3a, 0x5a7840, 0x46643a], broadleaf: [0x7a9244, 0x86984a, 0x6f8a3e, 0x92a050], poplar: [0x8aa04c, 0x96a858] }
+      : { conifer: [0x326e40, 0x3c7a48, 0x2b623a, 0x38723f], broadleaf: [0x4e8e3c, 0x5c9a42, 0x467f38, 0x689f44], poplar: [0x74a84a, 0x80b050, 0x689c44] };
+    const next = new Map<TreeKind, number>();
     spots.forEach(([x, y, r], i) => {
+      const kind = kinds[i]!;
+      const mesh = canopies.get(kind)!;
+      const idx = next.get(kind) ?? 0;
+      next.set(kind, idx + 1);
       const s = 0.8 + r * 0.6;
-      q.setFromAxisAngle(up, r * 6.28);
+      const r2 = hash2(map.seed + 36, Math.floor(x * 7), Math.floor(y * 7));
+      // A slight lean, a random turn, and (dry maps) broad flat-topped broadleaves.
+      e.set((r2 - 0.5) * 0.16, r * 6.28, (r - 0.5) * 0.16);
+      q.setFromEuler(e);
       v.set(x, groundHeight(map, x, y) - 0.05, y);
-      sc.set(s, s * (0.9 + r * 0.4), s);
+      const wide = dry && kind === 'broadleaf' ? 1.3 : 1;
+      sc.set(s * wide * (0.9 + r2 * 0.2), s * (0.9 + r * 0.4) / wide, s * wide * (1.1 - r2 * 0.2));
       m.compose(v, q, sc);
-      canopy.setMatrixAt(i, m);
+      mesh.setMatrixAt(idx, m);
+      const g = greens[kind];
+      mesh.setColorAt(idx, color.setHex(g[Math.floor(r2 * g.length) % g.length]!));
+      sc.set(s, s * TRUNK_HEIGHT[kind], s);
+      m.compose(v, q, sc);
       trunk.setMatrixAt(i, m);
-      canopy.setColorAt(i, color.setHex(greens[Math.floor(r * greens.length)]!));
+      chunk.treeSlots.push([mesh, idx]);
     });
-    canopy.computeBoundingSphere();
+    for (const mesh of canopies.values()) {
+      mesh.computeBoundingSphere();
+      chunk.props.add(mesh);
+    }
     trunk.computeBoundingSphere();
-    chunk.props.add(canopy, trunk);
-    chunk.treeMeshes = [canopy, trunk];
+    chunk.props.add(trunk);
+    chunk.trunks = trunk;
   }
 
   /** Rocks on rocky ground, lumps on ore and stone deposits, pools on oil. */
@@ -426,14 +495,19 @@ export class TerrainView {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     for (const c of this.chunks) {
       if (tx + w < c.x0 - 1 || ty + h < c.y0 - 1 || tx > c.x0 + c.size + 1 || ty > c.y0 + c.size + 1) continue;
-      let changed = false;
+      const changed = new Set<THREE.InstancedMesh>();
       c.treeSpots.forEach(([x, y], i) => {
         if (x >= tx - 0.2 && x < tx + w + 0.2 && y >= ty - 0.2 && y < ty + h + 0.2) {
-          for (const m of c.treeMeshes) m.setMatrixAt(i, zero);
-          changed = true;
+          const [mesh, idx] = c.treeSlots[i]!;
+          mesh.setMatrixAt(idx, zero);
+          changed.add(mesh);
+          if (c.trunks) {
+            c.trunks.setMatrixAt(i, zero);
+            changed.add(c.trunks);
+          }
         }
       });
-      if (changed) for (const m of c.treeMeshes) m.instanceMatrix.needsUpdate = true;
+      for (const m of changed) m.instanceMatrix.needsUpdate = true;
     }
   }
 }

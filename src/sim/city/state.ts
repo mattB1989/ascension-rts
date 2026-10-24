@@ -153,6 +153,8 @@ export interface PlayerCity {
   /** Power across all networks (MW). */
   powerSupply: number;
   powerDemand: number;
+  /** Demand above supply at the last check (for the warning). */
+  powerShort?: boolean;
   /** Goods made and used in the last 60 game seconds, per good (UI table). */
   made: Stock;
   used: Stock;

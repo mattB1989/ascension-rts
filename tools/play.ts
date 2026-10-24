@@ -21,6 +21,8 @@
 //   advance-age                 reach the next age when ready
 //   diplomacy                   neighbours: city-states and nations
 //   do '<json>'                 any game command, e.g. '{"kind":"deal","state":5,"good":"steel","import":50,"export":-1}'
+//                               overseas trade (needs a Trade Port): '{"kind":"tradeRule","good":"food","import":100,"export":-1}'
+//                               (import up to N, 0 = off; export above N, -1 = off); recruit: '{"kind":"recruit","building":ID,"unit":"rifleman"}'
 //   advance <seconds>           let time run (120 s = one year; at most 1200 per call)
 //
 // Every command prints what happened, including the game's own messages.
@@ -32,7 +34,7 @@ import { CITY_PALETTE, HOUSE_LEVELS } from '../src/data/city.ts';
 import { GOODS, sumTiers, TIERS, type GoodId } from '../src/data/goods.ts';
 import { AGES } from '../src/data/ages.ts';
 import { createCity } from '../src/sim/city/index.ts';
-import { cityBuildProblem, cityPlacementProblem } from '../src/sim/city/place.ts';
+import { cityBuildProblem, cityPlacementProblem, landYield } from '../src/sim/city/place.ts';
 import { nextAge } from '../src/sim/city/ages.ts';
 import { victoryProgress, VICTORY_NAMES } from '../src/sim/city/victory.ts';
 import { dependence, marketOf, purchasePrice } from '../src/sim/city/diplomacy.ts';
@@ -135,7 +137,7 @@ function stateText(w: World): string {
   lines.push(`${date(w)} · ${AGES[(['modern', 'digital', 'nano', 'space'] as const)[pc.age]!].name} · ₡${fmt(pc.credits)} (last year net ${net >= 0 ? '+' : ''}${fmt(net)}) · tax ${Math.round(pc.taxRate * 100)}%`);
   lines.push(`Last year: taxes +${fmt(ly.taxes)}, exports +${fmt(ly.trade)}, imports −${fmt(ly.imports)}, upkeep −${fmt(ly.upkeep)}, roads −${fmt(ly.roads)}, construction −${fmt(ly.construction)}, military −${fmt(ly.military)} · GDP ₡${fmt(pc.lastGdp)}`);
   lines.push(`People ${fmt(sumTiers(pc.population))}: ` + TIERS.map((t, i) => `${t.name} ${pc.population[i]} (jobs ${pc.jobs[i]}, employed ${pc.employed[i]})`).filter((_, i) => pc.population[i] || pc.jobs[i]).join(', ') + ` · happiness ${Math.round(pc.happiness * 100)}%`);
-  lines.push(`Power ${Math.round(pc.powerSupply)} MW supply / ${Math.round(pc.powerDemand)} MW demand · research ${Math.round(pc.research)}`);
+  lines.push(`Power ${Math.round(pc.powerSupply)} MW supply / ${Math.round(pc.powerDemand)} MW demand${pc.powerDemand > pc.powerSupply + 0.5 ? ' ⚠ SHORTAGE: unpowered houses lose a level' : ''} · research ${Math.round(pc.research)} · army ${w.units.filter((u) => u.owner === ME).length}`);
   const stock = (Object.keys(GOODS) as GoodId[]).filter((g) => (pc.stockpile[g] ?? 0) >= 1).map((g) => `${g} ${Math.floor(pc.stockpile[g]!)}`);
   lines.push(`Goods in stock: ${stock.join(', ') || 'none'}`);
   // Buildings.
@@ -148,7 +150,7 @@ function stateText(w: World): string {
   const counts: Record<string, number> = {};
   for (const b of own) if (b.type !== 'house') counts[b.type + (b.complete ? '' : ' (building)')] = (counts[b.type + (b.complete ? '' : ' (building)')] ?? 0) + 1;
   lines.push(`Other buildings: ${Object.entries(counts).map(([k, v]) => `${k}×${v}`).join(', ')}`);
-  const problems = own.filter((b) => b.type !== 'house' && b.city?.status && !/^(Working|OK|Idle — storage|Storing)/i.test(b.city.status));
+  const problems = own.filter((b) => b.type !== 'house' && b.city?.status && !/^(Working|OK|Idle — storage|Storing|All roads in reach)/i.test(b.city.status));
   if (problems.length) {
     lines.push('Problems:');
     for (const b of problems.slice(0, 25)) lines.push(`  #${b.id} ${b.type} at ${b.tx},${b.ty}: ${b.city!.status}`);
@@ -158,7 +160,7 @@ function stateText(w: World): string {
   if (next) lines.push(`Next age (${next.name}): ` + next.checks.map((c) => `${c.label} ${fmt(c.have)}/${fmt(c.need)} ${c.ok ? '✓' : '✗'}`).join(' · ') + (next.ready ? ' → READY: use "advance-age"' : ''));
   const sc = scenarioById(city.victory.scenario);
   if (sc) lines.push(`Scenario ${sc.name}: ${sc.goal} — ${sc.progress(w).text}${city.victory.scenarioDone ? ` (${city.victory.scenarioDone})` : ''}`);
-  if (city.victory.on) lines.push('Ways to win: ' + victoryProgress(w, ME).map((g) => `${VICTORY_NAMES[g.kind]} ${Math.round(g.frac * 100)}%`).join(' · '));
+  if (city.victory.on) lines.push('Ways to win:\n' + victoryProgress(w, ME).map((g) => `  ${VICTORY_NAMES[g.kind]} ${Math.round(g.frac * 100)}%: ${g.text}`).join('\n'));
   if (city.victory.winner >= 0) lines.push(`🏆 ${w.players[city.victory.winner]!.name} has won (${city.victory.how}).`);
   const wars = w.players.filter((p) => p.id !== ME && atWar(w, ME, p.id)).map((p) => p.name);
   if (wars.length) lines.push(`⚔ AT WAR with ${wars.join(', ')}`);
@@ -192,17 +194,17 @@ function mapText(w: World, cx: number, cy: number, r: number): string {
       const i = y * map.width + x;
       let ch = TERRAIN_CHAR[map.terrain[i] as TerrainId] ?? '?';
       const d = map.deposit[i];
-      if (d && !isWater(map.terrain[i] as TerrainId)) ch = ['', 'o', 's', 'x', 'r', 'u'][d] ?? ch;
+      if (d && !isWater(map.terrain[i] as TerrainId)) ch = ['', 'o', 'x', 's', 'r', 'u'][d] ?? ch;
       if (city.rail?.[i]) ch = '|';
       if (city.pipe?.[i]) ch = 'p';
-      if (city.road[i]) ch = '#';
+      if (city.road[i]) ch = map.terrain[i] === Terrain.Bridge ? '=' : '#';
       row.push(ch);
     }
     grid.push(row);
   }
   // Buildings: a letter per type (yours upper case, others lower case), legend below.
   const letters = new Map<string, string>();
-  const pool = 'HABCDEFGIJKLMNOPQRSUVWXYZ';
+  const pool = 'ABCDEFGIJKLMNOPQRSUVWXYZ';
   for (const b of w.buildings) {
     if (b.tx + b.w < x0 || b.tx > x1 || b.ty + b.h < y0 || b.ty > y1) continue;
     if (!letters.has(b.type)) letters.set(b.type, b.type === 'house' ? 'H' : b.type === 'town_hall' ? '@' : pool[letters.size % pool.length]!);
@@ -228,7 +230,9 @@ function catalogText(w: World): string {
       const e = def.econ;
       const why = cityBuildProblem(w, ME, t as BuildingTypeId);
       const mats = Object.entries(e.materials).map(([g, n]) => `${n} ${g}`).join(' ');
-      const recipe = e.recipe ? ` makes ${Object.entries(e.recipe.out).map(([g, n]) => `${n} ${g}`).join('+')}${Object.keys(e.recipe.in).length ? ` from ${Object.entries(e.recipe.in).map(([g, n]) => `${n} ${g}`).join('+')}` : ''} per ${e.recipe.seconds}s` : '';
+      const outs = e.recipe ? Object.entries(e.recipe.out).map(([g, n]) => `${n} ${g}`).join('+') : '';
+      const ins = e.recipe ? Object.entries(e.recipe.in).map(([g, n]) => `${n} ${g}`).join('+') : '';
+      const recipe = e.recipe ? ` · ${outs ? `makes ${outs}` : 'burns'}${ins ? `${outs ? ' from' : ''} ${ins}` : ''} per ${e.recipe.seconds}s` : '';
       const extra = [e.jobs ? `staff ${e.jobs.count} ${TIERS[e.jobs.tier]!.name}` : '', e.power ? (e.power < 0 ? `makes ${-e.power} MW` : `uses ${e.power} MW`) : '', e.service ? `${e.service.kind} for ${e.service.capacity} within ${e.service.radius}` : '', e.storage ? `stores ${e.storage}` : '', def.placement && def.placement !== 'land' ? `placement: ${def.placement}` : ''].filter(Boolean).join(', ');
       out.push(`  ${t} ${def.size[0]}x${def.size[1]} ₡${e.credits}${mats ? ` + ${mats}` : ''}, upkeep ₡${e.upkeep}/yr${recipe}${extra ? ` · ${extra}` : ''}${why ? `  [${why}]` : ''}`);
     }
@@ -260,6 +264,7 @@ function spots(w: World, type: BuildingTypeId, n: number): Array<[number, number
         if (cityPlacementProblem(w, ME, type, tx, ty) !== null) continue;
         if (type !== 'regional_office' && !touchesRoad(tx, ty)) continue;
         out.push([tx, ty, r]);
+        if (out.length >= n * 4) break;
       }
     }
   }
@@ -318,7 +323,10 @@ function main(): void {
       const { world } = load();
       const b = world.getBuilding(Number(rest[0]));
       if (!b) return console.log('No such building');
+      if (b.owner !== ME) console.log(`(owned by ${world.players[b.owner]?.name})`);
       console.log(buildingLine(b));
+      const h = hall(world);
+      if (b.city && h?.city) console.log(`connected to your town hall's road network: ${b.city.access >= 0 && b.city.comp === h.city.comp ? 'yes' : 'NO — trucks and crews cannot reach it'}`);
       const c = b.city;
       if (c) {
         const stock = Object.entries(c.stock).filter(([, v]) => (v ?? 0) >= 0.5).map(([g, v]) => `${g} ${Math.floor(v!)}`);
@@ -346,8 +354,12 @@ function main(): void {
       if (!BUILDINGS[type]) return console.log('Unknown building type (see catalog)');
       const why = cityBuildProblem(world, ME, type);
       if (why) console.log(`Note: ${why}`);
-      const s = spots(world, type, Number(rest[1] ?? 8));
-      console.log(s.length ? s.map(([x, y, r]) => `${x},${y} (${r} from the town hall)`).join('\n') : 'No valid spot next to your roads near the town hall: build roads towards suitable land (see map).');
+      const n = Number(rest[1] ?? 8);
+      const def: BuildingDef = BUILDINGS[type];
+      const graded = def.econ?.extract || ['fertile', 'forest', 'coast', 'stone', 'ore', 'oil', 'rare', 'uranium'].includes(def.placement ?? '');
+      const found = spots(world, type, graded ? n * 4 : n).map(([x, y, r]) => ({ x, y, r, q: graded ? landYield(world.map, def, x, y).yield : 1 }));
+      if (graded) found.sort((a, b) => b.q - a.q || a.r - b.r);
+      console.log(found.length ? found.slice(0, n).map((f) => `${f.x},${f.y} (${f.r} from the town hall${graded ? `, land ${Math.round(f.q * 100)}%` : ''})`).join('\n') : 'No valid spot next to your roads near the town hall: build roads towards suitable land (see map).');
       return;
     }
     case 'build': {

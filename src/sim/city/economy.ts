@@ -275,6 +275,14 @@ function power(world: World): void {
     c.powered = c.comp > 0 && left >= need;
     if (c.powered) supply.set(key(b), left - need);
   }
+  // Warn once when demand outgrows supply (houses go dark first, then lose their technicians).
+  city.players.forEach((pc, id) => {
+    const short = pc.powerDemand > pc.powerSupply + 0.5 && pc.powerDemand > 0;
+    if (short && !pc.powerShort && world.players[id]?.role !== 'cityState') {
+      world.emit({ kind: 'notify', player: id, text: `⚡ Power shortage: ${Math.round(pc.powerDemand)} MW needed, ${Math.round(pc.powerSupply)} MW made. Houses without power lose a level within a minute: build a power plant.` });
+    }
+    pc.powerShort = short;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +326,11 @@ function coverage(world: World): void {
     }
     // Hospitals: only while supplied (production sets the reason).
     if (s.def.econ!.recipe && c.efficiency <= 0) continue;
+    // An empty market serves nobody, so houses in reach shop at one that has stock.
+    if (svc.kind === 'market' && get(c.stock, 'food') + get(c.stock, 'goods') + get(c.stock, 'electronics') + get(c.stock, 'pharma') < 1) {
+      c.status = 'Empty: waiting for food from food plants, harbours or warehouses';
+      continue;
+    }
     let capacity = svc.capacity * (s.def.econ!.jobs ? Math.min(1, c.workers / s.def.econ!.jobs.count) : 1);
     if (svc.kind === 'water') {
       const left = waterLeft.get(c.comp * 64 + s.owner) ?? 0;
@@ -523,7 +536,7 @@ function households(world: World): void {
     if (next && c.upFor >= 15) {
       c.level++;
       c.upFor = 0;
-    } else if (c.level > 0 && c.downFor >= 30) {
+    } else if (c.level > 0 && c.downFor >= 60) {
       c.level--;
       c.downFor = 0;
     }

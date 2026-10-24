@@ -1357,3 +1357,25 @@ table.age-req .bar { width: 100%; }
 .end-stats { width: 100%; border-collapse: collapse; font-size: 13px; }
 .end-stats td { padding: 2px 4px; }
 .end-stats td:last-child { text-align: right; font-weight: 600; }
+
+/* Phones (portrait): panel buttons in a column on the right, panels above everything. */
+.city-panel { z-index: 6; background: rgba(16, 21, 28, 0.96) !important; }
+@media (max-width: 700px) and (orientation: portrait) {
+  .topbar { gap: 6px; }
+  .res-age { display: none; }
+  .city-res small { display: none; }
+  .top-actions {
+    position: fixed;
+    right: calc(8px + var(--safe-r));
+    top: calc(56px + var(--safe-t));
+    flex-direction: column;
+    gap: 4px;
+    margin-left: 0;
+  }
+  .top-actions .btn {
+    min-width: 38px;
+    min-height: 38px;
+    padding: 4px;
+  }
+  .overlay-bar { left: 8px; right: 56px; transform: none; }
+}

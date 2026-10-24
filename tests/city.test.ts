@@ -680,4 +680,5 @@ test('cargo airports fly goods between each other, no track needed', async () =>
   }
   assert.ok(planes > 0, 'a cargo plane flew');
   assert.ok((a.city!.stock.timber ?? 0) < 100, 'timber left airport A');
+  assert.ok(b.complete);
 });

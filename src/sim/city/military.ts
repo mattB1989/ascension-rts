@@ -120,7 +120,10 @@ export function captureRegion(world: World, seat: Building, to: number): void {
   const from = seat.owner;
   const map = world.map;
   const reg = map.region[Math.floor(seat.y) * map.width + Math.floor(seat.x)]!;
-  if (reg) city.regionOwner[reg] = to;
+  if (reg) {
+    city.regionOwner[reg] = to;
+    city.victory.conquered[to] = (city.victory.conquered[to] ?? 0) + 1;
+  }
   for (const b of world.buildings) {
     const r = map.region[Math.floor(b.y) * map.width + Math.floor(b.x)]!;
     if (b.owner === from && r === reg) {
@@ -147,7 +150,11 @@ export function captureRegion(world: World, seat: Building, to: number): void {
     world.players[from]!.defeated = true;
     world.emit({ kind: 'defeated', player: from, by: to });
     for (const b of world.buildings) if (b.owner === from) b.owner = to;
-    for (let r = 0; r < city.regionOwner.length; r++) if (city.regionOwner[r] === from) city.regionOwner[r] = to;
+    for (let r = 0; r < city.regionOwner.length; r++) {
+      if (city.regionOwner[r] !== from) continue;
+      city.regionOwner[r] = to;
+      city.victory.conquered[to] = (city.victory.conquered[to] ?? 0) + 1;
+    }
     for (const u of [...world.units]) if (u.owner === from) world.removeUnit(u, 'surrendered', true);
     city.bots = city.bots.filter((bot) => bot.player !== from);
     world.emit({ kind: 'notify', player: -1, text: `${world.players[from]!.name} is no more` });

@@ -363,6 +363,11 @@ export function botStep(world: World, bot: BotState): Command[] {
     [pc.age >= 2 && !has('nano_fab') && pc.population[3] >= 10, 'nano_fab'],
     [pc.age >= 2 && !has('robotics_plant') && has('nano_fab') > 0, 'robotics_plant'],
     [pc.age >= 2 && pc.powerDemand > pc.powerSupply - 30 && !has('fusion_plant') && pc.population[3] >= 20, 'fusion_plant'],
+    // The Space age, and the Space Elevator to win.
+    [pc.age >= 2 && pc.age < MAX_AGE && has('university') < 2 && pc.population[2] >= 150, 'university'],
+    [pc.age >= 3 && !has('launch_site') && pc.population[3] >= 40, 'launch_site'],
+    [pc.age >= 3 && pc.powerDemand > pc.powerSupply - 50 && !has('orbital_relay') && has('launch_site') > 0, 'orbital_relay'],
+    [pc.age >= 3 && !has('space_elevator') && has('launch_site') > 0 && credits > 160000, 'space_elevator'],
     [bot.nation && pc.age >= 1 && !has('mech_foundry') && pop >= 600 && has('vehicle_factory') > 0, 'mech_foundry'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];

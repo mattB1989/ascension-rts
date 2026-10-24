@@ -8,6 +8,7 @@ import type { ServiceKind } from '../../data/types.ts';
 import type { BotState } from '../../ai/cityBot.ts';
 import type { Command } from '../commands.ts';
 import type { Relations } from './diplomacy.ts';
+import { newVictoryState, type VictoryState } from './victory.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
 
@@ -187,6 +188,8 @@ export interface CityState {
   war: number[][];
   /** Overseas market price multiplier per good (drifts over time). */
   prices: Record<GoodId, number>;
+  /** Ways to win: progress and the winner. */
+  victory: VictoryState;
 }
 
 export function emptyBudget(): Budget {
@@ -274,6 +277,7 @@ export function createCityState(width: number, height: number, regions: number, 
     aiQueue: [],
     war: Array.from({ length: players }, () => new Array(players).fill(0)),
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
+    victory: newVictoryState(players),
   };
 }
 

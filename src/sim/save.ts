@@ -4,6 +4,7 @@
 // scratch memory) is rebuilt. Works in the browser (IndexedDB stores the clone)
 // and in Node (tests use structuredClone directly). Browser storage: src/ui/saves.ts.
 
+import { newVictoryState } from './city/victory.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { GOOD_IDS, type GoodId } from '../data/goods.ts';
 import { UNITS } from '../data/units.ts';
@@ -71,6 +72,7 @@ function migrate(w: World): void {
     b.city.covered.university ??= false;
   }
   city.aiQueue ??= [];
+  city.victory ??= newVictoryState(w.players.length);
   for (const t of city.trucks) t.buy ??= null;
   for (const pc of city.players) {
     for (const k of ['population', 'workforce', 'jobs', 'employed'] as const) while (pc[k].length < 4) (pc[k] as number[]).push(0);

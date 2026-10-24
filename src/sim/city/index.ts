@@ -170,6 +170,8 @@ export interface CityOptions {
   /** Rival AI nations (default: 1 on small maps, 2 on standard). */
   nations?: number;
   difficulty?: Difficulty;
+  /** Ways to win on (default) or off (sandbox: endless play). */
+  victory?: boolean;
 }
 
 const NATION_COLORS = [0xd64541, 0x8e44ad, 0x16a085];
@@ -180,7 +182,9 @@ export function createCity(opts: CityOptions): World {
   const states = opts.cityStates ?? (opts.size >= 512 ? 5 : 3);
   const nations = opts.nations ?? (opts.size >= 512 ? 2 : 1);
   const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + nations + states });
-  return startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
+  const world = startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
+  world.city!.victory.on = opts.victory ?? true;
+  return world;
 }
 
 export function startCity(map: GameMap, seed: number, cityStates = 0, nations = 0, difficulty: Difficulty = 'normal'): World {

@@ -227,7 +227,9 @@ export type GameEvent =
   | { kind: 'underAttack'; player: number; x: number; y: number }
   | { kind: 'gameOver'; winner: number }
   /** Economy game: a player lost their last seat of government. */
-  | { kind: 'defeated'; player: number; by: number };
+  | { kind: 'defeated'; player: number; by: number }
+  /** Economy game: a player has won (economic, federation, space or conquest). */
+  | { kind: 'victory'; player: number; how: string };
 
 export const POP_LIMIT = 200;
 export const CARRY_CAPACITY = 10;

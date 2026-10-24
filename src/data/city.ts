@@ -7,6 +7,7 @@ const NONE = { ore: 0, energy: 0 } as const;
 const common = { age: 'modern', cost: NONE, pop: 0, builtBy: 'engineer', mode: 'city' } as const;
 const digital = { ...common, age: 'digital' } as const;
 const nano = { ...common, age: 'nano' } as const;
+const space = { ...common, age: 'space' } as const;
 
 export const CITY_BUILDINGS = {
   // --- Core and logistics ---------------------------------------------------
@@ -157,6 +158,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 7000, materials: { concrete: 50, steel: 40, electronics: 10 }, upkeep: 450, jobs: { tier: 2, count: 10 }, recipe: { in: { steel: 2, electronics: 1, nano: 1 }, out: { robotics: 2 }, seconds: 15 }, power: 15, trucks: 1, pollution: 0.2 },
     description: 'Nano age. Robots from steel, electronics and nanomaterials. Farms, mines and factories stocked with robots need half the staff.',
   },
+  launch_site: {
+    ...space, id: 'launch_site', name: 'Launch Site', category: 'industry', requires: [], buildTime: 80, hp: 3000, size: [5, 5],
+    placement: 'land', vision: 8,
+    econ: { credits: 25000, materials: { concrete: 150, steel: 100, nano: 20 }, upkeep: 1500, jobs: { tier: 3, count: 10 }, recipe: { in: { fuel: 6, electronics: 2, nano: 1 }, out: { orbital: 3 }, seconds: 30 }, power: 40, trucks: 2, pollution: 0.4 },
+    description: 'Space age. Sends mining craft to the asteroids; they bring back orbital alloys. Burns fuel, electronics and nanomaterials. Needs scientists.',
+  },
   pharma_plant: {
     ...digital, id: 'pharma_plant', name: 'Pharmaceutical Plant', category: 'industry', requires: [], buildTime: 40, hp: 1400, size: [3, 3],
     placement: 'land', vision: 4,
@@ -187,6 +194,18 @@ export const CITY_BUILDINGS = {
     placement: 'land', vision: 7,
     econ: { credits: 15000, materials: { concrete: 100, steel: 60, nano: 10 }, upkeep: 800, jobs: { tier: 3, count: 6 }, recipe: { in: {}, out: {}, seconds: 10 }, power: -250 },
     description: 'Nano age. 250 MW from seawater fusion: no fuel, no smoke. Needs scientists.',
+  },
+  orbital_relay: {
+    ...space, id: 'orbital_relay', name: 'Orbital Solar Relay', category: 'utility', requires: [], buildTime: 60, hp: 2000, size: [4, 4],
+    placement: 'land', vision: 6,
+    econ: { credits: 20000, materials: { concrete: 60, steel: 40, orbital: 10 }, upkeep: 900, jobs: { tier: 3, count: 4 }, recipe: { in: { orbital: 1 }, out: {}, seconds: 60 }, power: -400 },
+    description: 'Space age. Beams down sunlight collected in orbit: 400 MW. Needs a little orbital alloy to maintain.',
+  },
+  space_elevator: {
+    ...space, id: 'space_elevator', name: 'Space Elevator', category: 'service', requires: [], buildTime: 300, hp: 10000, size: [6, 6],
+    placement: 'land', vision: 14, limit: 1,
+    econ: { credits: 150000, materials: { concrete: 400, steel: 300, nano: 100, orbital: 60 }, upkeep: 4000, jobs: { tier: 3, count: 20 }, power: 100 },
+    description: 'Space age wonder. A cable to orbit. Keep it staffed and powered for 5 years and your nation wins.',
   },
   pumping_station: {
     ...common, id: 'pumping_station', name: 'Pumping Station', category: 'utility', requires: [], buildTime: 20, hp: 800, size: [2, 2],
@@ -269,10 +288,10 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Roads', icon: '🛣', items: ['road'] },
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well', 'rare_earth_mine', 'uranium_mine'] },
-  { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant'] },
+  { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant', 'launch_site'] },
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
-  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'pumping_station', 'water_tower'] },
-  { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university'] },
+  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_tower'] },
+  { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
   { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret'] },
 ];
 
@@ -326,10 +345,18 @@ export const AGE_STEPS = [
   null,
   { name: 'Digital Age', research: 300, tier: 1, people: 300, gdp: 3000, credits: 8000, unlocks: 'Engineers and towers, electronics, rare earths and uranium, pharmaceuticals and hospitals, nuclear power, the data network, exo-troopers, rocket artillery and the Warden mech' },
   { name: 'Nano Age', research: 1500, tier: 2, people: 250, gdp: 10000, credits: 25000, unlocks: 'Scientists and spires, nanomaterials, robotics and automation, fusion power, the Disruptor, the Juggernaut and the Arclight' },
-  { name: 'Space Age', research: 4000, tier: 3, people: 300, gdp: 50000, credits: 80000, unlocks: 'arrives in a later update' },
+  { name: 'Space Age', research: 4000, tier: 3, people: 200, gdp: 20000, credits: 60000, unlocks: 'launch sites and orbital alloys, orbital solar relays, and the Space Elevator: run it for 5 years to win' },
 ] as const;
-/** Highest age that can be reached so far (Nano). */
-export const MAX_AGE = 2;
+/** Highest age that can be reached. */
+export const MAX_AGE = 3;
+
+/**
+ * Ways to win (DESIGN.md §11). Checked once a game year; the game goes on afterwards.
+ * Economic: a share of world GDP (every nation and city-state) held for some years.
+ * Federation: a share of all regions, at least half of them gained peacefully.
+ * Space: the Space Elevator kept running. Conquest: every rival nation defeated.
+ */
+export const VICTORY = { gdpShare: 0.5, gdpYears: 10, regionShare: 0.5, peacefulShare: 0.5, elevatorYears: 5 } as const;
 /** Road costs and upkeep (credits). */
 export const ROAD = {
   cost: 10,

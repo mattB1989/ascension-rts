@@ -15,6 +15,7 @@ import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock }
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
 import { updateMilitary } from './military.ts';
+import { updateVictory } from './victory.ts';
 import { botStep } from '../../ai/cityBot.ts';
 
 const SECOND = 15; // ticks
@@ -170,6 +171,7 @@ function everySecond(world: World): void {
       pc.history.push({ year: START_YEAR + sec / YEAR_SECONDS - 1, population: sumTiers(pc.population), credits: pc.credits, gdp: pc.lastGdp });
     }
   }
+  updateVictory(world, sec);
 }
 
 function sumLog(log: Stock[]): Stock {

@@ -489,3 +489,55 @@ test('Nano age: robots halve the staff a factory needs, and wear out slowly', as
   assert.ok((mill.city!.stock.robotics ?? 0) < 1, 'robots wear out while it works');
   assert.ok((pc.made.lumber ?? 0) > 0, 'at full output');
 });
+
+test('ways to win: the Space Elevator, a share of world GDP, and conquest', async () => {
+  const { addCityBuilding } = await import('../src/sim/city/place.ts');
+  const { VICTORY } = await import('../src/data/city.ts');
+  const { YEAR_SECONDS } = await import('../src/data/goods.ts');
+  // Space: an elevator kept running wins.
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const v = world.city!.victory;
+  assert.equal(v.winner, -1);
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 20; x <= hall.tx + 20; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  const [ex, ey] = spotOnStreet(world, 'space_elevator', hall.tx + 10, row);
+  addCityBuilding(world, 'space_elevator', 0, ex, ey, true);
+  run(world, 2);
+  assert.equal(v.elevator[0], 0, 'not running without staff and power');
+  // Scientists next door and a fusion plant: it runs.
+  const [fx, fy] = spotOnStreet(world, 'fusion_plant', hall.tx - 10, row);
+  addCityBuilding(world, 'fusion_plant', 0, fx, fy, true);
+  const [hx, hy] = spotOnStreet(world, 'house', hall.tx, row);
+  const house = addCityBuilding(world, 'house', 0, hx, hy, true);
+  for (let i = 0; i < (VICTORY.elevatorYears * YEAR_SECONDS + 5) * 15 && v.winner < 0; i++) {
+    house.city!.level = 5;
+    house.city!.residents = 96;
+    house.city!.downFor = 0;
+    world.step();
+  }
+  assert.equal(v.winner, 0);
+  assert.equal(v.how, 'space');
+  // Economic: most of the world's GDP for ten years.
+  const w2 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const v2 = w2.city!.victory;
+  for (let i = 0; i < (VICTORY.gdpYears + 1) * YEAR_SECONDS * 15 && v2.winner < 0; i++) {
+    w2.city!.players[0]!.gdp = 1e6;
+    w2.step();
+  }
+  assert.equal(v2.winner, 0);
+  assert.equal(v2.how, 'economic');
+  // Sandbox: nobody wins.
+  const w3 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, victory: false });
+  w3.city!.players[0]!.gdp = 1e9;
+  w3.players[1]!.defeated = true;
+  run(w3, YEAR_SECONDS + 1);
+  assert.equal(w3.city!.victory.winner, -1);
+  // Conquest: the only rival nation is gone.
+  const w4 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1 });
+  w4.players[1]!.defeated = true;
+  run(w4, YEAR_SECONDS + 1);
+  assert.equal(w4.city!.victory.how, 'conquest');
+});

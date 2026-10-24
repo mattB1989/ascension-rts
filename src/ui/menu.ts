@@ -88,13 +88,26 @@ export function showMenu(root: HTMLElement): void {
   }
   card.append(el('div', 'menu-label', 'Rival nations'), diff, riv);
 
+  let victory = true;
+  const vic = el('div', 'seg');
+  for (const [label, v, hint] of [['Ways to win', true, 'economy, federation, space, conquest'], ['Sandbox', false, 'endless, nobody wins']] as const) {
+    const b = el('button', `btn ${v === victory ? 'active' : ''}`, `${label} <small>${hint}</small>`);
+    b.addEventListener('click', () => {
+      victory = v;
+      for (const c of vic.children) c.classList.remove('active');
+      b.classList.add('active');
+    });
+    vic.appendChild(b);
+  }
+  card.append(el('div', 'menu-label', 'Game'), vic);
+
   const seedRow = el('div', 'menu-row');
   const seed = el('input', 'seed') as HTMLInputElement;
   seed.type = 'number';
   seed.value = String(1 + Math.floor(Math.random() * 99999));
   seed.title = 'Map seed: the same seed gives the same map';
   const start = el('button', 'btn primary', 'Found the nation →');
-  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}) }));
+  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}), ...(victory ? {} : { victory: 0 }) }));
   seedRow.append(el('span', 'menu-label', 'Seed'), seed, start);
   card.appendChild(seedRow);
 

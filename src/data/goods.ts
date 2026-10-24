@@ -5,7 +5,9 @@ export type GoodId =
   // Digital age
   | 'rare' | 'uranium' | 'electronics' | 'pharma'
   // Nano age
-  | 'nano' | 'robotics';
+  | 'nano' | 'robotics'
+  // Space age
+  | 'orbital';
 
 export interface GoodDef {
   id: GoodId;
@@ -37,6 +39,7 @@ export const GOODS: Record<GoodId, GoodDef> = {
   pharma: { id: 'pharma', name: 'Pharmaceuticals', icon: '💊', color: '#f08080', price: 45, description: 'Digital age. Crops and plastics. Hospitals use them; scientists buy them.' },
   nano: { id: 'nano', name: 'Nanomaterials', icon: '⚛', color: '#c8a0ff', price: 120, description: 'Nano age. Rare earths and electronics, with a lot of power. Robotics, fusion and Nano units need them.' },
   robotics: { id: 'robotics', name: 'Robotics', icon: '🤖', color: '#a0c0d0', price: 150, description: 'Nano age. Factories, mines and farms stocked with robots need half the staff.' },
+  orbital: { id: 'orbital', name: 'Orbital alloys', icon: '🛰', color: '#f0d060', price: 260, description: 'Space age. Brought down from the asteroids by launch sites. Orbital relays and the Space Elevator need them.' },
 };
 
 export const GOOD_IDS = Object.keys(GOODS) as GoodId[];

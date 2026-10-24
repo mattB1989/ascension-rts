@@ -6,6 +6,7 @@ import { buildingDef, type BuildingTypeId } from '../data/buildings.ts';
 import { AGES } from '../data/ages.ts';
 import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
 import { nextAge } from '../sim/city/ages.ts';
+import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { GOOD_IDS, GOODS, sumTiers, TIERS, type GoodId } from '../data/goods.ts';
@@ -108,7 +109,7 @@ export class CityHud {
     right.append(
       this.btn('🗺', 'Overlays: land, water, power, services, happiness, pollution', () => this.overlayBar.classList.toggle('hidden')),
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
-      this.btn('🔬', 'Ages and research', () => this.togglePanel('ages')),
+      this.btn('🔬', 'Ages, research and ways to win', () => this.togglePanel('ages')),
       this.btn('🤝', 'Diplomacy: city-states, deals, unions', () => this.togglePanel('diplomacy')),
       this.btn('🚢', 'Trade with the overseas market', () => this.togglePanel('trade')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
@@ -343,6 +344,12 @@ export class CityHud {
         this.showDefeat(this.world.players[e.by]?.name ?? 'the enemy');
         continue;
       }
+      if (e.kind === 'victory') {
+        const how = VICTORY_NAMES[e.how as VictoryKind] ?? 'Victory';
+        if (e.player === me) this.showEnd('Victory!', 'win', `${how}. Your nation leads the world. You can keep playing.`, 'Keep playing');
+        else this.showEnd('Defeat', 'lose', `${this.world.players[e.player]?.name ?? 'A rival'} has won: ${how.toLowerCase()}.`, 'Keep playing');
+        continue;
+      }
       if (e.kind === 'underAttack' && e.player === me) {
         this.onAlert(e.x, e.y);
         continue;
@@ -362,12 +369,16 @@ export class CityHud {
   onAlert: (x: number, y: number) => void = () => {};
 
   private showDefeat(by: string): void {
+    this.showEnd('Defeat', 'lose', `Your last seat of government has fallen to ${by}.`, 'Keep watching');
+  }
+
+  private showEnd(title: string, cls: string, text: string, stay: string): void {
     const o = el('div', 'gameover');
     const card = el('div', 'gameover-card');
-    card.append(el('h1', 'lose', 'Defeat'), el('p', 'muted', `Your last seat of government has fallen to ${by}.`));
+    card.append(el('h1', cls, title), el('p', 'muted', text));
     const again = el('button', 'btn primary', 'New game');
     again.addEventListener('click', () => this.onNew());
-    const look = el('button', 'btn', 'Keep watching');
+    const look = el('button', 'btn', stay);
     look.addEventListener('click', () => o.remove());
     const row = el('div', 'gameover-actions');
     row.append(again, look);
@@ -709,7 +720,17 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
       ${next ? `<h3>Next: ${esc(next.name)}</h3><table class="age-req">${rows}</table>
       <p class="muted">Unlocks ${esc(next.unlocks)}.</p>
       <button class="btn ${next.ready ? 'primary' : 'disabled'} wide" data-action="advance">${next.ready ? `⬆ Enter the ${esc(next.name)}` : 'Not ready yet'}</button>` : later}
-      <p class="muted">Research comes from Research Institutes staffed by technicians. GDP is the value of everything your nation made last year.</p>`;
+      <p class="muted">Research comes from Research Institutes staffed by technicians (and universities, by engineers). GDP is the value of everything your nation made last year.</p>
+      ${this.goalsHtml()}`;
+  }
+
+  private goalsHtml(): string {
+    const v = this.world.city!.victory;
+    if (!v.on) return `<h3>Ways to win</h3><p class="muted">Sandbox game: nobody wins, play as long as you like.</p>`;
+    const me = this.game.humanPlayer;
+    const rows = victoryProgress(this.world, me).map((g) => `<div class="goal"><div class="goal-head"><b>${esc(VICTORY_NAMES[g.kind])}</b>${bar(g.frac, 0, 1, g.frac >= 1 ? 'good' : '')}</div><div class="muted">${esc(g.text)}</div></div>`).join('');
+    const won = v.winner >= 0 ? `<p class="${v.winner === me ? 'pos' : 'neg'}">🏆 ${esc(this.world.players[v.winner]?.name ?? '')} won: ${esc(VICTORY_NAMES[v.how as VictoryKind] ?? '')}</p>` : '';
+    return `<h3>Ways to win</h3>${won}${rows}`;
   }
 
   private renderPanel(): void {

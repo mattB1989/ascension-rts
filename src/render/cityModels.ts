@@ -887,6 +887,81 @@ function fusionPlant(team: number): THREE.Group {
   return g;
 }
 
+// ---------------------------------------------------------------------------
+// Space age
+
+function launchSite(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(5, 5);
+  // Launch pad with a gantry and a rocket, a flame trench, a hangar and fuel tanks.
+  g.add(box(2.2, 0.25, 2.2, mat(0x6a6e72, { rough: 0.9 }), -0.8, 0.2, -0.8));
+  g.add(box(0.5, 0.1, 2.2, mat(0x2a2a2a), -0.8, 0.33, -0.8));
+  const rocket = new THREE.Group();
+  rocket.position.set(-0.8, 0.33, -0.8);
+  rocket.add(cyl(0.28, 0.3, 3.2, 14, white(), 0, 1.6, 0));
+  rocket.add(mesh(cached('noseCone', () => new THREE.ConeGeometry(0.28, 0.7, 14)), t.main, 0, 3.55, 0));
+  for (const [x, z] of [[0.38, 0], [-0.38, 0], [0, 0.38], [0, -0.38]] as const) rocket.add(cyl(0.12, 0.13, 1.4, 8, white(), x, 0.75, z));
+  rocket.add(box(0.05, 0.6, 0.3, t.accent, 0.3, 2.2, 0));
+  g.add(rocket);
+  for (const y of [0.8, 1.6, 2.4, 3.2]) g.add(box(0.5, 0.06, 0.5, mat(0xc0402a), 0.0, y, -0.8));
+  for (const [x, z] of [[-0.2, -1.0], [0.2, -1.0], [-0.2, -0.6], [0.2, -0.6]] as const) g.add(box(0.06, 3.6, 0.06, mat(0xc0402a), x, 1.9, z));
+  g.add(box(1.8, 1.2, 1.4, mat(0xc9c4ba), 1.1, 0.72, 1.3));
+  g.add(box(1.84, 0.08, 1.44, t.accent, 1.1, 1.36, 1.3));
+  for (const x of [-1.9, -1.3]) {
+    g.add(sphere(0.32, white(), x, 0.45, 1.6, 10));
+    g.add(cyl(0.05, 0.05, 0.4, 6, darkMetal(), x, 0.2, 1.6));
+  }
+  return g;
+}
+
+function orbitalRelay(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 4, paving());
+  // A big receiving dish on a turret, with a field of rectenna panels.
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
+    const p = box(0.7, 0.04, 0.4, mat(0x2a3a6a, { metal: 0.6, rough: 0.2 }), -1.25 + i * 0.75, 0.3, 1.0 + j * 0.5);
+    p.rotation.x = -0.4;
+    g.add(p);
+  }
+  g.add(cyl(0.5, 0.6, 0.6, 12, white(), 0, 0.42, -0.6));
+  const dish = new THREE.Group();
+  dish.name = 'spin';
+  dish.position.set(0, 1.3, -0.6);
+  const bowl = mesh(cached('relayDish', () => new THREE.SphereGeometry(1.1, 18, 8, 0, Math.PI * 2, 0, 0.75)), white(), 0, 0, 0);
+  bowl.rotation.x = Math.PI;
+  bowl.position.y = 0.6;
+  dish.add(bowl);
+  dish.add(cyl(0.04, 0.04, 1.0, 6, darkMetal(), 0, 0.3, 0));
+  dish.add(sphere(0.1, mat(0xfff080, { emissive: 0xffd040 }), 0, 0.85, 0, 8));
+  g.add(dish);
+  g.add(box(0.6, 0.08, 0.6, t.main, 0, 0.76, -0.6));
+  return g;
+}
+
+function spaceElevator(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(6, 6, paving());
+  // A ring-shaped anchor station; the tether rises out of sight with a climber on it.
+  g.add(cyl(2.4, 2.6, 0.5, 24, mat(0xc9ccd0, { metal: 0.3 }), 0, 0.35, 0));
+  g.add(mesh(cached('anchorRing', () => new THREE.TorusGeometry(2.0, 0.25, 10, 28)), t.main, 0, 0.7, 0).rotateX(Math.PI / 2));
+  g.add(cyl(0.9, 1.2, 1.4, 16, white(), 0, 1.1, 0));
+  g.add(cyl(0.6, 0.9, 0.8, 16, glass(), 0, 2.2, 0));
+  g.add(cyl(0.08, 0.08, 60, 6, mat(0xe8eef4, { metal: 0.6, rough: 0.2 }), 0, 32, 0));
+  const climber = new THREE.Group();
+  climber.position.set(0, 9, 0);
+  climber.add(box(0.7, 0.5, 0.7, white(), 0, 0, 0));
+  climber.add(box(0.74, 0.08, 0.74, t.accent, 0, 0.25, 0));
+  g.add(climber);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    g.add(box(0.5, 0.9, 0.5, mat(0xb0b4b8), Math.cos(a) * 2.5, 0.55, Math.sin(a) * 2.5));
+  }
+  const beacon = sphere(0.12, mat(0xf0d060, { emissive: 0xf0b020 }), 0, 2.7, 0, 8);
+  beacon.name = 'flare';
+  g.add(beacon);
+  return g;
+}
+
 export function buildCityModel(type: string, team: number, level = 0): THREE.Group | null {
   switch (type) {
     case 'town_hall': return townHall(team);
@@ -909,6 +984,9 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'nano_fab': return nanoFab(team);
     case 'robotics_plant': return roboticsPlant(team);
     case 'fusion_plant': return fusionPlant(team);
+    case 'launch_site': return launchSite(team);
+    case 'orbital_relay': return orbitalRelay(team);
+    case 'space_elevator': return spaceElevator(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
     case 'logging_camp': return loggingCamp(team);

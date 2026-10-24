@@ -57,7 +57,7 @@ async function boot(): Promise<void> {
     const d = params.get('difficulty');
     const difficulty = d === 'easy' || d === 'hard' ? d : 'normal';
     const rivals = params.has('rivals') ? Math.max(0, Math.min(3, Number(params.get('rivals')))) : undefined;
-    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals });
+    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0' });
     l.remove();
   } else if (mode === 'skirmish' || mode === 'sandbox') {
     world = createMatch({ seed: Number(params.get('seed')) || 1337, mode: mode === 'sandbox' ? 'sandbox' : 'standard' });

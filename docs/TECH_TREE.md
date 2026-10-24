@@ -67,7 +67,6 @@ flowchart LR
   subgraph Space
     spaceport[Spaceport]
     orbital_uplink[Orbital Uplink]
-    space_elevator[Space Elevator]
     point_defense_array[Point Defense Array]
   end
   command_center --> habitat_block
@@ -88,7 +87,6 @@ flowchart LR
   vehicle_factory --> repair_depot
   research_lab --> missile_silo
   radar_station --> orbital_uplink
-  spaceport --> space_elevator
   command_center --> wall
   wall --> gate
   barracks --> watchtower
@@ -128,7 +126,6 @@ flowchart LR
 | **Repair Depot** | Support | Digital | Vehicle Factory | 250 / 100 | 35 | 3×3 | — | Repairs vehicles and mechs nearby. |
 | **Missile Silo** | Special | Nano | Research Lab | 1500 / 1500 | 120 | 3×3 | — | Nuclear strike every 5 minutes. The enemy is warned 15 s before impact. Max 1. |
 | **Orbital Uplink** | Special | Space | Radar Station | 1000 / 1200 | 90 | 3×3 | — | Orbital laser strike and satellite scan powers. Max 1. |
-| **Space Elevator** | Wonder | Space | Spaceport | 5000 / 5000 | 300 | 6×6 | — | Build it and hold it for 5 minutes to win. Revealed to all players. Max 1. |
 <!-- /gen:buildings -->
 
 ---
@@ -354,6 +351,7 @@ seconds at normal speed.
 | Building | Category | Size | Price | Materials | Upkeep /yr | Staff | Makes | Notes |
 |---|---|---|---|---|---|---|---|---|
 | **Fusion Plant** | Utility | 5×5 | ₡15000 | 100 concrete + 60 steel + 10 nanomaterials | 800 | 6 scientists | power every 10s; 250 MW | Nano age. 250 MW from seawater fusion: no fuel, no smoke. Needs scientists. |
+| **Space Elevator** | Service | 6×6 | ₡150000 | 400 concrete + 300 steel + 100 nanomaterials + 60 orbital alloys | 4000 | 20 scientists | — | Space age wonder. A cable to orbit. Keep it staffed and powered for 5 years and your nation wins. needs 100 MW max 1 |
 | **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. Its militia and up to 8 garrisoned infantry defend it: lose it and its region falls. 2 trucks 2 crews max 1 |
 | **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
 | **Maintenance Depot** | Logistics | 3×2 | ₡700 | 10 lumber + 20 concrete | 90 | 6 workers | — | Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down. |
@@ -378,10 +376,12 @@ seconds at normal speed.
 | **Electronics Plant** | Industry | 4×3 | ₡3000 | 30 concrete + 20 steel | 220 | 12 technicians | 2 rare earths + 1 plastics → 2 electronics every 12s | Digital age. Electronics from rare earths and plastics. Needs technicians and power. needs 10 MW 1 truck |
 | **Nano Fab** | Industry | 4×4 | ₡9000 | 60 concrete + 40 steel + 20 electronics | 600 | 8 scientists | 1 rare earths + 1 electronics → 1 nanomaterials every 15s | Nano age. Nanomaterials from rare earths and electronics. Needs scientists and 30 MW. needs 30 MW 1 truck |
 | **Robotics Plant** | Industry | 4×3 | ₡7000 | 50 concrete + 40 steel + 10 electronics | 450 | 10 engineers | 2 steel + 1 electronics + 1 nanomaterials → 2 robotics every 15s | Nano age. Robots from steel, electronics and nanomaterials. Farms, mines and factories stocked with robots need half the staff. needs 15 MW 1 truck |
+| **Launch Site** | Industry | 5×5 | ₡25000 | 150 concrete + 100 steel + 20 nanomaterials | 1500 | 10 scientists | 6 fuel + 2 electronics + 1 nanomaterials → 3 orbital alloys every 30s | Space age. Sends mining craft to the asteroids; they bring back orbital alloys. Burns fuel, electronics and nanomaterials. Needs scientists. needs 40 MW 2 trucks |
 | **Pharmaceutical Plant** | Industry | 3×3 | ₡2600 | 30 concrete + 10 steel | 200 | 8 engineers | 2 crops + 1 plastics → 2 pharmaceuticals every 12s | Digital age. Medicines from crops and plastics, for hospitals. Needs engineers. needs 6 MW 1 truck |
 | **Oil Power Plant** | Utility | 4×3 | ₡1200 | 10 lumber + 20 concrete + 10 steel | 100 | 6 workers | 1 crude oil → power every 6s; 30 MW | Burns crude oil: 30 MW for every building connected to it by road. |
 | **Hydro Plant** | Utility | 3×3 | ₡2200 | 40 concrete + 10 steel | 120 | 4 workers | power every 10s; 20 MW | A dam on a river or lake: 20 MW with no fuel. Needs concrete and steel to build. |
 | **Nuclear Plant** | Utility | 4×4 | ₡6000 | 80 concrete + 40 steel | 400 | 8 engineers | 1 uranium → power every 30s; 100 MW | Digital age. 100 MW from a little uranium, with no smoke. Needs engineers. |
+| **Orbital Solar Relay** | Utility | 4×4 | ₡20000 | 60 concrete + 40 steel + 10 orbital alloys | 900 | 4 scientists | 1 orbital alloys → power every 60s; 400 MW | Space age. Beams down sunlight collected in orbit: 400 MW. Needs a little orbital alloy to maintain. |
 | **Pumping Station** | Utility | 2×2 | ₡500 | 10 concrete + 5 steel | 50 | 2 workers | water for 600 | Pumps river or lake water for 600 residents. Water Towers spread it to houses. |
 | **Water Tower** | Utility | 2×2 | ₡250 | 5 concrete + 2 steel | 20 | — | water: 400 residents within 24 road tiles | Gives running water to houses within 24 road tiles, fed by a Pumping Station on the same roads. |
 | **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food, consumer goods, and later electronics and pharmaceuticals, to households within 26 road tiles. Trucks keep it stocked. |
@@ -404,19 +404,20 @@ seconds at normal speed.
 | 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
 | 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction), University (construction) |
 | 🪨 **Stone** | ₡3 | Quarry | Cement Works |
-| 🧱 **Concrete** | ₡10 | Cement Works | Fusion Plant (construction), Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
+| 🧱 **Concrete** | ₡10 | Cement Works | Fusion Plant (construction), Space Elevator (construction), Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Launch Site (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Orbital Solar Relay (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
 | ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
-| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Robotics Plant, Fusion Plant (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
+| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Robotics Plant, Fusion Plant (construction), Space Elevator (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Launch Site (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Orbital Solar Relay (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
 | 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |
-| ⛽ **Fuel** | ₡14 | Oil Refinery | — |
+| ⛽ **Fuel** | ₡14 | Oil Refinery | Launch Site |
 | 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory, Electronics Plant, Pharmaceutical Plant |
 | 📦 **Consumer goods** | ₡30 | Goods Factory | households (markets) |
 | 🧲 **Rare earths** | ₡14 | Rare-Earth Mine | Electronics Plant, Nano Fab |
 | ☢ **Uranium** | ₡24 | Uranium Mine | Nuclear Plant |
-| 💾 **Electronics** | ₡55 | Electronics Plant | Nano Fab, Robotics Plant, households (markets), Nano Fab (construction), Robotics Plant (construction) |
+| 💾 **Electronics** | ₡55 | Electronics Plant | Nano Fab, Robotics Plant, Launch Site, households (markets), Nano Fab (construction), Robotics Plant (construction) |
 | 💊 **Pharmaceuticals** | ₡45 | Pharmaceutical Plant | Hospital, households (markets) |
-| ⚛ **Nanomaterials** | ₡120 | Nano Fab | Robotics Plant, Fusion Plant (construction) |
+| ⚛ **Nanomaterials** | ₡120 | Nano Fab | Robotics Plant, Launch Site, Fusion Plant (construction), Space Elevator (construction), Launch Site (construction) |
 | 🤖 **Robotics** | ₡150 | Robotics Plant | — |
+| 🛰 **Orbital alloys** | ₡260 | Launch Site | Orbital Solar Relay, Space Elevator (construction), Orbital Solar Relay (construction) |
 <!-- /gen:goods -->
 
 ### Houses

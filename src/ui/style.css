@@ -1344,3 +1344,6 @@ table.age-req td { padding: 4px 6px 4px 0; white-space: nowrap; }
 table.age-req td:nth-child(2) { width: 45%; }
 table.age-req .bar { width: 100%; }
 .btn.wide { width: 100%; margin: 6px 0; }
+.goal { margin: 6px 0; }
+.goal-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.goal-head .bar { flex: 0 0 45%; }

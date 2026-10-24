@@ -460,3 +460,32 @@ test('ages: research, technicians, GDP and credits unlock the Digital age and it
   run(world, 12);
   assert.ok(hospital.city!.served > 0, `hospital serves (${hospital.city!.status})`);
 });
+
+test('Nano age: robots halve the staff a factory needs, and wear out slowly', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { jobsOf, automated } = await import('../src/sim/city/state.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const pc = world.city!.players[0]!;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 20; x <= hall.tx + 20; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  const [sx, sy] = spotOnStreet(world, 'sawmill', hall.tx + 8, row);
+  const mill = addCityBuilding(world, 'sawmill', 0, sx, sy, true);
+  assert.equal(jobsOf(mill), 6);
+  stockUp(mill, { robotics: 1 });
+  assert.ok(automated(mill));
+  assert.equal(jobsOf(mill), 3);
+  pc.age = 2;
+  const { demandFor } = await import('../src/sim/city/logistics.ts');
+  assert.ok(demandFor(mill, 'robotics', world) > 0, 'Nano age: factories ask for robots');
+  const [hx, hy] = spotOnStreet(world, 'house', hall.tx - 8, row);
+  const house = addCityBuilding(world, 'house', 0, hx, hy, true);
+  house.city!.residents = 8;
+  stockUp(mill, { timber: 40 });
+  run(world, 60);
+  assert.equal(mill.city!.workers, 3, 'three workers run it');
+  assert.ok((mill.city!.stock.robotics ?? 0) < 1, 'robots wear out while it works');
+  assert.ok((pc.made.lumber ?? 0) > 0, 'at full output');
+});

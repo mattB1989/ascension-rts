@@ -12,7 +12,7 @@ import { GOOD_IDS, GOODS, sumTiers, TIERS, type GoodId } from '../data/goods.ts'
 import type { Game } from '../game.ts';
 import { houseCapacity, gameMonth, gameYear } from '../sim/city/economy.ts';
 import { stockTotal } from '../sim/city/logistics.ts';
-import { get } from '../sim/city/state.ts';
+import { automated, get, jobsOf } from '../sim/city/state.ts';
 import { buyPrice, sellPrice } from '../sim/city/trade.ts';
 import { dependence, DIPLO, marketOf, purchasePrice, stateOffers, stateValue, theyCharge, theyPay } from '../sim/city/diplomacy.ts';
 import { DEPOSIT_NAMES, TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
@@ -39,9 +39,9 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const SPEEDS = [1, 2, 4, 8];
 const NEED_LABEL: Record<string, string> = {
   food: '🍞 Food', water: '💧 Water', goods: '📦 Goods', power: '⚡ Power', police: '🚓 Police', health: '🏥 Health', school: '🎓 School',
-  electronics: '💾 Electronics', data: '📡 Data',
+  electronics: '💾 Electronics', data: '📡 Data', pharma: '💊 Pharma', university: '🏛 University',
 };
-const AGE_NAMES = ['Modern Age', 'Digital Age', 'Nano Age', 'Space Age'];
+const AGE_NAMES = ['Modern Age', 'Digital Age', 'Nano Age', 'Space Age'] as const;
 
 const TOOL_INFO: Record<string, { name: string; text: string }> = {
   road: { name: 'Road', text: `Drag to draw a road (₡${ROAD.cost} a tile, ₡${ROAD.bridgeCost} over shallow water). Every building needs one.` },
@@ -557,7 +557,7 @@ export class CityHud {
       const mats = Object.entries(e.materials) as Array<[GoodId, number]>;
       if (mats.length) rows.push(`<div class="stock">${mats.map(([g, n]) => chip(g, `${Math.floor(get(c.delivered, g))}/${n}`)).join('')}</div>`);
     } else {
-      if (e.jobs) rows.push(`<div>👷 ${c.workers}/${e.jobs.count} ${TIERS[e.jobs.tier]!.name.toLowerCase()}${e.recipe ? ` · ${Math.round(c.efficiency * 100)}% output` : ''}${e.extract ? ` · land ${Math.round(c.yield * 100)}%` : ''}</div>`);
+      if (e.jobs) rows.push(`<div>👷 ${c.workers}/${jobsOf(b)} ${TIERS[e.jobs.tier]!.name.toLowerCase()}${automated(b) ? ' · 🤖 automated' : ''}${e.recipe ? ` · ${Math.round(c.efficiency * 100)}% output` : ''}${e.extract ? ` · land ${Math.round(c.yield * 100)}%` : ''}</div>`);
       if (e.recipe) rows.push(`<div class="recipe">${recipeText(b.type)}</div>`);
       if ((e.power ?? 0) < 0) rows.push(`<div>⚡ ${Math.round(c.powerOut)} of ${-e.power!} MW</div>`);
       else if ((e.power ?? 0) > 0) rows.push(`<div>⚡ needs ${e.power} MW: ${c.powered ? 'powered' : '<span class="neg">no power</span>'}</div>`);

@@ -1,7 +1,8 @@
 // State of the economy game, kept on the World (world.city). Plain data only:
 // typed arrays, arrays and records, so a save is a structured clone.
 
-import type { HouseNeed } from '../../data/city.ts';
+import { AUTOMATION, type HouseNeed } from '../../data/city.ts';
+import type { Building } from '../types.ts';
 import { GOOD_IDS, perTier, type GoodId, type PerTier } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 import type { BotState } from '../../ai/cityBot.ts';
@@ -241,13 +242,13 @@ export function newCityBuilding(): CityBuildingState {
     level: 0,
     residents: 0,
     growth: 0,
-    needs: { food: false, water: false, goods: false, power: false, police: false, health: false, school: false, electronics: false, data: false },
+    needs: { food: false, water: false, goods: false, power: false, police: false, health: false, school: false, electronics: false, data: false, pharma: false, university: false },
     upFor: 0,
     downFor: 0,
     happiness: 0.6,
     served: 0,
     market: 0,
-    covered: { market: false, water: false, police: false, health: false, school: false, data: false },
+    covered: { market: false, water: false, police: false, health: false, school: false, data: false, university: false },
     pollution: 0,
     capture: 0,
     captureBy: -1,
@@ -283,3 +284,21 @@ export function add(s: Stock, g: GoodId, n: number): void {
 export function get(s: Stock, g: GoodId): number {
   return s[g] ?? 0;
 }
+
+/** Farms, mines and factories can run on robots (Nano age). */
+export function automatable(b: Building): boolean {
+  const e = b.def.econ;
+  return !!e?.jobs && !!e.recipe && (b.def.category === 'industry' || b.def.category === 'resource') && b.type !== 'robotics_plant';
+}
+
+/** Is this building running on robots now? */
+export function automated(b: Building): boolean {
+  return automatable(b) && get(b.city!.stock, 'robotics') >= 0.05;
+}
+
+/** Staff a building needs for full output (half when automated). */
+export function jobsOf(b: Building): number {
+  const n = b.def.econ?.jobs?.count ?? 0;
+  return automated(b) ? Math.ceil(n * AUTOMATION.share) : n;
+}
+

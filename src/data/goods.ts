@@ -3,7 +3,9 @@
 export type GoodId =
   | 'crops' | 'food' | 'timber' | 'lumber' | 'stone' | 'concrete' | 'ore' | 'steel' | 'oil' | 'fuel' | 'plastics' | 'goods'
   // Digital age
-  | 'rare' | 'uranium' | 'electronics' | 'pharma';
+  | 'rare' | 'uranium' | 'electronics' | 'pharma'
+  // Nano age
+  | 'nano' | 'robotics';
 
 export interface GoodDef {
   id: GoodId;
@@ -32,7 +34,9 @@ export const GOODS: Record<GoodId, GoodDef> = {
   rare: { id: 'rare', name: 'Rare earths', icon: '🧲', color: '#7fd0a0', price: 14, description: 'Digital age. Mined from rare-earth deposits; electronics are made from them.' },
   uranium: { id: 'uranium', name: 'Uranium', icon: '☢', color: '#b8e04a', price: 24, description: 'Digital age. Mined from uranium deposits; fuels nuclear power plants.' },
   electronics: { id: 'electronics', name: 'Electronics', icon: '💾', color: '#58a8ff', price: 55, description: 'Digital age. Rare earths and plastics. Engineers buy them; Digital units are built with them.' },
-  pharma: { id: 'pharma', name: 'Pharmaceuticals', icon: '💊', color: '#f08080', price: 45, description: 'Digital age. Crops and plastics. Hospitals use them.' },
+  pharma: { id: 'pharma', name: 'Pharmaceuticals', icon: '💊', color: '#f08080', price: 45, description: 'Digital age. Crops and plastics. Hospitals use them; scientists buy them.' },
+  nano: { id: 'nano', name: 'Nanomaterials', icon: '⚛', color: '#c8a0ff', price: 120, description: 'Nano age. Rare earths and electronics, with a lot of power. Robotics, fusion and Nano units need them.' },
+  robotics: { id: 'robotics', name: 'Robotics', icon: '🤖', color: '#a0c0d0', price: 150, description: 'Nano age. Factories, mines and farms stocked with robots need half the staff.' },
 };
 
 export const GOOD_IDS = Object.keys(GOODS) as GoodId[];

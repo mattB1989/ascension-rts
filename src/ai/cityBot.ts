@@ -357,25 +357,32 @@ export function botStep(world: World, bot: BotState): Command[] {
     [pc.age >= 1 && !has('hospital') && has('pharma_plant') > 0, 'hospital'],
     [pc.age >= 1 && !has('uranium_mine') && pc.population[2] >= 30, 'uranium_mine'],
     [pc.age >= 1 && pc.powerDemand > pc.powerSupply - 20 && !has('nuclear_plant') && pc.population[2] >= 30 && (has('uranium_mine') > 0 || bot.noLand.includes('uranium_mine')), 'nuclear_plant'],
+    // Towards the Nano age.
+    [pc.age >= 1 && pc.age < MAX_AGE && has('research_institute') < 2 && pc.population[1] >= 300 && bot.maxPop === Infinity, 'research_institute'],
+    [pc.age >= 1 && !has('university') && pc.population[2] >= 40, 'university'],
+    [pc.age >= 2 && !has('nano_fab') && pc.population[3] >= 10, 'nano_fab'],
+    [pc.age >= 2 && !has('robotics_plant') && has('nano_fab') > 0, 'robotics_plant'],
+    [pc.age >= 2 && pc.powerDemand > pc.powerSupply - 30 && !has('fusion_plant') && pc.population[3] >= 20, 'fusion_plant'],
     [bot.nation && pc.age >= 1 && !has('mech_foundry') && pop >= 600 && has('vehicle_factory') > 0, 'mech_foundry'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];
-  const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school', 'data_exchange', 'hospital']);
+  const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school', 'data_exchange', 'hospital', 'university']);
   const centre = houseCentre(world, p);
 
   // Coverage: wherever houses lack a service the town already has, add one among them.
   if (!busy) {
-    const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school' | 'data', boolean]> = [
+    const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school' | 'data' | 'university', boolean]> = [
       ['market', 'market', has('market') > 0],
       ['water_tower', 'water', has('water_tower') > 0 && has('pumping_station') > 0],
       ['police_station', 'police', has('police_station') > 0],
       ['clinic', 'health', has('clinic') > 0],
       ['school', 'school', has('school') > 0],
       ['data_exchange', 'data', has('data_exchange') > 0],
+      ['university', 'university', has('university') > 0],
     ];
     for (const [type, kind, active] of kinds) {
       if (!active) continue;
-      const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : kind === 'data' ? 3 : 1) && !h.city!.covered[kind]);
+      const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : kind === 'data' ? 3 : kind === 'university' ? 4 : 1) && !h.city!.covered[kind]);
       if (lacking.length < 4) continue;
       // Skip if one is already under construction, or the ones there are idle (no staff, no power).
       if (world.buildings.some((b) => b.owner === p && b.type === type && (!b.complete || (b.city!.status !== '' && b.city!.served === 0)))) continue;
@@ -476,8 +483,8 @@ function militaryStep(world: World, bot: BotState): Command[] {
       const digital = pc.age >= 1;
       const types: UnitTypeId[] =
         b.type === 'barracks' ? (digital ? ['exo_trooper', 'rocket_trooper', 'rifleman'] : ['rifleman', 'rocket_trooper', 'rifleman'])
-        : b.type === 'vehicle_factory' ? (digital ? ['battle_tank', 'rocket_artillery', 'flak_track', 'scout_buggy'] : ['battle_tank', 'scout_buggy', 'flak_track'])
-        : b.type === 'mech_foundry' ? ['warden'] : [];
+        : b.type === 'vehicle_factory' ? (pc.age >= 2 ? ['disruptor', 'battle_tank', 'rocket_artillery'] : digital ? ['battle_tank', 'rocket_artillery', 'flak_track', 'scout_buggy'] : ['battle_tank', 'scout_buggy', 'flak_track'])
+        : b.type === 'mech_foundry' ? (pc.age >= 2 ? ['juggernaut', 'arclight', 'warden'] : ['warden']) : [];
       for (const t of types) {
         if (recruitProblem(world, p, b, t) === null) {
           out.push({ kind: 'recruit', player: p, building: b.id, unit: t });

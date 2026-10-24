@@ -3,7 +3,7 @@
 //   households (consumption, needs, levels, growth) -> taxes and upkeep.
 // Construction advances every tick. See docs/DESIGN.md §3-6.
 
-import { CONSUMPTION, HOUSE_LEVELS, houseLevelAge, ROAD, TAX_PER_RESIDENT, type HouseNeed } from '../../data/city.ts';
+import { AUTOMATION, CONSUMPTION, HOUSE_LEVELS, houseLevelAge, ROAD, TAX_PER_RESIDENT, type HouseNeed } from '../../data/city.ts';
 import { GOODS, perTier, START_YEAR, sumTiers, TIERS, YEAR_SECONDS, type GoodId, type Tier } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 import { DT } from '../time.ts';
@@ -11,7 +11,7 @@ import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { accessIndex, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
-import { add, emptyBudget, get, type PlayerCity, type Stock } from './state.ts';
+import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock } from './state.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
 import { updateMilitary } from './military.ts';
@@ -216,15 +216,16 @@ function labour(world: World): void {
   for (const b of employers) {
     const c = b.city!;
     const job = b.def.econ!.jobs!;
+    const count = jobsOf(b);
     const pc = city.players[b.owner]!;
-    pc.jobs[job.tier] += job.count;
+    pc.jobs[job.tier] += count;
     c.workers = 0;
     if (!c.comp) continue;
     // Higher tiers can do lower tiers' jobs, not the other way round.
-    for (let t = job.tier; t < TIERS.length && c.workers < job.count; t++) {
+    for (let t = job.tier; t < TIERS.length && c.workers < count; t++) {
       const k = key(b.owner, c.comp, t);
       const free = pool.get(k) ?? 0;
-      const take = Math.min(free, job.count - c.workers);
+      const take = Math.min(free, count - c.workers);
       if (take > 0) {
         pool.set(k, free - take);
         c.workers += take;
@@ -380,7 +381,7 @@ function production(world: World): void {
     const pc = city.players[b.owner]!;
     c.efficiency = 0;
     c.powerOut = 0;
-    const staff = e.jobs ? c.workers / e.jobs.count : 1;
+    const staff = e.jobs ? Math.min(1, c.workers / jobsOf(b)) : 1;
     if (c.access < 0) {
       c.status = 'No road';
       continue;
@@ -413,7 +414,13 @@ function production(world: World): void {
     }
     const rate = staff * (e.extract ? c.yield : 1);
     c.efficiency = rate;
-    c.status = staff < 1 ? `Short of staff (${c.workers}/${e.jobs!.count})` : e.extract && c.yield < 0.5 ? 'Poor land' : '';
+    c.status = staff < 1 ? `Short of staff (${c.workers}/${jobsOf(b)})` : e.extract && c.yield < 0.5 ? 'Poor land' : '';
+    // Robots wear out slowly.
+    if (automated(b)) {
+      const wear = AUTOMATION.perYear / YEAR_SECONDS;
+      add(c.stock, 'robotics', -Math.min(wear, get(c.stock, 'robotics')));
+      logUsed(pc, 'robotics', wear);
+    }
     if ((e.power ?? 0) < 0) c.powerOut = -e.power! * staff;
     c.cycle += rate / e.recipe.seconds;
     if (c.cycle >= 1) {
@@ -478,7 +485,7 @@ function households(world: World): void {
     const market = c.market ? world.getBuilding(c.market) : undefined;
     const cur = HOUSE_LEVELS[c.level]!;
     const next = houseLevelAge(c.level + 1) <= pc.age ? HOUSE_LEVELS[c.level + 1] : undefined;
-    for (const g of ['food', 'goods', 'electronics'] as const) {
+    for (const g of ['food', 'goods', 'electronics', 'pharma'] as const) {
       // Food always; goods from houses up; electronics once the next level (or this one) asks for it.
       const wants = g === 'food' || (g === 'goods' && c.level >= 1) || (cur.needs as readonly string[]).includes(g) || ((next?.needs ?? []) as readonly string[]).includes(g);
       const need = (c.residents * CONSUMPTION[g]) / YEAR_SECONDS;
@@ -499,6 +506,7 @@ function households(world: World): void {
     c.needs.health = c.covered.health;
     c.needs.school = c.covered.school;
     c.needs.data = c.covered.data;
+    c.needs.university = c.covered.university;
 
     const curOk = cur.needs.every((n) => c.needs[n]);
     const nextOk = next ? next.needs.every((n) => c.needs[n]) : false;
@@ -558,7 +566,7 @@ function budget(world: World): void {
     } else if (b.complete) {
       // Idle buildings cost less to keep: 40% when unstaffed, full price when fully staffed.
       const jobs = b.def.econ?.jobs;
-      const staffed = jobs ? Math.min(1, c.workers / jobs.count) : 1;
+      const staffed = jobs ? Math.min(1, c.workers / jobsOf(b)) : 1;
       const up = ((b.def.econ?.upkeep ?? 0) * (0.4 + 0.6 * staffed)) / YEAR_SECONDS;
       pc.credits -= up;
       pc.year.upkeep += up;

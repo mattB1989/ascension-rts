@@ -98,7 +98,7 @@ export interface BuildingDef {
   description: string;
 }
 
-export type ServiceKind = 'market' | 'water' | 'police' | 'health' | 'school' | 'data';
+export type ServiceKind = 'market' | 'water' | 'police' | 'health' | 'school' | 'data' | 'university';
 
 /** How a building takes part in the economy game (DESIGN.md §3-6). */
 export interface EconDef {

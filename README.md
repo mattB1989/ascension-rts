@@ -50,6 +50,10 @@ original **Twin Shores** skirmish.
   electronics and pharmaceutical plants, hospitals, data exchanges, nuclear power, and
   exo-troopers, rocket artillery and the Warden mech (Mech Foundry). Rival nations research and
   advance too.
+- **The Nano age (E8)**: Scientists and spires (they want pharmaceuticals and a university),
+  universities (research and higher education), nano fabs, robotics plants, fusion power, and
+  the Disruptor, Juggernaut and Arclight. Robots in stock halve the staff a farm, mine or
+  factory needs.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.
@@ -61,7 +65,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: the Nano age, rail and treaties. See [docs/PLAN.md](docs/PLAN.md).
+Next: the Space age and ways to win, rail and treaties. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

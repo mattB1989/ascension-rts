@@ -6,6 +6,7 @@ import type { BuildingDef, EconDef, UnitEcon } from './types.ts';
 const NONE = { ore: 0, energy: 0 } as const;
 const common = { age: 'modern', cost: NONE, pop: 0, builtBy: 'engineer', mode: 'city' } as const;
 const digital = { ...common, age: 'digital' } as const;
+const nano = { ...common, age: 'nano' } as const;
 
 export const CITY_BUILDINGS = {
   // --- Core and logistics ---------------------------------------------------
@@ -49,8 +50,8 @@ export const CITY_BUILDINGS = {
   house: {
     ...common, id: 'house', name: 'House', category: 'housing', requires: [], buildTime: 12, hp: 500, size: [2, 2],
     placement: 'land', vision: 3,
-    econ: { credits: 60, materials: {}, upkeep: 0, housing: [8, 16, 24, 40, 64] },
-    description: 'Settlers build it themselves once it has a road. Grows from cottage to apartment (and to a tower in the Digital age) as its needs are met.',
+    econ: { credits: 60, materials: {}, upkeep: 0, housing: [8, 16, 24, 40, 64, 96] },
+    description: 'Settlers build it themselves once it has a road. Grows from cottage to apartment (to a tower in the Digital age, a spire in the Nano age) as its needs are met.',
   },
   // --- Raw producers ----------------------------------------------------------
   farm: {
@@ -144,6 +145,18 @@ export const CITY_BUILDINGS = {
     econ: { credits: 3000, materials: { concrete: 30, steel: 20 }, upkeep: 220, jobs: { tier: 1, count: 12 }, recipe: { in: { rare: 2, plastics: 1 }, out: { electronics: 2 }, seconds: 12 }, power: 10, trucks: 1, pollution: 0.3 },
     description: 'Digital age. Electronics from rare earths and plastics. Needs technicians and power.',
   },
+  nano_fab: {
+    ...nano, id: 'nano_fab', name: 'Nano Fab', category: 'industry', requires: [], buildTime: 50, hp: 2000, size: [4, 4],
+    placement: 'land', vision: 5,
+    econ: { credits: 9000, materials: { concrete: 60, steel: 40, electronics: 20 }, upkeep: 600, jobs: { tier: 3, count: 8 }, recipe: { in: { rare: 1, electronics: 1 }, out: { nano: 1 }, seconds: 15 }, power: 30, trucks: 1 },
+    description: 'Nano age. Nanomaterials from rare earths and electronics. Needs scientists and 30 MW.',
+  },
+  robotics_plant: {
+    ...nano, id: 'robotics_plant', name: 'Robotics Plant', category: 'industry', requires: [], buildTime: 45, hp: 1800, size: [4, 3],
+    placement: 'land', vision: 5,
+    econ: { credits: 7000, materials: { concrete: 50, steel: 40, electronics: 10 }, upkeep: 450, jobs: { tier: 2, count: 10 }, recipe: { in: { steel: 2, electronics: 1, nano: 1 }, out: { robotics: 2 }, seconds: 15 }, power: 15, trucks: 1, pollution: 0.2 },
+    description: 'Nano age. Robots from steel, electronics and nanomaterials. Farms, mines and factories stocked with robots need half the staff.',
+  },
   pharma_plant: {
     ...digital, id: 'pharma_plant', name: 'Pharmaceutical Plant', category: 'industry', requires: [], buildTime: 40, hp: 1400, size: [3, 3],
     placement: 'land', vision: 4,
@@ -169,6 +182,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 6000, materials: { concrete: 80, steel: 40 }, upkeep: 400, jobs: { tier: 2, count: 8 }, recipe: { in: { uranium: 1 }, out: {}, seconds: 30 }, power: -100 },
     description: 'Digital age. 100 MW from a little uranium, with no smoke. Needs engineers.',
   },
+  fusion_plant: {
+    ...nano, id: 'fusion_plant', name: 'Fusion Plant', category: 'utility', requires: [], buildTime: 70, hp: 4000, size: [5, 5],
+    placement: 'land', vision: 7,
+    econ: { credits: 15000, materials: { concrete: 100, steel: 60, nano: 10 }, upkeep: 800, jobs: { tier: 3, count: 6 }, recipe: { in: {}, out: {}, seconds: 10 }, power: -250 },
+    description: 'Nano age. 250 MW from seawater fusion: no fuel, no smoke. Needs scientists.',
+  },
   pumping_station: {
     ...common, id: 'pumping_station', name: 'Pumping Station', category: 'utility', requires: [], buildTime: 20, hp: 800, size: [2, 2],
     placement: 'freshWater', vision: 4,
@@ -186,7 +205,7 @@ export const CITY_BUILDINGS = {
     ...common, id: 'market', name: 'Market', category: 'service', requires: [], buildTime: 20, hp: 900, size: [3, 3],
     placement: 'land', vision: 4,
     econ: { credits: 400, materials: { lumber: 15 }, upkeep: 40, jobs: { tier: 0, count: 4 }, service: { kind: 'market', radius: 26, capacity: 500 } },
-    description: 'Sells food, consumer goods and (Digital age) electronics to households within 26 road tiles. Trucks keep it stocked.',
+    description: 'Sells food, consumer goods, and later electronics and pharmaceuticals, to households within 26 road tiles. Trucks keep it stocked.',
   },
   police_station: {
     ...common, id: 'police_station', name: 'Police Station', category: 'service', requires: [], buildTime: 20, hp: 900, size: [2, 2],
@@ -218,6 +237,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 3500, materials: { concrete: 40, steel: 20 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 6, research: 1 },
     description: 'Research towards the next age (see 🔬 Ages). Needs technicians and power.',
   },
+  university: {
+    ...digital, id: 'university', name: 'University', category: 'service', requires: [], buildTime: 50, hp: 1800, size: [4, 4],
+    placement: 'land', vision: 5,
+    econ: { credits: 6000, materials: { concrete: 50, steel: 20, lumber: 20 }, upkeep: 500, jobs: { tier: 2, count: 8 }, power: 6, research: 2, service: { kind: 'university', radius: 36, capacity: 1200 } },
+    description: 'Digital age. Twice the research of an institute, and higher education for 1,200 residents within 36 road tiles (Nano-age spires need it). Needs engineers.',
+  },
   data_exchange: {
     ...digital, id: 'data_exchange', name: 'Data Exchange', category: 'service', requires: [], buildTime: 25, hp: 900, size: [2, 2],
     placement: 'land', vision: 5,
@@ -233,6 +258,7 @@ export const HOUSE_LEVELS = [
   { name: 'Terrace', tier: 1, needs: ['food', 'water', 'power', 'police'] },
   { name: 'Apartment', tier: 1, needs: ['food', 'water', 'goods', 'power', 'police', 'health', 'school'] },
   { name: 'Tower', tier: 2, age: 1, needs: ['food', 'water', 'goods', 'power', 'police', 'health', 'school', 'electronics', 'data'] },
+  { name: 'Spire', tier: 3, age: 2, needs: ['food', 'water', 'goods', 'power', 'police', 'health', 'school', 'electronics', 'data', 'pharma', 'university'] },
 ] as const;
 /** Age index a house level needs (towers: Digital). */
 export const houseLevelAge = (level: number): number => (HOUSE_LEVELS[level] as { age?: number } | undefined)?.age ?? 0;
@@ -243,18 +269,18 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Roads', icon: '🛣', items: ['road'] },
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well', 'rare_earth_mine', 'uranium_mine'] },
-  { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant'] },
+  { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant'] },
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
-  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'pumping_station', 'water_tower'] },
-  { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange'] },
+  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'pumping_station', 'water_tower'] },
+  { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university'] },
   { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret'] },
 ];
 
 /** Economy-game costs for the skirmish's military buildings (DESIGN.md §9: war is paid for by the economy). */
 export const MILITARY_ECON: Record<string, EconDef> = {
   barracks: { credits: 1200, materials: { lumber: 20, concrete: 20 }, upkeep: 120, jobs: { tier: 0, count: 4 }, supplies: { steel: 8, fuel: 4, electronics: 4 } },
-  vehicle_factory: { credits: 2500, materials: { concrete: 30, steel: 20 }, upkeep: 200, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 30, fuel: 12, electronics: 8 } },
-  mech_foundry: { credits: 4000, materials: { concrete: 40, steel: 40 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 12, supplies: { steel: 40, electronics: 12 } },
+  vehicle_factory: { credits: 2500, materials: { concrete: 30, steel: 20 }, upkeep: 200, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 30, fuel: 12, electronics: 8, nano: 4 } },
+  mech_foundry: { credits: 4000, materials: { concrete: 40, steel: 40 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 12, supplies: { steel: 60, electronics: 16, nano: 10 } },
   watchtower: { credits: 300, materials: { lumber: 10, concrete: 5 }, upkeep: 20 },
   bunker: { credits: 500, materials: { concrete: 30 }, upkeep: 30 },
   gun_turret: { credits: 600, materials: { concrete: 10, steel: 10 }, upkeep: 40 },
@@ -273,6 +299,10 @@ export const UNIT_ECON: Record<string, UnitEcon> = {
   exo_trooper: { credits: 320, goods: { steel: 2, electronics: 1 }, upkeep: 30 },
   rocket_artillery: { credits: 1200, goods: { steel: 12, fuel: 4, electronics: 3 }, upkeep: 90 },
   warden: { credits: 2000, goods: { steel: 20, electronics: 6 }, upkeep: 140 },
+  // Nano age
+  disruptor: { credits: 1400, goods: { steel: 8, electronics: 4, nano: 2 }, upkeep: 100 },
+  juggernaut: { credits: 4500, goods: { steel: 40, electronics: 10, nano: 8 }, upkeep: 300 },
+  arclight: { credits: 4000, goods: { steel: 30, electronics: 12, nano: 6 }, upkeep: 260 },
 };
 
 /** Army size: this many units, plus one per this many residents. */
@@ -282,7 +312,9 @@ export const ARMY = { base: 6, perResidents: 20 } as const;
 export const CAPTURE = { seconds: 30, attackerRange: 4, defenderRange: 8 } as const;
 
 /** Consumption per resident per game year. */
-export const CONSUMPTION = { food: 0.4, goods: 0.2, electronics: 0.12 } as const;
+export const CONSUMPTION = { food: 0.4, goods: 0.2, electronics: 0.12, pharma: 0.1 } as const;
+/** Nano age: robots in stock halve the staff of farms, mines and factories; each uses this many robots a year. */
+export const AUTOMATION = { share: 0.5, perYear: 0.5 } as const;
 /** Taxes per resident per game year, by tier, at the default rate. */
 export const TAX_PER_RESIDENT = [10, 22, 40, 70] as const;
 
@@ -293,11 +325,11 @@ export const TAX_PER_RESIDENT = [10, 22, 40, 70] as const;
 export const AGE_STEPS = [
   null,
   { name: 'Digital Age', research: 300, tier: 1, people: 300, gdp: 3000, credits: 8000, unlocks: 'Engineers and towers, electronics, rare earths and uranium, pharmaceuticals and hospitals, nuclear power, the data network, exo-troopers, rocket artillery and the Warden mech' },
-  { name: 'Nano Age', research: 1500, tier: 2, people: 400, gdp: 15000, credits: 30000, unlocks: 'arrives in a later update' },
+  { name: 'Nano Age', research: 1500, tier: 2, people: 250, gdp: 10000, credits: 25000, unlocks: 'Scientists and spires, nanomaterials, robotics and automation, fusion power, the Disruptor, the Juggernaut and the Arclight' },
   { name: 'Space Age', research: 4000, tier: 3, people: 300, gdp: 50000, credits: 80000, unlocks: 'arrives in a later update' },
 ] as const;
-/** Highest age that can be reached so far (Digital). */
-export const MAX_AGE = 1;
+/** Highest age that can be reached so far (Nano). */
+export const MAX_AGE = 2;
 /** Road costs and upkeep (credits). */
 export const ROAD = {
   cost: 10,

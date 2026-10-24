@@ -60,7 +60,6 @@ flowchart LR
   end
   subgraph Nano
     arcology[Arcology]
-    fusion_plant[Fusion Plant]
     missile_silo[Missile Silo]
     laser_tower[Laser Tower]
     shield_generator[Shield Generator]
@@ -76,7 +75,6 @@ flowchart LR
   command_center --> ore_refinery
   command_center --> oil_derrick
   shipyard --> offshore_rig
-  research_lab --> fusion_plant
   command_center --> barracks
   barracks --> vehicle_factory
   barracks --> shipyard
@@ -119,7 +117,6 @@ flowchart LR
 | **Ore Refinery** | Resource | Modern | Command Center | 150 / 0 | 30 | 3×3 | — | Ore drop-off. Build it next to ore fields to shorten trips. Mining research. |
 | **Oil Derrick** | Resource | Modern | Command Center | 100 / 0 | 25 | 2×2 | — | Built on land oil. Produces Energy on its own. Produces 1.5 energy/s. |
 | **Offshore Rig** | Resource | Modern | Shipyard | 200 / 0 | 40 | 3×3 | — | Built on sea oil by a Sea Engineer. Pumps 2.5 oil/s into its tank; 1/s flows ashore by pipeline, Sea Engineers haul the rest to a Shipyard. Produces 2.5 energy/s. |
-| **Fusion Plant** | Resource | Nano | Research Lab | 600 / 0 | 60 | 3×3 | — | Produces Energy anywhere. Explodes when destroyed. Produces 4 energy/s. |
 | **Barracks** | Military | Modern | Command Center | 200 / 0 | 35 | 3×3 | — | Trains infantry. |
 | **Vehicle Factory** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds land vehicles. |
 | **Shipyard** | Military | Modern | Barracks | 300 / 100 | 45 | 4×4 | — | Builds ships and submarines. Must touch the water. Sea Engineers unload oil here. |
@@ -212,7 +209,7 @@ Armor classes: **Inf** infantry, **Lt** light vehicle, **Hv** heavy vehicle, **M
 | **Aircraft Carrier** (max 2) | Shipyard | Ship | 1200 / 700 | 8 | 3000 | 2 | — | projects air power to any coast (carries 6 Fighter Jets) | submarines; nearly defenceless alone |
 | **Aegis Cruiser** | Shipyard | Ship | 650 / 400 | 5 | 1600 | 2.5 | — | aircraft, missiles | submarines |
 | **Stealth Bomber** | Airfield | Air | 600 / 400 | 4 | 500 | 6 | — | structures, heavy vehicles | fighters once detected |
-| **Warden** | Mech Foundry | Mech | 900 / 500 | 6 | 2200 | 1.9 | — | infantry, light vehicles | massed Rocket Troopers, Laser Tower |
+| **Warden** | Mech Foundry | Mech | 900 / 500 | 6 | 2200 | 1.9 | Twin autocannons: 38 AP / 1s, range 7<br>Anti-personnel guns: 14 bullet / 0.5s, range 6 | infantry, light vehicles | massed Rocket Troopers, Laser Tower |
 <!-- /gen:units_digital -->
 
 ### Nano age
@@ -220,9 +217,9 @@ Armor classes: **Inf** infantry, **Lt** light vehicle, **Hv** heavy vehicle, **M
 <!-- gen:units_nano -->
 | Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
 |---|---|---|---|---|---|---|---|---|---|
-| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 400 | 2.6 | — | mechs and vehicles (EMP stun), shields | infantry |
-| **Juggernaut** | Mech Foundry | Mech | 1800 / 1200 | 10 | 5000 | 1.5 | — | structures, heavy vehicles; smashes walls | Disruptor, Arclight, Laser Tower |
-| **Arclight** | Mech Foundry | Mech | 1500 / 1300 | 8 | 3500 | 1.8 | — | mechs, heavy vehicles (eye laser) | infantry swarms, aircraft |
+| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 400 | 2.6 | Pulse cannon: 38 laser / 1.2s, range 6.5 | mechs and vehicles (EMP stun), shields | infantry |
+| **Juggernaut** | Mech Foundry | Mech | 1800 / 1200 | 10 | 5000 | 1.5 | Arm cannons: 120 AP / 2.2s, range 8, splash 1<br>Shoulder rockets: 50 explosive / 3s, range 9 | structures, heavy vehicles; smashes walls | Disruptor, Arclight, Laser Tower |
+| **Arclight** | Mech Foundry | Mech | 1500 / 1300 | 8 | 3500 | 1.8 | Eye laser: 90 laser / 1.6s, range 9 | mechs, heavy vehicles (eye laser) | infantry swarms, aircraft |
 | **Leviathan** | Mech Foundry | Mech | 2000 / 1500 | 10 | 5000 | 1.6 | — | ships and coasts (walks the seabed, hidden while submerged) | submarines, Disruptor |
 | **Nano Swarm** | Research Lab | Air | 200 / 200 | 2 | 150 | 3.5 | — | repairs friendly units in an area | everything (fragile) |
 <!-- /gen:units_nano -->
@@ -356,13 +353,14 @@ seconds at normal speed.
 <!-- gen:city_buildings -->
 | Building | Category | Size | Price | Materials | Upkeep /yr | Staff | Makes | Notes |
 |---|---|---|---|---|---|---|---|---|
+| **Fusion Plant** | Utility | 5×5 | ₡15000 | 100 concrete + 60 steel + 10 nanomaterials | 800 | 6 scientists | power every 10s; 250 MW | Nano age. 250 MW from seawater fusion: no fuel, no smoke. Needs scientists. |
 | **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. Its militia and up to 8 garrisoned infantry defend it: lose it and its region falls. 2 trucks 2 crews max 1 |
 | **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
 | **Maintenance Depot** | Logistics | 3×2 | ₡700 | 10 lumber + 20 concrete | 90 | 6 workers | — | Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down. |
 | **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |
 | **Warehouse** | Logistics | 4×3 | ₡600 | 30 lumber + 10 concrete | 80 | 6 workers | stores 400 | Takes in what producers make and sends it on to whoever needs it. Three trucks. 3 trucks |
 | **Trade Port** | Logistics | 4×3 | ₡3000 | 50 lumber | 200 | 8 workers | stores 400 | Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea. 6 trucks |
-| **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 / 64 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment (and to a tower in the Digital age) as its needs are met. |
+| **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 / 64 / 96 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment (to a tower in the Digital age, a spire in the Nano age) as its needs are met. |
 | **Farm** | Resource | 4×4 | ₡400 | 10 lumber | 30 | 6 workers | 4 crops every 20s | Grows crops. Fertile floodplain yields full output, grassland 60%, sand 20%. 1 truck |
 | **Fishing Harbour** | Resource | 3×3 | ₡500 | 15 lumber | 40 | 4 workers | 3 food every 12s | Lands fish straight as food. Output depends on open water nearby. 1 truck |
 | **Logging Camp** | Resource | 2×2 | ₡250 | — | 20 | 4 workers | 4 timber every 18s | Fells timber. Output depends on forest within 5 tiles. 1 truck |
@@ -378,18 +376,21 @@ seconds at normal speed.
 | **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 1 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
 | **Goods Factory** | Industry | 3×3 | ₡1400 | 15 steel + 15 concrete | 100 | 10 technicians | 1 steel + 1 plastics → 2 consumer goods every 10s | Makes consumer goods from steel and plastics. Needs technicians. needs 6 MW 1 truck |
 | **Electronics Plant** | Industry | 4×3 | ₡3000 | 30 concrete + 20 steel | 220 | 12 technicians | 2 rare earths + 1 plastics → 2 electronics every 12s | Digital age. Electronics from rare earths and plastics. Needs technicians and power. needs 10 MW 1 truck |
+| **Nano Fab** | Industry | 4×4 | ₡9000 | 60 concrete + 40 steel + 20 electronics | 600 | 8 scientists | 1 rare earths + 1 electronics → 1 nanomaterials every 15s | Nano age. Nanomaterials from rare earths and electronics. Needs scientists and 30 MW. needs 30 MW 1 truck |
+| **Robotics Plant** | Industry | 4×3 | ₡7000 | 50 concrete + 40 steel + 10 electronics | 450 | 10 engineers | 2 steel + 1 electronics + 1 nanomaterials → 2 robotics every 15s | Nano age. Robots from steel, electronics and nanomaterials. Farms, mines and factories stocked with robots need half the staff. needs 15 MW 1 truck |
 | **Pharmaceutical Plant** | Industry | 3×3 | ₡2600 | 30 concrete + 10 steel | 200 | 8 engineers | 2 crops + 1 plastics → 2 pharmaceuticals every 12s | Digital age. Medicines from crops and plastics, for hospitals. Needs engineers. needs 6 MW 1 truck |
 | **Oil Power Plant** | Utility | 4×3 | ₡1200 | 10 lumber + 20 concrete + 10 steel | 100 | 6 workers | 1 crude oil → power every 6s; 30 MW | Burns crude oil: 30 MW for every building connected to it by road. |
 | **Hydro Plant** | Utility | 3×3 | ₡2200 | 40 concrete + 10 steel | 120 | 4 workers | power every 10s; 20 MW | A dam on a river or lake: 20 MW with no fuel. Needs concrete and steel to build. |
 | **Nuclear Plant** | Utility | 4×4 | ₡6000 | 80 concrete + 40 steel | 400 | 8 engineers | 1 uranium → power every 30s; 100 MW | Digital age. 100 MW from a little uranium, with no smoke. Needs engineers. |
 | **Pumping Station** | Utility | 2×2 | ₡500 | 10 concrete + 5 steel | 50 | 2 workers | water for 600 | Pumps river or lake water for 600 residents. Water Towers spread it to houses. |
 | **Water Tower** | Utility | 2×2 | ₡250 | 5 concrete + 2 steel | 20 | — | water: 400 residents within 24 road tiles | Gives running water to houses within 24 road tiles, fed by a Pumping Station on the same roads. |
-| **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food, consumer goods and (Digital age) electronics to households within 26 road tiles. Trucks keep it stocked. |
+| **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food, consumer goods, and later electronics and pharmaceuticals, to households within 26 road tiles. Trucks keep it stocked. |
 | **Police Station** | Service | 2×2 | ₡500 | 10 lumber + 10 concrete | 90 | 4 workers | police: 600 residents within 28 road tiles | Keeps the peace within 28 road tiles. Terraces and apartments need it. |
 | **Clinic** | Service | 3×2 | ₡700 | 15 concrete + 5 steel | 120 | 4 technicians | health: 500 residents within 26 road tiles | Healthcare within 26 road tiles. Apartments need it. needs 2 MW |
 | **School** | Service | 3×3 | ₡700 | 15 lumber + 15 concrete | 120 | 4 technicians | school: 500 residents within 26 road tiles | Education within 26 road tiles. Apartments need it. |
 | **Hospital** | Service | 4×3 | ₡3000 | 40 concrete + 15 steel | 300 | 10 technicians | 1 pharmaceuticals → power every 20s; health: 1600 residents within 40 road tiles | Digital age. Healthcare for 1,600 residents within 40 road tiles, while trucks bring it pharmaceuticals. needs 6 MW |
 | **Research Institute** | Service | 3×3 | ₡3500 | 40 concrete + 20 steel | 300 | 8 technicians | — | Research towards the next age (see 🔬 Ages). Needs technicians and power. needs 6 MW |
+| **University** | Service | 4×4 | ₡6000 | 50 concrete + 20 steel + 20 lumber | 500 | 8 engineers | university: 1200 residents within 36 road tiles | Digital age. Twice the research of an institute, and higher education for 1,200 residents within 36 road tiles (Nano-age spires need it). Needs engineers. needs 6 MW |
 | **Data Exchange** | Service | 2×2 | ₡1200 | 10 concrete + 5 steel | 120 | 3 technicians | data: 800 residents within 32 road tiles | Digital age. Connects houses within 32 road tiles to the data network. Towers need it. needs 3 MW |
 <!-- /gen:city_buildings -->
 
@@ -401,19 +402,21 @@ seconds at normal speed.
 | 🌾 **Crops** | ₡4 | Farm | Food Plant, Pharmaceutical Plant |
 | 🍞 **Food** | ₡9 | Fishing Harbour, Food Plant | households (markets) |
 | 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
-| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
+| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction), University (construction) |
 | 🪨 **Stone** | ₡3 | Quarry | Cement Works |
-| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction), Hospital (construction), Research Institute (construction), Data Exchange (construction) |
+| 🧱 **Concrete** | ₡10 | Cement Works | Fusion Plant (construction), Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
 | ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
-| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction), Hospital (construction), Research Institute (construction), Data Exchange (construction) |
+| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Robotics Plant, Fusion Plant (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Nano Fab (construction), Robotics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction), Hospital (construction), Research Institute (construction), University (construction), Data Exchange (construction) |
 | 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |
 | ⛽ **Fuel** | ₡14 | Oil Refinery | — |
 | 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory, Electronics Plant, Pharmaceutical Plant |
 | 📦 **Consumer goods** | ₡30 | Goods Factory | households (markets) |
-| 🧲 **Rare earths** | ₡14 | Rare-Earth Mine | Electronics Plant |
+| 🧲 **Rare earths** | ₡14 | Rare-Earth Mine | Electronics Plant, Nano Fab |
 | ☢ **Uranium** | ₡24 | Uranium Mine | Nuclear Plant |
-| 💾 **Electronics** | ₡55 | Electronics Plant | households (markets) |
-| 💊 **Pharmaceuticals** | ₡45 | Pharmaceutical Plant | Hospital |
+| 💾 **Electronics** | ₡55 | Electronics Plant | Nano Fab, Robotics Plant, households (markets), Nano Fab (construction), Robotics Plant (construction) |
+| 💊 **Pharmaceuticals** | ₡45 | Pharmaceutical Plant | Hospital, households (markets) |
+| ⚛ **Nanomaterials** | ₡120 | Nano Fab | Robotics Plant, Fusion Plant (construction) |
+| 🤖 **Robotics** | ₡150 | Robotics Plant | — |
 <!-- /gen:goods -->
 
 ### Houses
@@ -429,4 +432,5 @@ when a need of their current level has been missing for 30 seconds.
 | **Terrace** | 24 | Technicians | ₡22 | food, water, power, police |
 | **Apartment** | 40 | Technicians | ₡22 | food, water, goods, power, police, health, school |
 | **Tower** | 64 | Engineers | ₡40 | food, water, goods, power, police, health, school, electronics, data |
+| **Spire** | 96 | Scientists | ₡70 | food, water, goods, power, police, health, school, electronics, data, pharma, university |
 <!-- /gen:house_levels -->

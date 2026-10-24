@@ -459,8 +459,83 @@ function warden(team: number): THREE.Group {
   return g;
 }
 
+/** Nano age: a fast hover-tank with a pulse emitter dish. */
+function disruptor(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  g.add(box(1.2, 0.18, 0.7, mat(0x3a3f44, { metal: 0.5 }), 0, 0.22, 0));
+  g.add(box(1.0, 0.04, 0.74, mat(0x60f0ff, { emissive: 0x30c0e0 }), 0, 0.12, 0)); // hover glow
+  g.add(box(1.1, 0.2, 0.62, t.main, -0.02, 0.4, 0));
+  const head = new THREE.Group();
+  head.name = 'turret';
+  head.position.set(0.05, 0.55, 0);
+  head.add(cyl(0.2, 0.24, 0.14, 12, t.accent, 0, 0, 0));
+  const dish = mesh(cached('pulseDish', () => new THREE.SphereGeometry(0.26, 12, 6, 0, Math.PI * 2, 0, 0.9)), mat(0xd8dde2, { metal: 0.6 }), 0.25, 0.12, 0);
+  dish.rotation.z = -Math.PI / 2;
+  head.add(dish);
+  head.add(sphere(0.06, mat(0x60f0ff, { emissive: 0x30c0e0 }), 0.36, 0.12, 0, 6));
+  g.add(head);
+  return g;
+}
+
+/** Nano age: a heavy assault mech with arm cannons and shoulder rockets. */
+function juggernaut(team: number): THREE.Group {
+  const t = teamMats(team);
+  const frame = mat(0x4a5058, { metal: 0.6, rough: 0.4 });
+  const g = new THREE.Group();
+  for (const z of [0.42, -0.42]) {
+    g.add(box(0.7, 0.12, 0.36, mat(C.dark), 0.05, 0.06, z));
+    g.add(box(0.26, 0.7, 0.28, frame, 0, 0.45, z));
+    g.add(box(0.32, 0.55, 0.32, t.main, -0.05, 1.05, z));
+  }
+  g.add(box(0.7, 0.3, 1.0, frame, -0.02, 1.38, 0));
+  const torso = new THREE.Group();
+  torso.name = 'turret';
+  torso.position.set(0, 1.85, 0);
+  torso.add(box(1.0, 0.7, 1.1, t.main, 0, 0, 0));
+  torso.add(box(0.25, 0.2, 0.6, mat(0x40e0f0, { emissive: 0x2090b0 }), 0.52, 0.12, 0));
+  for (const z of [0.72, -0.72]) {
+    torso.add(box(0.5, 0.45, 0.32, t.accent, 0.1, -0.1, z));
+    torso.add(cylX(0.11, 0.9, 8, mat(C.steel, { metal: 0.6 }), 0.6, -0.15, z));
+  }
+  torso.add(box(0.5, 0.3, 0.5, frame, -0.25, 0.48, 0.3));
+  for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) torso.add(cylX(0.06, 0.06, 6, mat(C.black), 0.01, 0.42 + j * 0.13, 0.2 + i * 0.18));
+  g.add(torso);
+  return g;
+}
+
+/** Nano age: a slender laser mech with a single glowing eye. */
+function arclight(team: number): THREE.Group {
+  const t = teamMats(team);
+  const frame = mat(0xd8dde2, { metal: 0.5, rough: 0.3 });
+  const g = new THREE.Group();
+  for (const z of [0.32, -0.32]) {
+    g.add(box(0.55, 0.1, 0.24, mat(C.dark), 0.1, 0.05, z));
+    const shin = box(0.14, 0.75, 0.16, frame, 0.05, 0.45, z);
+    shin.rotation.z = 0.15;
+    g.add(shin);
+    g.add(box(0.18, 0.6, 0.2, t.main, -0.05, 1.08, z));
+  }
+  g.add(box(0.5, 0.22, 0.8, frame, -0.02, 1.42, 0));
+  const head = new THREE.Group();
+  head.name = 'turret';
+  head.position.set(0, 1.78, 0);
+  head.add(box(0.8, 0.45, 0.7, t.main, 0, 0, 0));
+  head.add(sphere(0.16, mat(0xff5040, { emissive: 0xff2010 }), 0.42, 0.04, 0, 10));
+  head.add(cylX(0.08, 0.3, 8, frame, 0.5, 0.04, 0));
+  for (const z of [0.4, -0.4]) head.add(box(0.5, 0.12, 0.14, frame, -0.1, 0.2, z));
+  g.add(head);
+  return g;
+}
+
 export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
   switch (type) {
+    case 'disruptor':
+      return disruptor(team);
+    case 'juggernaut':
+      return juggernaut(team);
+    case 'arclight':
+      return arclight(team);
     case 'exo_trooper':
       return exoTrooper(team);
     case 'rocket_artillery':

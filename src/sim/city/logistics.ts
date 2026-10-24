@@ -12,7 +12,7 @@ import { DT } from '../time.ts';
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { pathTo, searchRoads } from './roads.ts';
-import { add, get, type Stock, type Truck } from './state.ts';
+import { add, automatable, get, type Stock, type Truck } from './state.ts';
 import { exportDemand } from './trade.ts';
 import { dealFor, isCityState, marketOf, settle, stateOffers, stateWants, theyCharge, theyPay } from './diplomacy.ts';
 
@@ -48,7 +48,9 @@ export function demandFor(b: Building, g: GoodId, world?: World): number {
     const per = e.recipe.in[g];
     if (per) return Math.max(0, Math.max(TRUCK_LOAD, per * INPUT_CYCLES) - get(c.stock, g) - incoming);
   }
-  if (e.service?.kind === 'market' && (g === 'food' || g === 'goods' || g === 'electronics')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
+  if (e.service?.kind === 'market' && (g === 'food' || g === 'goods' || g === 'electronics' || g === 'pharma')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
+  // Nano age: robots for farms, mines and factories (they then need half the staff).
+  if (g === 'robotics' && world && (world.city?.players[b.owner]?.age ?? 0) >= 2 && automatable(b)) return Math.max(0, 2 - get(c.stock, g) - incoming);
   const sup = e.supplies?.[g];
   if (sup) return Math.max(0, sup - get(c.stock, g) - incoming);
   return 0;

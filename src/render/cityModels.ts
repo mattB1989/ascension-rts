@@ -268,7 +268,26 @@ function tower(team: number): THREE.Group {
   return g;
 }
 
-export const HOUSE_MODELS = [cottage, house, terrace, apartment, tower];
+function spire(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2, mat(0xcfd6dc, { rough: 0.6 }));
+  // A tapering white-and-glass spire with sky gardens.
+  const tiers: Array<[number, number, number]> = [[1.6, 1.5, 0.15], [1.4, 1.6, 1.65], [1.2, 1.6, 3.25], [0.95, 1.4, 4.85]];
+  for (const [w, h, y] of tiers) {
+    g.add(box(w, h, w * 0.92, glass(), 0, y + h / 2, 0));
+    g.add(box(w + 0.06, 0.08, w * 0.92 + 0.06, white(), 0, y + h, 0));
+    for (const [x, z] of [[-w / 2, -w * 0.46], [w / 2, -w * 0.46], [-w / 2, w * 0.46], [w / 2, w * 0.46]] as const) g.add(box(0.06, h, 0.06, white(), x, y + h / 2, z));
+  }
+  for (const [w, , y] of tiers.slice(1)) g.add(box(w, 0.12, 0.12, grassMat(), 0, y + 0.06, w * 0.46 + 0.07)); // sky gardens
+  g.add(box(0.5, 0.06, 0.5, t.main, 0, 6.3, 0));
+  g.add(cyl(0.02, 0.05, 1.4, 6, white(), 0, 7.0, 0));
+  const beacon = sphere(0.06, mat(0xc8a0ff, { emissive: 0x8a50ff }), 0, 7.72, 0, 6);
+  beacon.name = 'flare';
+  g.add(beacon);
+  return g;
+}
+
+export const HOUSE_MODELS = [cottage, house, terrace, apartment, tower, spire];
 
 // ---------------------------------------------------------------------------
 // Raw producers
@@ -783,6 +802,91 @@ function mechFoundry(team: number): THREE.Group {
   return g;
 }
 
+// ---------------------------------------------------------------------------
+// Nano age (and the university, from the Digital age)
+
+function university(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 4, grassMat());
+  // Quad: three wings round a lawn, a clock tower and a domed library.
+  g.add(box(3.4, 1.1, 0.8, plaster(), 0, 0.67, -1.3));
+  g.add(gable(3.5, 0.9, 1.22, 0.35, roofGrey(), 0, -1.3));
+  for (const x of [-1.35, 1.35]) {
+    g.add(box(0.7, 1.0, 2.0, plaster(), x, 0.62, 0.1));
+    g.add(box(0.74, 0.08, 2.04, roofGrey(), x, 1.16, 0.1));
+  }
+  windowRow(g, 7, 3.0, 0.75, 'x', -0.89);
+  g.add(box(0.6, 2.4, 0.6, plaster(), 0, 1.32, -1.3));
+  g.add(mesh(cached('clockRoof', () => new THREE.ConeGeometry(0.45, 0.6, 4)), roofGrey(), 0, 2.82, -1.3).rotateY(Math.PI / 4));
+  g.add(cyl(0.18, 0.18, 0.04, 12, white(), 0, 2.1, -0.99).rotateX(Math.PI / 2));
+  g.add(cyl(0.5, 0.5, 0.6, 14, plaster(), 0, 0.42, 0.9));
+  g.add(mesh(cached('libDome', () => new THREE.SphereGeometry(0.5, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2)), t.main, 0, 0.72, 0.9));
+  tree(g, -0.6, 0.0, 0.7);
+  tree(g, 0.6, 0.1, 0.7);
+  return g;
+}
+
+function nanoFab(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 4, mat(0xd8dce0, { rough: 0.5 }));
+  // Sealed clean-room halls with a glowing violet core and cooling fins.
+  g.add(box(3.2, 1.2, 2.2, white(), 0, 0.72, -0.5));
+  g.add(box(3.24, 0.1, 2.24, t.main, 0, 1.37, -0.5));
+  g.add(box(3.22, 0.25, 0.04, mat(0x9a7cf0, { emissive: 0x5a30c0 }), 0, 0.85, 0.61));
+  const core = sphere(0.45, mat(0xc8a0ff, { emissive: 0x8a50ff, metal: 0.3, rough: 0.2 }), 0.9, 1.8, -0.6, 14);
+  core.name = 'flare';
+  g.add(core);
+  g.add(cyl(0.5, 0.6, 0.35, 14, metal(), 0.9, 1.45, -0.6));
+  for (let k = 0; k < 6; k++) g.add(box(0.05, 0.5, 0.9, metal(), -1.4 + k * 0.22, 1.65, -0.6));
+  g.add(box(1.2, 0.5, 0.7, mat(0xc9c4ba), -0.9, 0.37, 1.3));
+  crates(g, 0.6, 1.3, 3, 0xc8a0ff);
+  return g;
+}
+
+function roboticsPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 3, paving());
+  factoryHall(g, 3.0, 1.8, 1.1, -0.2, -0.3, mat(0xe0e4e8, { rough: 0.6 }), t.main, true);
+  windowRow(g, 6, 2.6, 0.6, 'x', 0.61);
+  // A robot arm in the yard.
+  const arm = new THREE.Group();
+  arm.name = 'spin';
+  arm.position.set(1.45, 0.15, 0.95);
+  arm.add(cyl(0.18, 0.22, 0.2, 10, mat(0xe0a020), 0, 0.1, 0));
+  const upper = box(0.12, 0.7, 0.12, mat(0xe0a020), 0.15, 0.5, 0);
+  upper.rotation.z = -0.5;
+  arm.add(upper);
+  const fore = box(0.5, 0.1, 0.1, mat(0xe0a020), 0.45, 0.8, 0);
+  fore.rotation.z = -0.3;
+  arm.add(fore);
+  g.add(arm);
+  crates(g, -1.6, 1.0, 3, 0xa0c0d0);
+  return g;
+}
+
+function fusionPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(5, 5);
+  // A tokamak ring in a glass-roofed hall, with magnet coils and a control block.
+  g.add(cyl(1.7, 1.8, 0.6, 24, mat(0xb0b8c0, { metal: 0.4 }), -0.2, 0.42, -0.2));
+  const ring = mesh(cached('tokamak', () => new THREE.TorusGeometry(1.15, 0.38, 12, 28)), mat(0x8c939a, { metal: 0.7, rough: 0.3 }), -0.2, 1.1, -0.2);
+  ring.rotation.x = Math.PI / 2;
+  g.add(ring);
+  const plasma = mesh(cached('plasma', () => new THREE.TorusGeometry(1.15, 0.12, 8, 28)), mat(0xff80ff, { emissive: 0xc040ff }), -0.2, 1.15, -0.2);
+  plasma.rotation.x = Math.PI / 2;
+  plasma.name = 'flare';
+  g.add(plasma);
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    g.add(box(0.2, 0.9, 0.2, mat(0x3a5a9a, { metal: 0.5 }), -0.2 + Math.cos(a) * 1.15, 1.1, -0.2 + Math.sin(a) * 1.15));
+  }
+  g.add(box(1.4, 0.9, 1.0, white(), 1.4, 0.57, 1.6));
+  g.add(box(1.44, 0.08, 1.04, t.accent, 1.4, 1.06, 1.6));
+  windowRow(g, 4, 1.1, 0.7, 'x', 2.11);
+  for (const z of [-2.0, -1.4]) g.add(box(0.06, 1.8, 0.06, darkMetal(), 2.0, 0.95, z));
+  return g;
+}
+
 export function buildCityModel(type: string, team: number, level = 0): THREE.Group | null {
   switch (type) {
     case 'town_hall': return townHall(team);
@@ -801,6 +905,10 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'research_institute': return researchInstitute(team);
     case 'data_exchange': return dataExchange(team);
     case 'mech_foundry': return mechFoundry(team);
+    case 'university': return university(team);
+    case 'nano_fab': return nanoFab(team);
+    case 'robotics_plant': return roboticsPlant(team);
+    case 'fusion_plant': return fusionPlant(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
     case 'logging_camp': return loggingCamp(team);

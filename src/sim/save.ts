@@ -66,6 +66,9 @@ function migrate(w: World): void {
     b.city.needs.electronics ??= false;
     b.city.needs.data ??= false;
     b.city.covered.data ??= false;
+    b.city.needs.pharma ??= false;
+    b.city.needs.university ??= false;
+    b.city.covered.university ??= false;
   }
   city.aiQueue ??= [];
   for (const t of city.trucks) t.buy ??= null;

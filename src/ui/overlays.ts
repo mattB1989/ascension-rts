@@ -7,7 +7,7 @@ import { searchRoads } from '../sim/city/roads.ts';
 import { Terrain } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 
-export type OverlayKind = 'land' | 'roads' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'data' | 'happiness' | 'pollution';
+export type OverlayKind = 'land' | 'roads' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'data' | 'university' | 'happiness' | 'pollution';
 
 export const OVERLAYS: Array<{ id: OverlayKind; icon: string; name: string; legend: string }> = [
   { id: 'land', icon: '🌾', name: 'Land', legend: 'Green: fertile farmland. Brown: ore, grey: stone, black: oil, teal: rare earths, yellow-green: uranium deposits.' },
@@ -18,6 +18,7 @@ export const OVERLAYS: Array<{ id: OverlayKind; icon: string; name: string; lege
   { id: 'police', icon: '🚓', name: 'Police', legend: 'Blue: patrolled by a police station.' },
   { id: 'health', icon: '🏥', name: 'Health', legend: 'Pink: within a clinic\'s reach.' },
   { id: 'school', icon: '🎓', name: 'School', legend: 'Purple: within a school\'s reach.' },
+  { id: 'university', icon: '🏛', name: 'University', legend: 'Gold: within a university\'s reach. Nano-age spires need it.' },
   { id: 'data', icon: '📡', name: 'Data', legend: 'Cyan: on the data network (Digital age: data exchanges). Towers need it.' },
   { id: 'happiness', icon: '😊', name: 'Happiness', legend: 'Houses from red (unhappy) to green (happy).' },
   { id: 'pollution', icon: '🏭', name: 'Pollution', legend: 'Red haze around heavy industry: houses nearby are less happy.' },
@@ -36,6 +37,10 @@ export function overlayFor(type: BuildingTypeId | string): OverlayKind | null {
       return 'land';
     case 'data_exchange':
       return 'data';
+    case 'university':
+      return 'university';
+    case 'fusion_plant':
+      return 'power';
     case 'hospital':
       return 'health';
     case 'water_tower':
@@ -73,6 +78,7 @@ const SERVICE_COLOR: Record<ServiceKind, [number, number, number]> = {
   health: [255, 110, 180],
   school: [170, 110, 255],
   data: [60, 220, 230],
+  university: [240, 200, 60],
 };
 
 /** A building to tint in the overlay. */

@@ -36,6 +36,8 @@ export interface BotState {
   expandAt?: number;
   /** Game time of the next check for streets cut off from the town hall. */
   linkAt?: number;
+  /** Game time of the next look at the books when broke. */
+  austerityAt?: number;
   /** Nations: their character (see PERSONALITIES). */
   personality?: Personality;
   /** Nations: game time of the next look at city-states (deals, unions, roads), and those out of road reach. */
@@ -330,6 +332,8 @@ export function botStep(world: World, bot: BotState): Command[] {
   if (--bot.wait > 0) return [];
   bot.wait = bot.nation ? DIFFICULTY[bot.difficulty].think : 3;
   reserved = [];
+  // A new age as soon as it is ready (nations and the scripted player; city-states stay as they are).
+  if (bot.maxPop === Infinity && nextAge(world, bot.player)?.ready) return [{ kind: 'advanceAge', player: bot.player }];
   if (bot.nation) {
     const m = militaryStep(world, bot);
     if (m.length) return m;
@@ -368,19 +372,37 @@ export function botStep(world: World, bot: BotState): Command[] {
   const used = (g: GoodId) => get(pc.used, g);
   const stock = (g: GoodId) => world.buildings.filter((b) => b.owner === p && b.city).reduce((s, b) => s + get(b.city!.stock, g), 0);
 
+  // Out of money and losing more each year: raise taxes, then close what costs most and does least.
+  const ly = pc.lastYear;
+  const net = ly.taxes + ly.trade - ly.imports - ly.upkeep - ly.roads - ly.military;
+  if (bot.maxPop === Infinity && world.time >= (bot.austerityAt ?? 0)) {
+    if (credits < 300 && net < 0) {
+      bot.austerityAt = world.time + 60;
+      if (pc.taxRate < 1.3) return [{ kind: 'taxRate', player: p, rate: 1.3 }];
+      const idle = world.buildings
+        .filter((b) => b.owner === p && b.complete && b.city && ['coast_guard', 'barracks', 'supply_depot', 'maintenance_depot', 'vehicle_factory', 'warehouse'].includes(b.type))
+        .sort((a, b) => (b.def.econ?.upkeep ?? 0) - (a.def.econ?.upkeep ?? 0));
+      if (idle.length) {
+        bot.log.push(`close ${idle[0]!.type} (broke)`);
+        return [{ kind: 'demolish', player: p, building: idle[0]!.id }];
+      }
+    } else if (credits > 4000 && pc.taxRate > 1) {
+      bot.austerityAt = world.time + 60;
+      return [{ kind: 'taxRate', player: p, rate: 1 }];
+    }
+  }
+
   // Nations court city-states: trade with them by road, accept their requests to join, buy friends.
   if (bot.nation) {
     const d = nationDiplomacy(world, bot, stock);
     if (d.length) return d;
   }
 
-  // A new age as soon as it is ready (nations and the scripted player; city-states stay as they are).
-  if (bot.maxPop === Infinity && nextAge(world, p)?.ready) return [{ kind: 'advanceAge', player: p }];
 
   // Trade: once there is a port, buy what the land can't give and sell surpluses.
   if (has('trade_port') && world.time >= bot.tradeAt) {
     bot.tradeAt = world.time + 30;
-    const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber', rare_earth_mine: 'rare', uranium_mine: 'uranium' };
+    const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber', rare_earth_mine: 'rare', uranium_mine: 'uranium', farm: 'food' };
     const rules: Array<[GoodId, number, number]> = [['steel', 60, -1], ['concrete', 40, -1], ['crops', 0, 150], ['timber', 0, 150], ['stone', 0, 150], ['food', 0, 250], ['lumber', 0, 200]];
     for (const t of bot.noLand) {
       const g = missing[t];
@@ -458,6 +480,8 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('construction_office') && pop >= 60, 'construction_office'],
     [made('food') < (pop * CONSUMPTION.food * 60) / YEAR_SECONDS * 1.3 && has('farm') < has('food_plant') * 1.3 && pop >= 40, 'farm'],
     [has('farm') >= has('food_plant') * 1.3 && made('food') < used('food') * 1.2, 'food_plant'],
+    // No more farmland: fish.
+    [bot.noLand.includes('farm') && has('fishing_harbour') < 4 && made('food') < used('food') * 1.2 && !bot.noLand.includes('fishing_harbour'), 'fishing_harbour'],
     [made('lumber') < used('lumber') + 6 && stock('lumber') < 60 && has('logging_camp') < 5, 'logging_camp'],
     [has('logging_camp') > has('sawmill') * 1.5, 'sawmill'],
     [stock('concrete') < 30 && has('cement_works') > 0 && has('quarry') <= has('cement_works'), 'quarry'],
@@ -465,6 +489,8 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('steel_mill') && has('iron_mine') > 0, 'steel_mill'],
     [!has('oil_refinery') && (has('steel_mill') > 0 || bot.noLand.includes('iron_mine')) && pop >= 120, 'oil_refinery'],
     [!has('goods_factory') && has('oil_refinery') > 0 && pc.population[1] >= 20, 'goods_factory'],
+    // Research towards the next age once there are technicians to staff it.
+    [pc.age < MAX_AGE && !has('research_institute') && pc.population[1] >= 120 && bot.maxPop === Infinity && credits > 4500, 'research_institute'],
     [has('goods_factory') > 0 && has('goods_factory') < 4 && made('goods') < used('goods') * 1.1 + 2 && stock('goods') < 40, 'goods_factory'],
     [has('oil_refinery') > 0 && has('oil_refinery') < has('goods_factory') + has('electronics_plant') && stock('plastics') < 30, 'oil_refinery'],
     // Each plant burns about two thirds of a well's oil.
@@ -479,7 +505,6 @@ export function botStep(world: World, bot: BotState): Command[] {
     [bot.nation && !has('vehicle_factory') && has('barracks') > 0 && pop >= 300 && has('oil_refinery') > 0, 'vehicle_factory'],
     [has('maintenance_depot') * 300 < roadsByOwner(world)[p]! && roadsByOwner(world)[p]! > 150, 'maintenance_depot'],
     // Towards the Digital age, and what it brings.
-    [pc.age < MAX_AGE && !has('research_institute') && pc.population[1] >= 120 && bot.maxPop === Infinity, 'research_institute'],
     [pc.age >= 1 && !has('data_exchange'), 'data_exchange'],
     [pc.age >= 1 && !has('electronics_plant') && has('oil_refinery') > 0, 'electronics_plant'],
     [pc.age >= 1 && !has('rare_earth_mine') && has('electronics_plant') > 0, 'rare_earth_mine'],

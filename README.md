@@ -89,7 +89,8 @@ army on land, sea and air, transports, walls, gates, garrisoned towers, victory.
 URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation directly (add
 `&spectate=1&fog=0` to watch AI nations play every seat, `&victory=0` for a sandbox);
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
-turns the fog of war off.
+turns the fog of war off. `node --experimental-strip-types tools/headless.ts 7 256 temperate normal 30`
+plays an AI-only game in Node and prints how every nation does (the balance harness).
 
 Next: more polish (graphics, post-game report), barges and pipelines. See [docs/PLAN.md](docs/PLAN.md).
 

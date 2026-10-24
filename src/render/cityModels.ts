@@ -10,6 +10,7 @@ import type { ModelFn } from './city/common.ts';
 import { HOUSING_MODELS } from './city/housing.ts';
 import { INDUSTRY_MODELS } from './city/industry.ts';
 import { INFRA_MODELS } from './city/infra.ts';
+import { cityTree } from './trees.ts';
 
 /** Building materials get a surface texture: the one asked for, else plaster grain (or metal panels for metals). */
 function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number; tex?: DetailKind | 'none' } = {}): THREE.MeshStandardMaterial {
@@ -75,9 +76,14 @@ function crates(g: THREE.Group, x: number, z: number, n: number, color = 0x9a7a4
   for (let i = 0; i < n; i++) g.add(box(0.3, 0.26, 0.3, m, x + (i % 3) * 0.34, 0.25 + Math.floor(i / 3) * 0.27, z));
 }
 
+/** A street or garden tree: mostly broadleaf, the odd conifer or poplar (chosen by position). */
 function tree(g: THREE.Group, x: number, z: number, s = 1): void {
-  g.add(cyl(0.05 * s, 0.06 * s, 0.35 * s, 5, timber(), x, 0.29 * s, z));
-  g.add(mesh(cached('cityTree', () => new THREE.ConeGeometry(0.28, 0.7, 6)), mat(0x3b7a3a, { rough: 0.9 }), x, 0.75 * s, z));
+  const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+  const t = cityTree(h < 0.2 ? 'conifer' : h < 0.35 ? 'poplar' : 'broadleaf', h);
+  t.position.set(x, 0.1, z);
+  t.rotation.y = h * 6.28;
+  t.scale.setScalar(0.68 * s);
+  g.add(t);
 }
 
 // ---------------------------------------------------------------------------

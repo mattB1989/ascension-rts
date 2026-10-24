@@ -6,18 +6,33 @@
 import * as THREE from 'three';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import { buildCityModel } from './cityModels.ts';
-import { box, C, cached, cyl, cylX, mat, mesh, sphere, teamMats } from './models.ts';
+import { box, C, cached, cyl, cylX, mat as plainMat, mesh, sphere, teamMats } from './models.ts';
+import type { DetailKind } from './textures.ts';
 
-const concrete = () => mat(C.concrete, { rough: 0.95 });
-const concreteDark = () => mat(0x7f7d76, { rough: 0.95 });
-const wall = () => mat(0xd9d6cc, { rough: 0.8 });
-const wallGrey = () => mat(0xb3b6b9, { rough: 0.7 });
-const roof = () => mat(0x5b6168, { rough: 0.8 });
-const metal = () => mat(0x8c939a, { metal: 0.6, rough: 0.45 });
-const darkMetal = () => mat(0x3c4146, { metal: 0.5, rough: 0.5 });
-const glass = () => mat(0x8fd0f0, { metal: 0.6, rough: 0.15 });
-const windowGlow = () => mat(0xffd98a, { emissive: 0xffb84a, rough: 0.4 });
-const hazard = () => mat(0xe0b23a, { rough: 0.6 });
+/**
+ * Static building materials get a world-space surface texture: the one asked for,
+ * else plaster grain (metal panels for metals). Parts that move (dishes, turrets,
+ * cranks, gate bars) use `plainMat`: a world-space texture would swim over them.
+ */
+function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number; tex?: DetailKind | 'none' } = {}): THREE.MeshStandardMaterial {
+  const tex = opts.tex === 'none' || opts.emissive ? undefined : opts.tex ?? ((opts.metal ?? 0.2) >= 0.4 ? ((opts.rough ?? 0.7) <= 0.25 ? undefined : 'panels') : 'plaster');
+  return plainMat(color, { ...opts, tex });
+}
+
+const concrete = () => mat(C.concrete, { rough: 0.95, tex: 'concrete' });
+const concreteDark = () => mat(0x7f7d76, { rough: 0.95, tex: 'concrete' });
+const wall = () => mat(0xd9d6cc, { rough: 0.8, tex: 'plaster' });
+const wallGrey = () => mat(0xb3b6b9, { rough: 0.7, tex: 'panels' });
+const roof = () => mat(0x5b6168, { rough: 0.8, tex: 'panels' });
+const metal = () => mat(0x8c939a, { metal: 0.6, rough: 0.45, tex: 'panels' });
+const darkMetal = () => mat(0x3c4146, { metal: 0.5, rough: 0.5, tex: 'panels' });
+const glass = () => mat(0x8fd0f0, { metal: 0.6, rough: 0.15, tex: 'glass' });
+const windowGlow = () => plainMat(0xffd98a, { emissive: 0xffb84a, rough: 0.4 });
+const hazard = () => mat(0xe0b23a, { rough: 0.6, tex: 'none' });
+/** Untextured variants for moving parts. */
+const metalPlain = () => plainMat(0x8c939a, { metal: 0.6, rough: 0.45 });
+const darkMetalPlain = () => plainMat(0x3c4146, { metal: 0.5, rough: 0.5 });
+const hazardPlain = () => plainMat(0xe0b23a, { rough: 0.6 });
 
 /** Concrete pad slightly larger than the footprint. */
 function pad(w: number, h: number): THREE.Group {
@@ -64,7 +79,7 @@ function commandCenter(team: number): THREE.Group {
   const dish = new THREE.Group();
   dish.name = 'spin';
   dish.position.set(-1.3, 3.95, 0.65);
-  const d = mesh(cached('ccDish', () => new THREE.SphereGeometry(0.5, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2.4)), metal(), 0, 0, 0.1);
+  const d = mesh(cached('ccDish', () => new THREE.SphereGeometry(0.5, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2.4)), metalPlain(), 0, 0, 0.1);
   d.rotation.x = -1.1;
   dish.add(d);
   g.add(dish);
@@ -87,7 +102,7 @@ function habitat(team: number): THREE.Group {
   }
   g.add(box(1.6, 0.14, 1.6, t.main, 0, 2.3, 0));
   g.add(box(0.5, 0.2, 0.4, darkMetal(), 0.3, 2.47, -0.3));
-  g.add(box(0.6, 0.08, 0.6, mat(0x5f8f43), -0.35, 2.41, 0.35)); // roof garden
+  g.add(box(0.6, 0.08, 0.6, mat(0x5f8f43, { tex: 'lawn' }), -0.35, 2.41, 0.35)); // roof garden
   g.add(box(0.5, 0.5, 0.05, glass(), 0, 0.42, 0.8)); // entrance
   return g;
 }
@@ -104,7 +119,7 @@ function refinery(team: number): THREE.Group {
   }
   // Glowing crystal vat
   g.add(cyl(0.38, 0.4, 0.3, 10, darkMetal(), -0.55, 1.4, 0.5));
-  g.add(cyl(0.32, 0.32, 0.05, 10, mat(0x4fd1c5, { emissive: 0x1fbfb0 }), -0.55, 1.56, 0.5));
+  g.add(cyl(0.32, 0.32, 0.05, 10, plainMat(0x4fd1c5, { emissive: 0x1fbfb0 }), -0.55, 1.56, 0.5));
   // Conveyor ramp from the ground to the hall
   const ramp = box(1.4, 0.08, 0.32, darkMetal(), -1.0, 0.75, -1.0);
   ramp.rotation.z = 0.5;
@@ -138,13 +153,13 @@ function oilDerrick(team: number): THREE.Group {
   const crank = new THREE.Group();
   crank.name = 'crank';
   crank.position.set(-0.55, 0.55, 0);
-  crank.add(box(0.5, 0.12, 0.08, frame, 0.1, 0, 0.18));
-  crank.add(box(0.5, 0.12, 0.08, frame, 0.1, 0, -0.18));
-  crank.add(box(0.2, 0.25, 0.3, metal(), 0.32, 0, 0));
+  crank.add(box(0.5, 0.12, 0.08, darkMetalPlain(), 0.1, 0, 0.18));
+  crank.add(box(0.5, 0.12, 0.08, darkMetalPlain(), 0.1, 0, -0.18));
+  crank.add(box(0.2, 0.25, 0.3, metalPlain(), 0.32, 0, 0));
   g.add(crank);
   g.add(box(0.35, 0.35, 0.35, metal(), -0.7, 0.4, 0)); // motor
   g.add(cyl(0.04, 0.04, 1.1, 5, metal(), 0.85, 0.7, 0)); // polished rod
-  g.add(cyl(0.3, 0.3, 0.5, 10, mat(0x9b6b3d, { rough: 0.6 }), 0.4, 0.4, 0.6)); // storage tank
+  g.add(cyl(0.3, 0.3, 0.5, 10, mat(0x9b6b3d, { rough: 0.6, tex: 'panels' }), 0.4, 0.4, 0.6)); // storage tank
   g.add(cyl(0.31, 0.31, 0.06, 10, t.main, 0.4, 0.66, 0.6));
   return g;
 }
@@ -152,8 +167,8 @@ function oilDerrick(team: number): THREE.Group {
 function offshoreRig(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
-  const steel = mat(0x8a8178, { metal: 0.5, rough: 0.5 });
-  for (const x of [-1.1, 1.1]) for (const z of [-1.1, 1.1]) g.add(cyl(0.16, 0.2, 3.4, 8, mat(0xd0a030, { rough: 0.6 }), x, -0.3, z));
+  const steel = mat(0x8a8178, { metal: 0.5, rough: 0.5, tex: 'panels' });
+  for (const x of [-1.1, 1.1]) for (const z of [-1.1, 1.1]) g.add(cyl(0.16, 0.2, 3.4, 8, mat(0xd0a030, { rough: 0.6, tex: 'panels' }), x, -0.3, z));
   g.add(box(2.9, 0.25, 2.9, steel, 0, 1.4, 0));
   g.add(box(2.94, 0.08, 2.94, t.main, 0, 1.3, 0));
   // Derrick tower: tapered lattice
@@ -175,7 +190,7 @@ function offshoreRig(team: number): THREE.Group {
   const boom = box(1.2, 0.06, 0.06, steel, 1.6, 1.8, 1.1);
   boom.rotation.z = 0.35;
   g.add(boom);
-  const flame = mesh(cached('flame', () => new THREE.ConeGeometry(0.14, 0.45, 6)), mat(0xff9a3c, { emissive: 0xff6a10 }), 2.15, 2.25, 1.1);
+  const flame = mesh(cached('flame', () => new THREE.ConeGeometry(0.14, 0.45, 6)), plainMat(0xff9a3c, { emissive: 0xff6a10 }), 2.15, 2.25, 1.1);
   flame.name = 'flare';
   g.add(flame);
   return g;
@@ -186,14 +201,14 @@ function barracks(team: number): THREE.Group {
   const g = pad(3, 3);
   const hut = mesh(
     cached('quonset', () => new THREE.CylinderGeometry(0.85, 0.85, 2.4, 12, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2)),
-    mat(0x7c8463, { rough: 0.85 }), -0.35, 0.15, 0,
+    mat(0x7c8463, { rough: 0.85, tex: 'panels' }), -0.35, 0.15, 0,
   );
   g.add(hut);
   g.add(box(0.06, 0.5, 0.5, darkMetal(), 0.86, 0.45, 0)); // door
   g.add(box(0.08, 0.12, 0.9, t.main, 0.88, 0.85, 0));
   windows(g, 3, 1.4, 0.6, 'z', 0.83, 0.16);
   // Sandbag wall around the yard
-  const sand = mat(0xb8a173, { rough: 1 });
+  const sand = mat(0xb8a173, { rough: 1, tex: 'plaster' });
   for (let i = 0; i < 5; i++) g.add(box(0.36, 0.2, 0.22, sand, 0.7 + (i % 2) * 0.05, 0.25, -1.3 + i * 0.12 + (i > 2 ? 1.6 : 0)));
   g.add(box(0.9, 0.22, 0.24, sand, 1.0, 0.25, 1.25));
   g.add(flag(team, 1.25, -1.25, 1.8));
@@ -215,7 +230,7 @@ function vehicleFactory(team: number): THREE.Group {
   }
   // Big door with hazard stripes, facing +x
   g.add(box(0.06, 1.0, 2.0, darkMetal(), 1.62, 0.66, 0));
-  for (let i = 0; i < 5; i++) g.add(box(0.07, 0.12, 0.25, i % 2 ? hazard() : mat(0x222222), 1.64, 1.25, -0.8 + i * 0.4));
+  for (let i = 0; i < 5; i++) g.add(box(0.07, 0.12, 0.25, i % 2 ? hazard() : mat(0x222222, { tex: 'none' }), 1.64, 1.25, -0.8 + i * 0.4));
   g.add(box(3.44, 0.14, 3.24, t.main, -0.1, 1.5, 0));
   for (const z of [-1.2, 1.2]) g.add(cyl(0.14, 0.16, 1.4, 8, darkMetal(), -1.4, 2.2, z));
   // Yard crane
@@ -243,7 +258,7 @@ function shipyard(team: number): THREE.Group {
   g.add(box(1.4, 0.18, 2.3, crane, 1.6, 2.4, 0));
   g.add(box(0.3, 0.25, 0.3, darkMetal(), 1.6, 2.2, 0.3));
   // A hull taking shape on the slip
-  g.add(box(1.6, 0.35, 0.6, mat(C.hullGrey, { metal: 0.4 }), 1.8, 0.45, 0));
+  g.add(box(1.6, 0.35, 0.6, mat(C.hullGrey, { metal: 0.4, tex: 'panels' }), 1.8, 0.45, 0));
   return g;
 }
 
@@ -253,13 +268,13 @@ function airfield(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
   g.add(box(5.9, 0.1, 4.9, concreteDark(), 0, 0.05, 0));
-  const tarmac = mat(0x3d4043, { rough: 0.9 });
-  const paint = mat(0xf2f2f2);
+  const tarmac = mat(0x3d4043, { rough: 0.9, tex: 'concrete' });
+  const paint = mat(0xf2f2f2, { tex: 'none' });
   g.add(box(5.9, 0.04, 1.3, tarmac, 0, 0.12, 1.65));
   for (let i = 0; i < 7; i++) g.add(box(0.45, 0.02, 0.08, paint, -2.55 + i * 0.85, 0.15, 1.65));
   for (const x of [-2.75, 2.75]) for (let k = 0; k < 4; k++) g.add(box(0.14, 0.02, 0.08, paint, x, 0.15, 1.25 + k * 0.27));
   // Taxiway and stands
-  g.add(box(5.9, 0.03, 1.5, mat(0x585c60, { rough: 0.9 }), 0, 0.115, 0.15));
+  g.add(box(5.9, 0.03, 1.5, mat(0x585c60, { rough: 0.9, tex: 'concrete' }), 0, 0.115, 0.15));
   const yellow = hazard();
   for (const x of [-2.1, -0.7, 0.7, 2.1]) {
     g.add(box(0.06, 0.02, 1.2, yellow, x, 0.14, 0.15));
@@ -275,19 +290,19 @@ function airfield(team: number): THREE.Group {
   g.add(box(1.6, 0.6, 0.04, darkMetal(), -1.4, 0.4, -1.03));
   // Fuel tanks
   for (const x of [0.5, 1.05]) {
-    g.add(cyl(0.25, 0.25, 0.55, 10, mat(0xe8e2d0, { rough: 0.6 }), x, 0.38, -1.9));
+    g.add(cyl(0.25, 0.25, 0.55, 10, mat(0xe8e2d0, { rough: 0.6, tex: 'panels' }), x, 0.38, -1.9));
     g.add(cyl(0.26, 0.26, 0.06, 10, t.main, x, 0.62, -1.9));
   }
   // Control tower
   g.add(cyl(0.22, 0.28, 1.8, 8, wall(), 2.3, 0.95, -1.75));
   g.add(cyl(0.42, 0.34, 0.4, 8, glass(), 2.3, 2.05, -1.75));
   g.add(cyl(0.45, 0.45, 0.08, 8, t.main, 2.3, 2.29, -1.75));
-  const beacon = sphere(0.06, mat(0xff4a3a, { emissive: 0xff2a1a }), 2.3, 2.4, -1.75, 6);
+  const beacon = sphere(0.06, plainMat(0xff4a3a, { emissive: 0xff2a1a }), 2.3, 2.4, -1.75, 6);
   beacon.name = 'flare';
   g.add(beacon);
   // Windsock
   g.add(cyl(0.02, 0.02, 0.9, 4, darkMetal(), 2.8, 0.5, -0.8));
-  g.add(mesh(cached('sock', () => new THREE.ConeGeometry(0.08, 0.35, 6).rotateZ(Math.PI / 2)), mat(0xff7a2a), 2.97, 0.9, -0.8));
+  g.add(mesh(cached('sock', () => new THREE.ConeGeometry(0.08, 0.35, 6).rotateZ(Math.PI / 2)), mat(0xff7a2a, { tex: 'none' }), 2.97, 0.9, -0.8));
   return g;
 }
 
@@ -302,8 +317,8 @@ function radarStation(team: number): THREE.Group {
   const dish = new THREE.Group();
   dish.name = 'spin';
   dish.position.set(0.35, 1.85, -0.35);
-  dish.add(box(1.3, 0.35, 0.05, metal(), 0, 0.1, 0.12));
-  dish.add(box(0.08, 0.2, 0.25, darkMetal(), 0, -0.05, 0));
+  dish.add(box(1.3, 0.35, 0.05, metalPlain(), 0, 0.1, 0.12));
+  dish.add(box(0.08, 0.2, 0.25, darkMetalPlain(), 0, -0.05, 0));
   g.add(dish);
   return g;
 }
@@ -315,10 +330,10 @@ function researchLab(team: number): THREE.Group {
   g.add(box(2.44, 0.1, 2.04, t.main, -0.2, 1.06, 0.3));
   windows(g, 6, 2.0, 0.6, 'x', 1.31, 0.18);
   g.add(cyl(0.75, 0.8, 0.4, 16, wallGrey(), 0.6, 1.25, -0.6));
-  g.add(mesh(cached('labDome', () => new THREE.SphereGeometry(0.72, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)), mat(0x9fe6ff, { emissive: 0x2a8fbf, metal: 0.3, rough: 0.2 }), 0.6, 1.45, -0.6));
+  g.add(mesh(cached('labDome', () => new THREE.SphereGeometry(0.72, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)), plainMat(0x9fe6ff, { emissive: 0x2a8fbf, metal: 0.3, rough: 0.2 }), 0.6, 1.45, -0.6));
   // Solar panels
   for (let i = 0; i < 3; i++) {
-    const panel = box(0.6, 0.04, 0.4, mat(0x1d2f5a, { metal: 0.6, rough: 0.3 }), -0.9 + i * 0.65, 1.25, 0.8);
+    const panel = box(0.6, 0.04, 0.4, mat(0x1d2f5a, { metal: 0.6, rough: 0.3, tex: 'glass' }), -0.9 + i * 0.65, 1.25, 0.8);
     panel.rotation.x = -0.4;
     g.add(panel);
   }
@@ -328,14 +343,14 @@ function researchLab(team: number): THREE.Group {
 // ---------------------------------------------------------------------------
 // Defenses
 
-const sandbag = () => mat(0xb8a173, { rough: 1 });
+const sandbag = () => mat(0xb8a173, { rough: 1, tex: 'plaster' });
 
 /** One wall pillar; the pieces between neighbouring segments are drawn by the view. */
 function wallPillar(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
-  g.add(box(0.62, 1.15, 0.62, mat(0xb8b4aa, { rough: 0.9 }), 0, 0.575, 0));
-  g.add(box(0.7, 0.12, 0.7, mat(0x9c988e, { rough: 0.9 }), 0, 1.2, 0));
+  g.add(box(0.62, 1.15, 0.62, mat(0xb8b4aa, { rough: 0.9, tex: 'concrete' }), 0, 0.575, 0));
+  g.add(box(0.7, 0.12, 0.7, mat(0x9c988e, { rough: 0.9, tex: 'concrete' }), 0, 1.2, 0));
   g.add(box(0.64, 0.08, 0.64, t.main, 0, 0.9, 0));
   return g;
 }
@@ -345,14 +360,14 @@ function gate(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
   for (const x of [-0.42, 0.42]) {
-    g.add(box(0.2, 1.4, 0.5, mat(0xb8b4aa, { rough: 0.9 }), x, 0.7, 0));
+    g.add(box(0.2, 1.4, 0.5, mat(0xb8b4aa, { rough: 0.9, tex: 'concrete' }), x, 0.7, 0));
     g.add(box(0.24, 0.12, 0.54, t.main, x, 1.42, 0));
   }
   const bar = new THREE.Group();
   bar.name = 'gateBar';
   bar.position.set(-0.32, 0.75, 0);
-  bar.add(box(0.7, 0.55, 0.12, darkMetal(), 0.35, 0, 0));
-  for (let i = 0; i < 3; i++) bar.add(box(0.12, 0.56, 0.13, hazard(), 0.1 + i * 0.22, 0, 0));
+  bar.add(box(0.7, 0.55, 0.12, darkMetalPlain(), 0.35, 0, 0));
+  for (let i = 0; i < 3; i++) bar.add(box(0.12, 0.56, 0.13, hazardPlain(), 0.1 + i * 0.22, 0, 0));
   g.add(bar);
   return g;
 }
@@ -360,7 +375,7 @@ function gate(team: number): THREE.Group {
 function watchtower(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
-  const wood = mat(0x7a5a3a, { rough: 0.9 });
+  const wood = mat(0x7a5a3a, { rough: 0.9, tex: 'planks' });
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
       const leg = box(0.09, 2.2, 0.09, wood, sx * 0.3, 1.1, sz * 0.3);
@@ -377,8 +392,8 @@ function watchtower(team: number): THREE.Group {
   const turret = new THREE.Group();
   turret.name = 'turret';
   turret.position.set(0, 2.45, 0);
-  turret.add(cylX(0.03, 0.45, 5, mat(C.black), 0.3, 0.08, 0));
-  turret.add(box(0.14, 0.12, 0.12, mat(C.dark), 0.06, 0.06, 0));
+  turret.add(cylX(0.03, 0.45, 5, plainMat(C.black), 0.3, 0.08, 0));
+  turret.add(box(0.14, 0.12, 0.12, plainMat(C.dark), 0.06, 0.06, 0));
   g.add(turret);
   return g;
 }
@@ -386,18 +401,18 @@ function watchtower(team: number): THREE.Group {
 function bunker(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
-  const conc = mat(0x8f8b80, { rough: 1 });
+  const conc = mat(0x8f8b80, { rough: 1, tex: 'concrete' });
   g.add(box(1.8, 0.5, 1.8, conc, 0, 0.25, 0));
   g.add(mesh(cached('bunkerTop', () => new THREE.CylinderGeometry(0.62, 0.9, 0.38, 8)), conc, 0, 0.69, 0));
   g.add(box(1.82, 0.08, 1.82, t.main, 0, 0.5, 0));
-  const slit = mat(0x0c0c0c);
+  const slit = mat(0x0c0c0c, { tex: 'none' });
   for (const [x, z, w, d] of [[0, 0.91, 0.9, 0.04], [0, -0.91, 0.9, 0.04], [0.91, 0, 0.04, 0.9], [-0.91, 0, 0.04, 0.9]] as const) g.add(box(w, 0.1, d, slit, x, 0.32, z));
   for (let i = 0; i < 6; i++) g.add(box(0.36, 0.18, 0.22, sandbag(), -0.75 + (i % 3) * 0.75, 0.09, i < 3 ? 1.02 : -1.02));
   const turret = new THREE.Group();
   turret.name = 'turret';
   turret.position.set(0, 0.9, 0);
-  turret.add(box(0.3, 0.16, 0.3, mat(C.dark)));
-  turret.add(cylX(0.035, 0.5, 5, mat(C.black), 0.32, 0, 0));
+  turret.add(box(0.3, 0.16, 0.3, plainMat(C.dark)));
+  turret.add(cylX(0.035, 0.5, 5, plainMat(C.black), 0.32, 0, 0));
   g.add(turret);
   return g;
 }
@@ -405,14 +420,14 @@ function bunker(team: number): THREE.Group {
 function gunTurret(team: number): THREE.Group {
   const t = teamMats(team);
   const g = new THREE.Group();
-  g.add(mesh(cached('turretBase', () => new THREE.CylinderGeometry(0.42, 0.48, 0.5, 8)), mat(0x9c988e, { rough: 0.9 }), 0, 0.25, 0));
+  g.add(mesh(cached('turretBase', () => new THREE.CylinderGeometry(0.42, 0.48, 0.5, 8)), mat(0x9c988e, { rough: 0.9, tex: 'concrete' }), 0, 0.25, 0));
   g.add(cyl(0.44, 0.44, 0.06, 8, t.main, 0, 0.5, 0));
   const turret = new THREE.Group();
   turret.name = 'turret';
   turret.position.set(0, 0.68, 0);
   turret.add(box(0.5, 0.28, 0.42, t.accent));
-  turret.add(box(0.2, 0.14, 0.3, mat(C.steel), -0.18, 0.18, 0));
-  for (const z of [0.09, -0.09]) turret.add(cylX(0.04, 0.62, 6, mat(C.steel, { metal: 0.6 }), 0.5, 0.02, z));
+  turret.add(box(0.2, 0.14, 0.3, plainMat(C.steel), -0.18, 0.18, 0));
+  for (const z of [0.09, -0.09]) turret.add(cylX(0.04, 0.62, 6, plainMat(C.steel, { metal: 0.6 }), 0.5, 0.02, z));
   g.add(turret);
   return g;
 }
@@ -424,15 +439,15 @@ function samSite(team: number): THREE.Group {
   const turret = new THREE.Group();
   turret.name = 'turret';
   turret.position.set(0, 0.3, 0);
-  turret.add(cyl(0.3, 0.36, 0.25, 8, mat(C.dark), 0, 0.12, 0));
+  turret.add(cyl(0.3, 0.36, 0.25, 8, plainMat(C.dark), 0, 0.12, 0));
   const rack = new THREE.Group();
   rack.position.set(0, 0.45, 0);
   rack.rotation.z = 0.6;
   rack.add(box(0.9, 0.08, 0.6, t.main, 0, -0.08, 0));
   for (const z of [-0.2, 0.2]) {
     for (const y of [0.04, 0.2]) {
-      rack.add(cylX(0.07, 0.85, 8, mat(0xe8e8e0), 0, y, z));
-      rack.add(mesh(cached('samNose', () => new THREE.ConeGeometry(0.07, 0.18, 8).rotateZ(-Math.PI / 2)), mat(0xd04a3a), 0.5, y, z));
+      rack.add(cylX(0.07, 0.85, 8, plainMat(0xe8e8e0), 0, y, z));
+      rack.add(mesh(cached('samNose', () => new THREE.ConeGeometry(0.07, 0.18, 8).rotateZ(-Math.PI / 2)), plainMat(0xd04a3a), 0.5, y, z));
     }
   }
   turret.add(rack);
@@ -442,7 +457,7 @@ function samSite(team: number): THREE.Group {
   const dish = new THREE.Group();
   dish.name = 'spin';
   dish.position.set(-0.75, 1.38, -0.7);
-  dish.add(box(0.55, 0.18, 0.04, metal(), 0, 0, 0.05));
+  dish.add(box(0.55, 0.18, 0.04, metalPlain(), 0, 0, 0.05));
   g.add(dish);
   return g;
 }
@@ -450,15 +465,15 @@ function samSite(team: number): THREE.Group {
 function coastalBattery(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2);
-  const conc = mat(0x8f8b80, { rough: 1 });
+  const conc = mat(0x8f8b80, { rough: 1, tex: 'concrete' });
   g.add(box(1.7, 0.55, 1.7, conc, 0, 0.42, 0));
   g.add(box(1.72, 0.08, 1.72, t.main, 0, 0.72, 0));
   const turret = new THREE.Group();
   turret.name = 'turret';
   turret.position.set(0, 0.95, 0);
-  turret.add(mesh(cached('coastalDome', () => new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), mat(C.hullGrey, { metal: 0.4 }), 0, -0.2, 0));
-  turret.add(cylX(0.09, 1.5, 8, mat(C.steel, { metal: 0.6 }), 0.95, 0.05, 0));
-  turret.add(cylX(0.13, 0.2, 8, mat(C.dark), 1.68, 0.05, 0));
+  turret.add(mesh(cached('coastalDome', () => new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), plainMat(C.hullGrey, { metal: 0.4 }), 0, -0.2, 0));
+  turret.add(cylX(0.09, 1.5, 8, plainMat(C.steel, { metal: 0.6 }), 0.95, 0.05, 0));
+  turret.add(cylX(0.13, 0.2, 8, plainMat(C.dark), 1.68, 0.05, 0));
   g.add(turret);
   return g;
 }
@@ -503,7 +518,7 @@ export function buildBuildingModel(type: BuildingTypeId, team: number, level = 0
 /** Scaffolding shown while a building is under construction. */
 export function buildScaffold(w: number, h: number, height: number): THREE.Group {
   const g = new THREE.Group();
-  const pole = mat(0xc9a24a, { rough: 0.7 });
+  const pole = mat(0xc9a24a, { rough: 0.7, tex: 'none' });
   const hw = w / 2 - 0.08;
   const hh = h / 2 - 0.08;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.06, height, 0.06, pole, sx * hw, height / 2, sz * hh));

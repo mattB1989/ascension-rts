@@ -393,8 +393,80 @@ function transportShip(team: number): THREE.Group {
   return g;
 }
 
+/** Digital age: a soldier in a powered exoskeleton with a heavy rifle. */
+function exoTrooper(team: number): THREE.Group {
+  const t = teamMats(team);
+  const frame = mat(0x50565c, { metal: 0.6, rough: 0.4 });
+  const g = new THREE.Group();
+  for (const z of [0.07, -0.07]) {
+    g.add(box(0.1, 0.26, 0.09, frame, 0, 0.13, z));
+    g.add(box(0.16, 0.04, 0.11, mat(C.dark), 0.02, 0.02, z));
+  }
+  g.add(box(0.2, 0.28, 0.3, t.main, 0, 0.4, 0));
+  g.add(box(0.12, 0.22, 0.26, frame, -0.12, 0.42, 0)); // power pack
+  g.add(box(0.03, 0.05, 0.2, mat(0x40e0f0, { emissive: 0x20c0e0 }), -0.19, 0.46, 0));
+  g.add(sphere(0.095, t.accent, 0.01, 0.62, 0, 6));
+  g.add(box(0.05, 0.05, 0.12, mat(0x40e0f0, { emissive: 0x20a0c0 }), 0.08, 0.63, 0)); // visor
+  g.add(box(0.42, 0.06, 0.06, mat(C.black), 0.18, 0.42, 0.14));
+  g.add(box(0.12, 0.1, 0.07, frame, 0.04, 0.42, 0.14));
+  g.scale.setScalar(1.6);
+  return g;
+}
+
+/** Digital age: a wheeled launcher with a tilted rocket pod. */
+function rocketArtillery(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = new THREE.Group();
+  const tyre = mat(C.dark, { rough: 0.9 });
+  for (const x of [-0.5, -0.1, 0.45]) for (const z of [0.3, -0.3]) g.add(cyl(0.14, 0.14, 0.1, 10, tyre, x, 0.14, z).rotateX(Math.PI / 2));
+  g.add(box(1.4, 0.18, 0.56, t.main, 0, 0.3, 0));
+  g.add(box(0.36, 0.34, 0.54, t.main, 0.52, 0.52, 0)); // cab
+  g.add(box(0.04, 0.16, 0.44, mat(C.glass, { metal: 0.5, rough: 0.2 }), 0.71, 0.58, 0));
+  const pod = new THREE.Group();
+  pod.name = 'turret';
+  pod.position.set(-0.3, 0.45, 0);
+  const launcher = new THREE.Group();
+  launcher.rotation.z = 0.45;
+  launcher.add(box(0.8, 0.3, 0.46, t.accent, 0.2, 0.15, 0));
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) launcher.add(cylX(0.05, 0.04, 6, mat(C.black), 0.61, 0.07 + j * 0.15, -0.14 + i * 0.14));
+  pod.add(launcher);
+  g.add(pod);
+  return g;
+}
+
+/** Digital age: the first mech, a two-legged walker with shoulder guns. */
+function warden(team: number): THREE.Group {
+  const t = teamMats(team);
+  const frame = mat(0x5a6068, { metal: 0.6, rough: 0.4 });
+  const g = new THREE.Group();
+  for (const z of [0.28, -0.28]) {
+    g.add(box(0.5, 0.08, 0.26, mat(C.dark), 0.05, 0.04, z)); // feet
+    g.add(box(0.16, 0.5, 0.18, frame, 0, 0.32, z)); // shins
+    g.add(box(0.2, 0.4, 0.22, t.main, -0.05, 0.75, z)); // thighs
+  }
+  g.add(box(0.5, 0.2, 0.7, frame, -0.02, 0.98, 0)); // hips
+  const torso = new THREE.Group();
+  torso.name = 'turret';
+  torso.position.set(0, 1.3, 0);
+  torso.add(box(0.7, 0.5, 0.8, t.main, 0, 0, 0));
+  torso.add(box(0.2, 0.18, 0.5, mat(0x40e0f0, { emissive: 0x2090b0, metal: 0.4 }), 0.36, 0.08, 0)); // cockpit
+  for (const z of [0.5, -0.5]) {
+    torso.add(box(0.4, 0.3, 0.22, t.accent, 0, 0.12, z));
+    torso.add(cylX(0.06, 0.7, 6, mat(C.steel, { metal: 0.6 }), 0.45, 0.12, z));
+  }
+  torso.add(box(0.3, 0.2, 0.3, frame, -0.3, 0.3, 0));
+  g.add(torso);
+  return g;
+}
+
 export function buildUnitModel(type: UnitTypeId, team: number): THREE.Group {
   switch (type) {
+    case 'exo_trooper':
+      return exoTrooper(team);
+    case 'rocket_artillery':
+      return rocketArtillery(team);
+    case 'warden':
+      return warden(team);
     case 'engineer':
       return soldier(team, 'engineer');
     case 'rifleman':

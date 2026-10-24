@@ -2,7 +2,7 @@
 // truck over connected roads, opinion and dependence, and the two peaceful ways
 // a city-state joins your nation: economic union (it asks) or purchase.
 
-import { GOOD_IDS, GOODS, type GoodId } from '../../data/goods.ts';
+import { GOOD_IDS, GOODS, sumTiers, type GoodId } from '../../data/goods.ts';
 import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
@@ -126,7 +126,7 @@ export function stateValue(world: World, state: number): { population: number; w
   const pc = world.city!.players[state]!;
   let worth = 0;
   for (const b of world.buildings) if (b.owner === state && b.complete) worth += b.def.econ?.credits ?? 0;
-  const population = pc.population[0] + pc.population[1];
+  const population = sumTiers(pc.population);
   return { population, worth, gdp: pc.lastGdp || pc.gdp };
 }
 

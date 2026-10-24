@@ -58,6 +58,8 @@ export type Placement =
   | 'stone' // quarries: on a stone deposit
   | 'ore' // mines: on an ore deposit
   | 'oil' // oil wells: on an oil deposit
+  | 'rare' // rare-earth mines: on a rare-earth deposit
+  | 'uranium' // uranium mines: on a uranium deposit
   | 'freshWater'; // pumping stations: next to a river or lake
 
 export interface BuildingDef {
@@ -96,7 +98,7 @@ export interface BuildingDef {
   description: string;
 }
 
-export type ServiceKind = 'market' | 'water' | 'police' | 'health' | 'school';
+export type ServiceKind = 'market' | 'water' | 'police' | 'health' | 'school' | 'data';
 
 /** How a building takes part in the economy game (DESIGN.md §3-6). */
 export interface EconDef {
@@ -128,6 +130,8 @@ export interface EconDef {
   waterSupply?: number;
   /** Ground made worse for housing nearby (0..1). */
   pollution?: number;
+  /** Research points per second at full staff (and power). */
+  research?: number;
   /** Military buildings: goods kept in stock for training (trucks deliver them). */
   supplies?: Readonly<Partial<Record<GoodId, number>>>;
 }

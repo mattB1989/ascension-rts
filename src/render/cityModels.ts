@@ -250,7 +250,25 @@ function apartment(team: number): THREE.Group {
   return g;
 }
 
-export const HOUSE_MODELS = [cottage, house, terrace, apartment];
+function tower(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2, paving());
+  // Glass tower on a stone podium, with a lit crown and an antenna.
+  g.add(box(1.7, 0.5, 1.6, mat(0xb8b2a6, { rough: 0.8 }), 0, 0.37, 0));
+  g.add(box(1.35, 4.4, 1.25, glass(), 0, 2.82, 0));
+  for (let k = 0; k < 9; k++) g.add(box(1.39, 0.05, 1.29, mat(0xd8dde2, { metal: 0.3, rough: 0.5 }), 0, 0.85 + k * 0.48, 0));
+  for (const [x, z] of [[-0.66, -0.61], [0.66, -0.61], [-0.66, 0.61], [0.66, 0.61]] as const) g.add(box(0.08, 4.4, 0.08, mat(0xe8eaec, { rough: 0.6 }), x, 2.82, z));
+  g.add(box(1.0, 0.3, 0.9, t.main, 0, 5.17, 0));
+  g.add(box(1.05, 0.06, 0.95, windowGlow(), 0, 5.0, 0));
+  g.add(cyl(0.025, 0.025, 0.9, 4, darkMetal(), 0.25, 5.7, 0.2));
+  const beacon = sphere(0.05, mat(0xff4040, { emissive: 0xff2020 }), 0.25, 6.17, 0.2, 6);
+  beacon.name = 'flare';
+  g.add(beacon);
+  g.add(box(0.5, 0.4, 0.04, glass(), 0, 0.32, 0.82));
+  return g;
+}
+
+export const HOUSE_MODELS = [cottage, house, terrace, apartment, tower];
 
 // ---------------------------------------------------------------------------
 // Raw producers
@@ -598,6 +616,173 @@ function school(team: number): THREE.Group {
   return g;
 }
 
+// ---------------------------------------------------------------------------
+// Digital age
+
+/** Open pit with terraces, a conveyor and a coloured heap. */
+function openPit(team: number, heap: number, glow = false): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, mat(0x7a6a58, { rough: 1 }));
+  for (let k = 0; k < 3; k++) g.add(cyl(1.1 - k * 0.3, 1.15 - k * 0.3, 0.06, 12, mat(k % 2 ? 0x6a5a4a : 0x5a4c3e, { rough: 1 }), -0.3, 0.15 + k * 0.01 - k * 0.0, -0.3));
+  g.add(cyl(0.35, 0.35, 0.07, 10, mat(0x3a3028, { rough: 1 }), -0.3, 0.2, -0.3));
+  const conveyor = box(1.4, 0.06, 0.18, darkMetal(), 0.55, 0.55, 0.55);
+  conveyor.rotation.z = 0.35;
+  g.add(conveyor);
+  g.add(mesh(cached('pitHeap', () => new THREE.ConeGeometry(0.5, 0.6, 7)), mat(heap, glow ? { rough: 0.7, emissive: 0x3a5a10 } : { rough: 0.9 }), 1.0, 0.42, 0.95));
+  g.add(box(0.7, 0.5, 0.5, mat(0xc9c4ba), 0.9, 0.37, -0.9));
+  g.add(box(0.74, 0.07, 0.54, t.accent, 0.9, 0.65, -0.9));
+  return g;
+}
+
+function rareEarthMine(team: number): THREE.Group {
+  return openPit(team, 0x4fb88a);
+}
+
+function uraniumMine(team: number): THREE.Group {
+  const g = openPit(team, 0xa8d040, true);
+  // Hazard drums.
+  for (let i = 0; i < 3; i++) g.add(cyl(0.1, 0.1, 0.24, 8, mat(0xe0c020), -1.1 + i * 0.24, 0.24, 1.1));
+  return g;
+}
+
+function electronicsPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 3, paving());
+  // Clean white halls with blue glass bands and rooftop units.
+  g.add(box(3.0, 1.0, 1.8, white(), -0.2, 0.6, -0.3));
+  g.add(box(3.04, 0.22, 1.84, mat(0x3a6ab0, { metal: 0.5, rough: 0.2 }), -0.2, 0.75, -0.3));
+  g.add(box(3.04, 0.07, 1.84, t.main, -0.2, 1.13, -0.3));
+  for (const x of [-1.2, -0.6, 0.0, 0.6]) g.add(box(0.36, 0.22, 0.36, metal(), x, 1.28, -0.6));
+  g.add(cyl(0.18, 0.18, 0.9, 10, metal(), 1.55, 0.55, -0.9));
+  g.add(box(0.8, 0.5, 0.5, mat(0xc9c4ba), 1.3, 0.37, 0.9));
+  crates(g, -1.5, 1.05, 3, 0x58a8ff);
+  return g;
+}
+
+function pharmaPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, paving());
+  g.add(box(2.0, 1.1, 1.4, white(), -0.3, 0.65, -0.3));
+  g.add(box(2.04, 0.08, 1.44, t.accent, -0.3, 1.24, -0.3));
+  windowRow(g, 5, 1.6, 0.7, 'x', 0.41);
+  // Steel reactors with domed tops.
+  for (const z of [-0.7, 0.1]) {
+    g.add(cyl(0.25, 0.25, 1.0, 12, metal(), 1.05, 0.6, z));
+    g.add(sphere(0.25, metal(), 1.05, 1.1, z, 10));
+  }
+  const red = mat(0xd03a30, { emissive: 0x501010 });
+  g.add(box(0.3, 0.08, 0.08, red, -0.3, 1.45, 0.42));
+  g.add(box(0.08, 0.3, 0.08, red, -0.3, 1.45, 0.42));
+  return g;
+}
+
+function nuclearPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 4);
+  // Two hyperboloid cooling towers, a domed reactor and a turbine hall.
+  const coolGeo = cached('coolTower', () => {
+    const pts: THREE.Vector2[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const y = k / 8;
+      const r = 0.62 - 0.5 * y * (1 - y) * 1.2 + 0.0;
+      pts.push(new THREE.Vector2(r, y * 2.6));
+    }
+    return new THREE.LatheGeometry(pts, 16);
+  });
+  const cool = mat(0xd8d4ca, { rough: 0.9 });
+  cool.side = THREE.DoubleSide;
+  for (const [x, z] of [[-0.95, -0.9], [0.55, -1.05]] as const) {
+    g.add(mesh(coolGeo, cool, x, 0.12, z));
+    const top = new THREE.Object3D();
+    top.name = 'smoke';
+    top.position.set(x, 2.8, z);
+    g.add(top);
+  }
+  g.add(cyl(0.6, 0.6, 0.9, 16, mat(0xc9c4ba), -0.6, 0.57, 0.95));
+  g.add(sphere(0.6, mat(0xc9c4ba), -0.6, 1.02, 0.95, 16));
+  g.add(box(1.4, 0.8, 0.9, mat(0xb0aca4), 0.95, 0.52, 0.85));
+  g.add(box(1.44, 0.08, 0.94, t.accent, 0.95, 0.96, 0.85));
+  windowRow(g, 4, 1.1, 0.6, 'x', 1.31);
+  return g;
+}
+
+function hospital(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 3, paving());
+  g.add(box(3.2, 1.6, 1.3, white(), 0, 0.92, -0.5));
+  g.add(box(1.2, 2.4, 1.0, white(), -0.9, 1.32, -0.5));
+  for (const y of [0.55, 1.0, 1.45]) windowRow(g, 7, 2.9, y, 'x', 0.16);
+  windowRow(g, 2, 0.7, 1.9, 'x', 0.01);
+  g.add(box(3.24, 0.08, 1.34, mat(0x9ab0b8), 0, 1.76, -0.5));
+  // Helipad on the tall wing, red cross, ambulance bay.
+  g.add(cyl(0.42, 0.42, 0.05, 16, mat(0x3a3f44), -0.9, 2.56, -0.5));
+  g.add(box(0.3, 0.02, 0.06, white(), -0.9, 2.6, -0.5));
+  const red = mat(0xd03a30, { emissive: 0x501010 });
+  g.add(box(0.44, 0.12, 0.1, red, 0.8, 2.0, 0.17));
+  g.add(box(0.12, 0.44, 0.1, red, 0.8, 2.0, 0.17));
+  g.add(box(1.0, 0.06, 0.6, t.main, 0.9, 0.6, 0.55));
+  for (const sx of [0.45, 1.35]) g.add(cyl(0.025, 0.025, 0.5, 4, darkMetal(), sx, 0.35, 0.8));
+  return g;
+}
+
+function researchInstitute(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, grassMat());
+  g.add(box(2.2, 1.0, 1.1, mat(0xd6d0c4), -0.2, 0.6, -0.6));
+  g.add(box(2.24, 0.08, 1.14, t.main, -0.2, 1.14, -0.6));
+  windowRow(g, 6, 1.9, 0.65, 'x', -0.04);
+  // Observatory dome and a radio dish.
+  g.add(cyl(0.45, 0.45, 0.5, 14, white(), 0.8, 0.4, 0.7));
+  g.add(mesh(cached('obsDome', () => new THREE.SphereGeometry(0.45, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2)), metal(), 0.8, 0.65, 0.7));
+  const dish = new THREE.Group();
+  dish.name = 'spin';
+  dish.position.set(-0.9, 1.5, -0.6);
+  const bowl = mesh(cached('dish', () => new THREE.SphereGeometry(0.35, 12, 6, 0, Math.PI * 2, 0, 0.9)), white(), 0, 0, 0);
+  bowl.rotation.x = Math.PI * 0.75;
+  dish.add(bowl);
+  g.add(cyl(0.04, 0.05, 0.3, 6, darkMetal(), -0.9, 1.3, -0.6));
+  g.add(dish);
+  tree(g, -1.1, 1.0, 0.8);
+  tree(g, 0.0, 1.1, 0.7);
+  return g;
+}
+
+function dataExchange(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2, paving());
+  g.add(box(1.1, 0.7, 0.9, mat(0x4a5058, { metal: 0.3, rough: 0.5 }), -0.25, 0.45, 0.2));
+  g.add(box(1.14, 0.06, 0.94, t.main, -0.25, 0.83, 0.2));
+  for (let k = 0; k < 4; k++) g.add(box(0.03, 0.06, 0.03, mat(0x40e0f0, { emissive: 0x20c0e0 }), -0.6 + k * 0.2, 0.6, 0.66));
+  // Lattice mast with dishes.
+  for (const [x, z] of [[0.45, -0.5], [0.7, -0.5], [0.45, -0.25], [0.7, -0.25]] as const) g.add(box(0.04, 2.6, 0.04, darkMetal(), x, 1.4, z));
+  for (const y of [0.9, 1.6, 2.3]) g.add(box(0.3, 0.04, 0.3, darkMetal(), 0.575, y, -0.375));
+  for (const [y, r] of [[2.0, 0.6], [2.5, -0.9]] as const) {
+    const d = mesh(cached('smallDish', () => new THREE.SphereGeometry(0.16, 10, 5, 0, Math.PI * 2, 0, 0.9)), white(), 0.575, y, -0.375);
+    d.rotation.set(Math.PI / 2, 0, r);
+    g.add(d);
+  }
+  const beacon = sphere(0.05, mat(0xff4040, { emissive: 0xff2020 }), 0.575, 2.78, -0.375, 6);
+  beacon.name = 'flare';
+  g.add(beacon);
+  return g;
+}
+
+function mechFoundry(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(5, 5);
+  factoryHall(g, 3.6, 2.6, 2.0, -0.3, -0.6, mat(0x6a7078, { metal: 0.4, rough: 0.5 }), darkMetal());
+  g.add(box(1.6, 1.5, 0.05, mat(0x3a3f44, { metal: 0.5 }), -0.3, 0.85, 0.72));
+  g.add(box(3.64, 0.25, 2.64, t.main, -0.3, 1.9, -0.6));
+  // Gantry crane over the yard and a mech frame waiting.
+  for (const x of [-1.9, 1.5]) g.add(box(0.12, 2.6, 0.12, mat(0xe0b020), x, 1.4, 1.6));
+  g.add(box(3.6, 0.15, 0.2, mat(0xe0b020), -0.2, 2.7, 1.6));
+  g.add(box(0.3, 1.2, 0.25, darkMetal(), 0.6, 0.75, 1.5));
+  g.add(box(0.3, 1.2, 0.25, darkMetal(), 1.0, 0.75, 1.5));
+  g.add(box(0.8, 0.6, 0.6, mat(0x8c939a, { metal: 0.6 }), 0.8, 1.65, 1.5));
+  chimney(g, 1.8, -1.7, 2.6, 0.18, darkMetal());
+  return g;
+}
+
 export function buildCityModel(type: string, team: number, level = 0): THREE.Group | null {
   switch (type) {
     case 'town_hall': return townHall(team);
@@ -606,7 +791,16 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'warehouse': return warehouse(team);
     case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
-    case 'house': return HOUSE_MODELS[Math.max(0, Math.min(3, level))]!(team);
+    case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team);
+    case 'rare_earth_mine': return rareEarthMine(team);
+    case 'uranium_mine': return uraniumMine(team);
+    case 'electronics_plant': return electronicsPlant(team);
+    case 'pharma_plant': return pharmaPlant(team);
+    case 'nuclear_plant': return nuclearPlant(team);
+    case 'hospital': return hospital(team);
+    case 'research_institute': return researchInstitute(team);
+    case 'data_exchange': return dataExchange(team);
+    case 'mech_foundry': return mechFoundry(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
     case 'logging_camp': return loggingCamp(team);

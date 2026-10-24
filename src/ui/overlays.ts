@@ -7,10 +7,10 @@ import { searchRoads } from '../sim/city/roads.ts';
 import { Terrain } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 
-export type OverlayKind = 'land' | 'roads' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'happiness' | 'pollution';
+export type OverlayKind = 'land' | 'roads' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'data' | 'happiness' | 'pollution';
 
 export const OVERLAYS: Array<{ id: OverlayKind; icon: string; name: string; legend: string }> = [
-  { id: 'land', icon: '🌾', name: 'Land', legend: 'Green: fertile farmland. Brown: ore, grey: stone, black: oil deposits.' },
+  { id: 'land', icon: '🌾', name: 'Land', legend: 'Green: fertile farmland. Brown: ore, grey: stone, black: oil, teal: rare earths, yellow-green: uranium deposits.' },
   { id: 'roads', icon: '🛣', name: 'Roads', legend: 'Road condition: green good, red worn (slow trucks). Maintenance depots repair within 30 tiles.' },
   { id: 'water', icon: '💧', name: 'Water', legend: 'Blue: reached by a water tower. Houses: blue with water, red without.' },
   { id: 'power', icon: '⚡', name: 'Power', legend: 'Yellow: powered. Red: needs power and has none.' },
@@ -18,6 +18,7 @@ export const OVERLAYS: Array<{ id: OverlayKind; icon: string; name: string; lege
   { id: 'police', icon: '🚓', name: 'Police', legend: 'Blue: patrolled by a police station.' },
   { id: 'health', icon: '🏥', name: 'Health', legend: 'Pink: within a clinic\'s reach.' },
   { id: 'school', icon: '🎓', name: 'School', legend: 'Purple: within a school\'s reach.' },
+  { id: 'data', icon: '📡', name: 'Data', legend: 'Cyan: on the data network (Digital age: data exchanges). Towers need it.' },
   { id: 'happiness', icon: '😊', name: 'Happiness', legend: 'Houses from red (unhappy) to green (happy).' },
   { id: 'pollution', icon: '🏭', name: 'Pollution', legend: 'Red haze around heavy industry: houses nearby are less happy.' },
 ];
@@ -30,11 +31,19 @@ export function overlayFor(type: BuildingTypeId | string): OverlayKind | null {
     case 'iron_mine':
     case 'oil_well':
     case 'logging_camp':
+    case 'rare_earth_mine':
+    case 'uranium_mine':
       return 'land';
+    case 'data_exchange':
+      return 'data';
+    case 'hospital':
+      return 'health';
     case 'water_tower':
     case 'pumping_station':
       return 'water';
     case 'power_plant':
+    case 'nuclear_plant':
+    case 'hydro_plant':
       return 'power';
     case 'market':
       return 'market';
@@ -63,6 +72,7 @@ const SERVICE_COLOR: Record<ServiceKind, [number, number, number]> = {
   police: [70, 110, 255],
   health: [255, 110, 180],
   school: [170, 110, 255],
+  data: [60, 220, 230],
 };
 
 /** A building to tint in the overlay. */
@@ -117,6 +127,8 @@ export function computeOverlay(world: World, kind: OverlayKind, viewer: number):
       if (d === 1) put(i, 190, 80, 40, 230);
       else if (d === 2) put(i, 20, 20, 20, 230);
       else if (d === 3) put(i, 225, 225, 220, 230);
+      else if (d === 4) put(i, 60, 200, 150, 230);
+      else if (d === 5) put(i, 180, 220, 50, 230);
       else if (t === Terrain.Fertile) put(i, 90, 220, 60, 200);
       else if (t === Terrain.Grass) put(i, 160, 200, 80, 90);
       else if (t === Terrain.Forest) put(i, 30, 110, 40, 160);

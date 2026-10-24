@@ -28,6 +28,8 @@ const DEPOSIT_TINT: Record<number, [number, number]> = {
   [Deposit.Ore]: [0xa0553a, 0.55],
   [Deposit.Stone]: [0xbdb8ae, 0.6],
   [Deposit.Oil]: [0x2a2622, 0.55],
+  [Deposit.Rare]: [0x4fb88a, 0.55],
+  [Deposit.Uranium]: [0xa8d040, 0.5],
 };
 
 export const BORDER_DEPTH = -3.6;
@@ -55,6 +57,8 @@ const sharedMaterials = {
   ore: new THREE.MeshStandardMaterial({ color: 0x9a4a32, flatShading: true, roughness: 0.8, metalness: 0.2 }),
   stone: new THREE.MeshStandardMaterial({ color: 0xc9c4ba, flatShading: true, roughness: 0.9 }),
   oil: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.3 }),
+  rare: new THREE.MeshStandardMaterial({ color: 0x3fae7e, flatShading: true, roughness: 0.5, metalness: 0.4 }),
+  uranium: new THREE.MeshStandardMaterial({ color: 0x9cc83a, flatShading: true, roughness: 0.6, emissive: 0x3a5a10, emissiveIntensity: 0.5 }),
 };
 applyOverlay(sharedMaterials.ground);
 
@@ -323,7 +327,7 @@ export class TerrainView {
   /** Rocks on rocky ground, lumps on ore and stone deposits, pools on oil. */
   private buildScatter(chunk: Chunk): void {
     const map = this.map;
-    const kinds: Record<string, Array<[number, number, number]>> = { rock: [], ore: [], stone: [], oil: [] };
+    const kinds: Record<string, Array<[number, number, number]>> = { rock: [], ore: [], stone: [], oil: [], rare: [], uranium: [] };
     for (let ty = chunk.y0; ty < chunk.y0 + chunk.size; ty++) {
       for (let tx = chunk.x0; tx < chunk.x0 + chunk.size; tx++) {
         const i = ty * map.width + tx;
@@ -333,6 +337,8 @@ export class TerrainView {
         if (d === Deposit.Ore && r < 0.5) kinds.ore!.push([tx + 0.3 + r * 0.4, ty + 0.5, r]);
         if (d === Deposit.Stone && r < 0.45) kinds.stone!.push([tx + 0.5, ty + 0.3 + r * 0.4, r]);
         if (d === Deposit.Oil && r < 0.22) kinds.oil!.push([tx + 0.5, ty + 0.5, r]);
+        if (d === Deposit.Rare && r < 0.45) kinds.rare!.push([tx + 0.4 + r * 0.3, ty + 0.5, r]);
+        if (d === Deposit.Uranium && r < 0.4) kinds.uranium!.push([tx + 0.5, ty + 0.4 + r * 0.3, r]);
       }
     }
     const m = new THREE.Matrix4();
@@ -361,6 +367,8 @@ export class TerrainView {
     make(kinds.ore!, lumpGeo, sharedMaterials.ore, 1);
     make(kinds.stone!, lumpGeo, sharedMaterials.stone, 1.1);
     make(kinds.oil!, poolGeo, sharedMaterials.oil, 1, true);
+    make(kinds.rare!, lumpGeo, sharedMaterials.rare, 0.9);
+    make(kinds.uranium!, lumpGeo, sharedMaterials.uranium, 0.8);
   }
 
   /** Remove trees standing inside a footprint (a building or road was placed there). */

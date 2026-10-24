@@ -148,7 +148,7 @@ Each milestone ends with a playable build on GitHub Pages.
 | **E4** ◐ | Networks and trade | ✅ overseas market, trade ports and ships, network condition and maintenance, hydro power. Still to do: rail, river barges, pipelines, pirates raiding convoys |
 | **E5** ◐ | Neighbours | ✅ city-states with their own economies (AI on the same rules), local prices, trade deals by road, opinion and dependence, regional offices, economic union, purchase. Still to do: treaties |
 | **E6** ◐ | Rivals and war | ✅ nation AI (Easy / Normal / Hard) that builds, trades, expands and makes war; units paid in credits and goods with upkeep; army limit by population; war and peace; capturing seats and their regions; garrisons; defeat. Still to do: supply depots and attrition, war weariness, blockades, embargoes, harness |
-| **E7** | Digital age | Engineers tier, electronics, pharmaceuticals, nuclear power, airports, data network, research pacts, Digital units (subs, carriers, first mech) |
+| **E7** ◐ | Digital age | ✅ ages reached by research, people, GDP and a price; Engineers tier and towers, rare earths and uranium, electronics, pharmaceuticals and hospitals, nuclear power, data network, exo-troopers, rocket artillery, the Warden mech; AI nations advance too. Still to do: airports, research pacts, Digital navy and air force in the economy game |
 | **E8** | Nano age | Scientists tier, nanomaterials, robotics and automation, fusion, maglev, heavy mechs, EMP, shields |
 | **E9** | Space age | Orbital industry, launch site, Space Elevator; all victory types |
 | **E10** | Polish and content | Graphics pass, sound and music, post-game report, more biomes, scenarios, AI personalities, AI-vs-AI spectator, replays |

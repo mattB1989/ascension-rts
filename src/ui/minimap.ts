@@ -21,7 +21,7 @@ const COLORS: Record<TerrainId, string> = {
   [Terrain.Snow]: '#eef2f4',
 };
 
-const DEPOSIT_COLORS: Record<number, [number, number, number]> = { 1: [196, 84, 52], 2: [24, 22, 20], 3: [222, 220, 214] };
+const DEPOSIT_COLORS: Record<number, [number, number, number]> = { 1: [196, 84, 52], 2: [24, 22, 20], 3: [222, 220, 214], 4: [80, 190, 140], 5: [176, 214, 64] };
 
 export class Minimap {
   readonly el: HTMLCanvasElement;

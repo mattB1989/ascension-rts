@@ -63,10 +63,16 @@ function migrate(w: World): void {
   for (const b of w.buildings) if (b.city) {
     b.city.capture ??= 0;
     b.city.captureBy ??= -1;
+    b.city.needs.electronics ??= false;
+    b.city.needs.data ??= false;
+    b.city.covered.data ??= false;
   }
   city.aiQueue ??= [];
   for (const t of city.trucks) t.buy ??= null;
   for (const pc of city.players) {
+    for (const k of ['population', 'workforce', 'jobs', 'employed'] as const) while (pc[k].length < 4) (pc[k] as number[]).push(0);
+    pc.age ??= 0;
+    pc.research ??= 0;
     pc.deals ??= {};
     pc.relations ??= null;
     pc.trade ??= {};
@@ -77,7 +83,12 @@ function migrate(w: World): void {
     pc.lastYear.military ??= 0;
   }
   if (!w.map.nearRegion) (w.map as { nearRegion: Uint16Array }).nearRegion = new Uint16Array(w.map.region);
-  for (const r of w.map.regions) (r as { ocean?: boolean }).ocean ??= false;
+  for (const r of w.map.regions) {
+    const x = r as { ocean?: boolean; rare?: number; uranium?: number };
+    x.ocean ??= false;
+    x.rare ??= 0;
+    x.uranium ??= 0;
+  }
 }
 
 /** Same as saving and loading, in memory (tests, "restart from here"). */

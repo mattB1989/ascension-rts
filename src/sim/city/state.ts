@@ -2,7 +2,7 @@
 // typed arrays, arrays and records, so a save is a structured clone.
 
 import type { HouseNeed } from '../../data/city.ts';
-import { GOOD_IDS, type GoodId } from '../../data/goods.ts';
+import { GOOD_IDS, perTier, type GoodId, type PerTier } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 import type { BotState } from '../../ai/cityBot.ts';
 import type { Command } from '../commands.ts';
@@ -127,10 +127,13 @@ export interface PlayerCity {
   year: Budget;
   lastYear: Budget;
   /** Population and jobs by tier (computed each second). */
-  population: [number, number];
-  workforce: [number, number];
-  jobs: [number, number];
-  employed: [number, number];
+  population: PerTier;
+  workforce: PerTier;
+  jobs: PerTier;
+  employed: PerTier;
+  /** Age reached (0 Modern, 1 Digital, 2 Nano, 3 Space) and research points towards the next. */
+  age: number;
+  research: number;
   happiness: number;
   /** Power across all networks (MW). */
   powerSupply: number;
@@ -195,10 +198,12 @@ export function newPlayerCity(credits: number): PlayerCity {
     taxRate: 1,
     year: emptyBudget(),
     lastYear: emptyBudget(),
-    population: [0, 0],
-    workforce: [0, 0],
-    jobs: [0, 0],
-    employed: [0, 0],
+    population: perTier(),
+    workforce: perTier(),
+    jobs: perTier(),
+    employed: perTier(),
+    age: 0,
+    research: 0,
     happiness: 0.6,
     powerSupply: 0,
     powerDemand: 0,
@@ -236,13 +241,13 @@ export function newCityBuilding(): CityBuildingState {
     level: 0,
     residents: 0,
     growth: 0,
-    needs: { food: false, water: false, goods: false, power: false, police: false, health: false, school: false },
+    needs: { food: false, water: false, goods: false, power: false, police: false, health: false, school: false, electronics: false, data: false },
     upFor: 0,
     downFor: 0,
     happiness: 0.6,
     served: 0,
     market: 0,
-    covered: { market: false, water: false, police: false, health: false, school: false },
+    covered: { market: false, water: false, police: false, health: false, school: false, data: false },
     pollution: 0,
     capture: 0,
     captureBy: -1,

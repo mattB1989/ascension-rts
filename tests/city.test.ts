@@ -1,3 +1,4 @@
+import { sumTiers } from '../src/data/goods.ts';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { botStep, newBot } from '../src/ai/cityBot.ts';
@@ -132,7 +133,7 @@ test('the scripted city grows: technicians, a positive budget, every chain runni
   const bot = newBot(0);
   run(world, 12 * 120, bot);
   const pc = world.city!.players[0]!;
-  const pop = pc.population[0] + pc.population[1];
+  const pop = sumTiers(pc.population);
   assert.ok(pop > 250, `population ${pop}`);
   assert.ok(pc.population[1] > 50, `technicians ${pc.population[1]}`);
   assert.ok(pc.lastYear.taxes > pc.lastYear.upkeep + pc.lastYear.roads, `taxes ${pc.lastYear.taxes} vs upkeep ${pc.lastYear.upkeep}`);
@@ -281,7 +282,7 @@ test('city-states grow on their own, trade by road with you, and can join your n
   run(world, 4 * 120);
   const s = states[0]!.id;
   const spc = world.city!.players[s]!;
-  assert.ok(spc.population[0] + spc.population[1] > 30, 'the city-state grew');
+  assert.ok(sumTiers(spc.population) > 30, 'the city-state grew');
   assert.ok(world.buildings.filter((b) => b.owner === s).length > 5, 'it built a town');
   // Connect our town hall to theirs with a road (L-shape through any land we may cross).
   const mine = world.buildings.find((b) => b.owner === 0 && b.type === 'town_hall')!;
@@ -400,4 +401,62 @@ test('war: an undefended seat falls to troops holding it, a garrisoned one does 
   run(world, 100);
   assert.notEqual(hall.owner, me, 'the town hall fell');
   assert.ok(world.players[me]!.defeated, 'no seat left: defeated');
+});
+
+test('ages: research, technicians, GDP and credits unlock the Digital age and its buildings', async () => {
+  const { addCityBuilding, cityBuildProblem, stockUp } = await import('../src/sim/city/place.ts');
+  const { nextAge } = await import('../src/sim/city/ages.ts');
+  const { recruitProblem } = await import('../src/sim/city/military.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const pc = world.city!.players[0]!;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 30; x <= hall.tx + 30; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  assert.match(cityBuildProblem(world, 0, 'electronics_plant') ?? '', /Digital/);
+  // Technicians in apartments, power, and a research institute.
+  for (let i = 0; i < 8; i++) {
+    const [hx, hy] = spotOnStreet(world, 'house', hall.tx - 28 + i * 3, row);
+    const h = addCityBuilding(world, 'house', 0, hx, hy, true);
+    h.city!.level = 3;
+    h.city!.residents = 40;
+  }
+  const [px, py] = spotOnStreet(world, 'power_plant', hall.tx + 8, row);
+  stockUp(addCityBuilding(world, 'power_plant', 0, px, py, true), { oil: 40 });
+  const [rx, ry] = spotOnStreet(world, 'research_institute', hall.tx + 16, row);
+  const lab = addCityBuilding(world, 'research_institute', 0, rx, ry, true);
+  const [bx, by] = spotOnStreet(world, 'barracks', hall.tx + 22, row);
+  const barracks = addCityBuilding(world, 'barracks', 0, bx, by, true);
+  run(world, 10);
+  assert.ok(lab.city!.workers > 0 && lab.city!.powered, `institute staffed and powered (${lab.city!.status})`);
+  assert.ok(pc.research > 3, `research ${pc.research}`);
+  assert.match(recruitProblem(world, 0, barracks, 'exo_trooper') ?? '', /Digital/);
+  // Not ready yet: the command does nothing.
+  world.step([{ kind: 'advanceAge', player: 0 }]);
+  assert.equal(pc.age, 0);
+  pc.research = 300;
+  pc.lastGdp = 4000;
+  pc.credits = 20000;
+  const next = nextAge(world, 0)!;
+  assert.ok(next.ready, JSON.stringify(next.checks));
+  world.step([{ kind: 'advanceAge', player: 0 }]);
+  assert.equal(pc.age, 1);
+  assert.equal(world.players[0]!.age, 'digital');
+  assert.equal(pc.credits, 12000);
+  assert.equal(cityBuildProblem(world, 0, 'electronics_plant'), null);
+  // An electronics plant makes electronics from rare earths and plastics.
+  const [ex, ey] = spotOnStreet(world, 'electronics_plant', hall.tx - 8, row);
+  const plant = addCityBuilding(world, 'electronics_plant', 0, ex, ey, true);
+  stockUp(plant, { rare: 10, plastics: 5 });
+  run(world, 30);
+  assert.ok((pc.made.electronics ?? 0) > 0, `electronics made (${plant.city!.status})`);
+  // A hospital covers houses only while it has pharmaceuticals.
+  const [qx, qy] = spotOnStreet(world, 'hospital', hall.tx + 2, row);
+  const hospital = addCityBuilding(world, 'hospital', 0, qx, qy, true);
+  run(world, 12);
+  assert.equal(hospital.city!.served, 0, 'no pharmaceuticals, no patients');
+  stockUp(hospital, { pharma: 10 });
+  run(world, 12);
+  assert.ok(hospital.city!.served > 0, `hospital serves (${hospital.city!.status})`);
 });

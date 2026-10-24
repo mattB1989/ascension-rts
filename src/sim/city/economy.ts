@@ -3,8 +3,8 @@
 //   households (consumption, needs, levels, growth) -> taxes and upkeep.
 // Construction advances every tick. See docs/DESIGN.md §3-6.
 
-import { CONSUMPTION, HOUSE_LEVELS, ROAD, TAX_PER_RESIDENT, type HouseNeed } from '../../data/city.ts';
-import { GOODS, START_YEAR, YEAR_SECONDS, type GoodId, type Tier } from '../../data/goods.ts';
+import { CONSUMPTION, HOUSE_LEVELS, houseLevelAge, ROAD, TAX_PER_RESIDENT, type HouseNeed } from '../../data/city.ts';
+import { GOODS, perTier, START_YEAR, sumTiers, TIERS, YEAR_SECONDS, type GoodId, type Tier } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 import { DT } from '../time.ts';
 import type { Building } from '../types.ts';
@@ -29,6 +29,7 @@ const FOOD_FIRST = new Set(['farm', 'fishing_harbour', 'food_plant']);
 
 function jobPriority(b: Building): number {
   if (FOOD_FIRST.has(b.type)) return 1.5;
+  if (b.def.econ?.research) return 5.5;
   return PRIORITY[b.def.category] ?? 6;
 }
 
@@ -166,7 +167,7 @@ function everySecond(world: World): void {
       pc.year = emptyBudget();
       pc.lastGdp = pc.gdp;
       pc.gdp = 0;
-      pc.history.push({ year: START_YEAR + sec / YEAR_SECONDS - 1, population: pc.population[0] + pc.population[1], credits: pc.credits, gdp: pc.lastGdp });
+      pc.history.push({ year: START_YEAR + sec / YEAR_SECONDS - 1, population: sumTiers(pc.population), credits: pc.credits, gdp: pc.lastGdp });
     }
   }
 }
@@ -192,10 +193,10 @@ function logUsed(pc: PlayerCity, g: GoodId, n: number): void {
 function labour(world: World): void {
   const city = world.city!;
   for (const pc of city.players) {
-    pc.population = [0, 0];
-    pc.workforce = [0, 0];
-    pc.jobs = [0, 0];
-    pc.employed = [0, 0];
+    pc.population = perTier();
+    pc.workforce = perTier();
+    pc.jobs = perTier();
+    pc.employed = perTier();
   }
   // Workforce per (player, network, tier).
   const pool = new Map<string, number>();
@@ -219,8 +220,8 @@ function labour(world: World): void {
     pc.jobs[job.tier] += job.count;
     c.workers = 0;
     if (!c.comp) continue;
-    // Technicians can do workers' jobs; workers can't do technicians'.
-    for (let t = job.tier; t <= 1 && c.workers < job.count; t++) {
+    // Higher tiers can do lower tiers' jobs, not the other way round.
+    for (let t = job.tier; t < TIERS.length && c.workers < job.count; t++) {
       const k = key(b.owner, c.comp, t);
       const free = pool.get(k) ?? 0;
       const take = Math.min(free, job.count - c.workers);
@@ -306,6 +307,8 @@ function coverage(world: World): void {
       c.status = 'No power';
       continue;
     }
+    // Hospitals: only while supplied (production sets the reason).
+    if (s.def.econ!.recipe && c.efficiency <= 0) continue;
     let capacity = svc.capacity * (s.def.econ!.jobs ? Math.min(1, c.workers / s.def.econ!.jobs.count) : 1);
     if (svc.kind === 'water') {
       const left = waterLeft.get(c.comp * 64 + s.owner) ?? 0;
@@ -366,6 +369,10 @@ function production(world: World): void {
       c.status = constructionStatus(b);
       continue;
     }
+    if (e.research) {
+      research(world, b);
+      continue;
+    }
     if (!e.recipe) {
       if (!e.service) c.status = c.access < 0 && b.type !== 'house' ? 'No road' : '';
       continue;
@@ -419,6 +426,23 @@ function production(world: World): void {
   }
 }
 
+/** Research institutes: points towards the next age while staffed and powered. */
+function research(world: World, b: Building): void {
+  const c = b.city!;
+  const e = b.def.econ!;
+  const pc = world.city!.players[b.owner]!;
+  const staff = e.jobs ? c.workers / e.jobs.count : 1;
+  c.efficiency = 0;
+  if (c.access < 0) c.status = 'No road';
+  else if (staff <= 0) c.status = 'No staff: technicians from houses on these roads';
+  else if ((e.power ?? 0) > 0 && !c.powered) c.status = 'No power';
+  else {
+    c.efficiency = staff;
+    c.status = staff < 1 ? `Short of staff (${c.workers}/${e.jobs!.count})` : '';
+    pc.research += e.research! * staff;
+  }
+}
+
 function constructionStatus(b: Building): string {
   const c = b.city!;
   if (c.access < 0) return 'No road: connect it to your roads';
@@ -441,19 +465,22 @@ function households(world: World): void {
   let happySum = new Array(city.players.length).fill(0);
   let happyN = new Array(city.players.length).fill(0);
   const unemployment = city.players.map((pc) => {
-    const wf = pc.workforce[0] + pc.workforce[1];
-    return wf > 0 ? 1 - (pc.employed[0] + pc.employed[1]) / wf : 0;
+    const wf = sumTiers(pc.workforce);
+    return wf > 0 ? 1 - sumTiers(pc.employed) / wf : 0;
   });
   // Settlers come for work: they move in while there are jobs, or while few are out of work.
-  const attractive = city.players.map((pc, i) => pc.jobs[0] + pc.jobs[1] > pc.employed[0] + pc.employed[1] || unemployment[i]! < 0.12 || pc.population[0] + pc.population[1] < 24);
+  const attractive = city.players.map((pc, i) => sumTiers(pc.jobs) > sumTiers(pc.employed) || unemployment[i]! < 0.12 || sumTiers(pc.population) < 24);
   for (const h of world.buildings) {
     const c = h.city;
     if (!c || h.type !== 'house' || !h.complete) continue;
     const pc = city.players[h.owner]!;
     // Shopping: food and goods from the market that serves this house.
     const market = c.market ? world.getBuilding(c.market) : undefined;
-    for (const g of ['food', 'goods'] as const) {
-      const wants = g === 'food' || c.level >= 1;
+    const cur = HOUSE_LEVELS[c.level]!;
+    const next = houseLevelAge(c.level + 1) <= pc.age ? HOUSE_LEVELS[c.level + 1] : undefined;
+    for (const g of ['food', 'goods', 'electronics'] as const) {
+      // Food always; goods from houses up; electronics once the next level (or this one) asks for it.
+      const wants = g === 'food' || (g === 'goods' && c.level >= 1) || (cur.needs as readonly string[]).includes(g) || ((next?.needs ?? []) as readonly string[]).includes(g);
       const need = (c.residents * CONSUMPTION[g]) / YEAR_SECONDS;
       let ok = false;
       if (market?.city && wants) {
@@ -471,9 +498,8 @@ function households(world: World): void {
     c.needs.police = c.covered.police;
     c.needs.health = c.covered.health;
     c.needs.school = c.covered.school;
+    c.needs.data = c.covered.data;
 
-    const cur = HOUSE_LEVELS[c.level]!;
-    const next = HOUSE_LEVELS[c.level + 1];
     const curOk = cur.needs.every((n) => c.needs[n]);
     const nextOk = next ? next.needs.every((n) => c.needs[n]) : false;
     c.upFor = nextOk ? c.upFor + 1 : 0;

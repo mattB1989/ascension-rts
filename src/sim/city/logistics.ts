@@ -48,7 +48,7 @@ export function demandFor(b: Building, g: GoodId, world?: World): number {
     const per = e.recipe.in[g];
     if (per) return Math.max(0, Math.max(TRUCK_LOAD, per * INPUT_CYCLES) - get(c.stock, g) - incoming);
   }
-  if (e.service?.kind === 'market' && (g === 'food' || g === 'goods')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
+  if (e.service?.kind === 'market' && (g === 'food' || g === 'goods' || g === 'electronics')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
   const sup = e.supplies?.[g];
   if (sup) return Math.max(0, sup - get(c.stock, g) - incoming);
   return 0;
@@ -136,6 +136,8 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
       for (const g of goods) {
         const d = demandFor(b, g, world);
         if (d < 1) continue;
+        // No trickle deliveries: a working building that still has some waits until it needs half a load.
+        if (d < TRUCK_LOAD / 2 && b.complete && get(b.city.stock, g) >= 1) continue;
         const have = get(c.stock, g);
         const n = Math.min(have, TRUCK_LOAD, d);
         // Wait for a full load unless that covers the whole demand.

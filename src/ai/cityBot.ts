@@ -5,8 +5,9 @@
 // city manager of AI nations later (E5/E6).
 
 import { BUILDINGS, buildingDef, type BuildingTypeId } from '../data/buildings.ts';
-import { CONSUMPTION } from '../data/city.ts';
-import { YEAR_SECONDS, type GoodId } from '../data/goods.ts';
+import { CONSUMPTION, MAX_AGE } from '../data/city.ts';
+import { nextAge } from '../sim/city/ages.ts';
+import { sumTiers, YEAR_SECONDS, type GoodId } from '../data/goods.ts';
 import type { Command } from '../sim/commands.ts';
 import { cityBuildProblem, cityPlacementProblem, landYield } from '../sim/city/place.ts';
 import { roadProblem } from '../sim/city/roads.ts';
@@ -240,19 +241,22 @@ export function botStep(world: World, bot: BotState): Command[] {
   const pending = world.buildings.filter((b) => b.owner === p && !b.complete && b.type !== 'house').length;
   const busy = pending >= 3 + count(world, p, 'construction_office') * 2;
   const has = (t: string) => count(world, p, t);
-  const pop = pc.population[0] + pc.population[1];
+  const pop = sumTiers(pc.population);
   const houses = world.buildings.filter((b) => b.owner === p && b.type === 'house');
   const room = houses.reduce((s, h) => s + (h.city!.level < 3 ? [8, 16, 24, 40][h.city!.level]! - h.city!.residents : 0), 0);
-  const freeJobs = pc.jobs[0] + pc.jobs[1] - pc.employed[0] - pc.employed[1];
+  const freeJobs = sumTiers(pc.jobs) - sumTiers(pc.employed);
   const credits = pc.credits;
   const made = (g: GoodId) => get(pc.made, g);
   const used = (g: GoodId) => get(pc.used, g);
   const stock = (g: GoodId) => world.buildings.filter((b) => b.owner === p && b.city).reduce((s, b) => s + get(b.city!.stock, g), 0);
 
+  // A new age as soon as it is ready (nations and the scripted player; city-states stay as they are).
+  if (bot.maxPop === Infinity && nextAge(world, p)?.ready) return [{ kind: 'advanceAge', player: p }];
+
   // Trade: once there is a port, buy what the land can't give and sell surpluses.
   if (has('trade_port') && world.time >= bot.tradeAt) {
     bot.tradeAt = world.time + 30;
-    const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber' };
+    const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber', rare_earth_mine: 'rare', uranium_mine: 'uranium' };
     const rules: Array<[GoodId, number, number]> = [['steel', 60, -1], ['concrete', 40, -1], ['crops', 0, 150], ['timber', 0, 150], ['stone', 0, 150], ['food', 0, 250], ['lumber', 0, 200]];
     for (const t of bot.noLand) {
       const g = missing[t];
@@ -260,6 +264,41 @@ export function botStep(world: World, bot: BotState): Command[] {
         const r = rules.find((x) => x[0] === g);
         if (r) r[1] = 80;
         else rules.push([g, 80, -1]);
+      }
+    }
+    // Power plants short of oil: buy it in.
+    if (pc.powerDemand > pc.powerSupply - 2 && has('power_plant') > 0) {
+      const r = rules.find((x) => x[0] === 'oil');
+      if (r) r[1] = Math.max(r[1], 120);
+      else rules.push(['oil', 120, -1]);
+    }
+    // Factories idle for want of an input, while there is money: buy it in.
+    if (credits > 5000) {
+      const short = new Set<GoodId>();
+      for (const b of world.buildings) {
+        const rec = b.def.econ?.recipe;
+        if (b.owner !== p || !b.complete || !rec || !b.city!.status.startsWith('Needs')) continue;
+        for (const [g, n] of Object.entries(rec.in) as Array<[GoodId, number]>) if (get(b.city!.stock, g) < n && stock(g) < 20) short.add(g);
+      }
+      for (const g of short) {
+        const r = rules.find((x) => x[0] === g);
+        if (r) {
+          r[1] = Math.max(r[1], 60);
+          r[2] = -1;
+        } else rules.push([g, 60, -1]);
+      }
+    }
+    // Sites stuck waiting for materials while there is money: buy them in.
+    if (credits > 2500) {
+      for (const g of ['lumber', 'concrete', 'steel'] as const) {
+        const short = world.buildings.filter((b) => b.owner === p && !b.complete && b.city).reduce((s, b) => s + Math.max(0, (b.def.econ?.materials[g] ?? 0) - get(b.city!.delivered, g) - get(b.city!.incoming, g)), 0);
+        if (short <= 0 || stock(g) >= short) continue;
+        const want = Math.min(400, Math.ceil((short + 40) / 20) * 20);
+        const r = rules.find((x) => x[0] === g);
+        if (r) {
+          r[1] = Math.max(r[1], want);
+          r[2] = -1;
+        } else rules.push([g, want, -1]);
       }
     }
     const changed = rules.filter(([g, imp, exp]) => pc.trade[g]?.import !== imp || pc.trade[g]?.export !== exp);
@@ -271,7 +310,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('logging_camp'), 'logging_camp'],
     [!has('sawmill') && !bot.noLand.includes('logging_camp'), 'sawmill'],
     [!has('trade_port') && bot.noLand.length > 0, 'trade_port'],
-    [credits > 400 && (room < 6 ? freeJobs > 4 || pop < 30 : freeJobs > room * 0.5 + 4), 'house'],
+    [credits > 150 && (room < 6 ? freeJobs > 4 || pop < 30 : freeJobs > room * 0.5 + 4), 'house'],
     [!has('farm') && pop >= 12, 'farm'],
     [!has('food_plant') && pop >= 12, 'food_plant'],
     [!has('market') && pop >= 16, 'market'],
@@ -282,6 +321,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('oil_well') && pop >= 40, 'oil_well'],
     [!has('power_plant') && (has('oil_well') > 0 || bot.noLand.includes('oil_well')), 'power_plant'],
     [!has('hydro_plant') && pop >= 60 && bot.noLand.includes('oil_well'), 'hydro_plant'],
+    [has('hydro_plant') < 2 && pop >= 200 && pc.powerDemand > pc.powerSupply - 5 && !bot.noLand.includes('hydro_plant'), 'hydro_plant'],
     [!has('cement_works') && has('power_plant') > 0, 'cement_works'],
     [!has('warehouse') && pop >= 50, 'warehouse'],
     [!has('police_station') && pop >= 60, 'police_station'],
@@ -293,8 +333,10 @@ export function botStep(world: World, bot: BotState): Command[] {
     [stock('concrete') < 30 && has('cement_works') > 0 && has('quarry') <= has('cement_works'), 'quarry'],
     [!has('iron_mine') && pop >= 80, 'iron_mine'],
     [!has('steel_mill') && has('iron_mine') > 0, 'steel_mill'],
-    [!has('oil_refinery') && has('steel_mill') > 0 && pop >= 120, 'oil_refinery'],
+    [!has('oil_refinery') && (has('steel_mill') > 0 || bot.noLand.includes('iron_mine')) && pop >= 120, 'oil_refinery'],
     [!has('goods_factory') && has('oil_refinery') > 0 && pc.population[1] >= 20, 'goods_factory'],
+    [has('goods_factory') > 0 && has('goods_factory') < 4 && made('goods') < used('goods') * 1.1 + 2 && stock('goods') < 40, 'goods_factory'],
+    [has('oil_refinery') > 0 && has('oil_refinery') < has('goods_factory') + has('electronics_plant') && stock('plastics') < 30, 'oil_refinery'],
     // Each plant burns about two thirds of a well's oil.
     [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 < has('power_plant') + 1 && !bot.noLand.includes('oil_well'), 'oil_well'],
     [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 >= has('power_plant') + 1, 'power_plant'],
@@ -306,26 +348,37 @@ export function botStep(world: World, bot: BotState): Command[] {
     [bot.nation && !has('barracks') && pop >= 120, 'barracks'],
     [bot.nation && !has('vehicle_factory') && has('barracks') > 0 && pop >= 300 && has('oil_refinery') > 0, 'vehicle_factory'],
     [has('maintenance_depot') * 300 < world.city!.roadCount && world.city!.roadCount > 150, 'maintenance_depot'],
+    // Towards the Digital age, and what it brings.
+    [pc.age < MAX_AGE && !has('research_institute') && pc.population[1] >= 120 && bot.maxPop === Infinity, 'research_institute'],
+    [pc.age >= 1 && !has('data_exchange'), 'data_exchange'],
+    [pc.age >= 1 && !has('electronics_plant') && has('oil_refinery') > 0, 'electronics_plant'],
+    [pc.age >= 1 && !has('rare_earth_mine') && has('electronics_plant') > 0, 'rare_earth_mine'],
+    [pc.age >= 1 && !has('pharma_plant') && pc.population[2] >= 20, 'pharma_plant'],
+    [pc.age >= 1 && !has('hospital') && has('pharma_plant') > 0, 'hospital'],
+    [pc.age >= 1 && !has('uranium_mine') && pc.population[2] >= 30, 'uranium_mine'],
+    [pc.age >= 1 && pc.powerDemand > pc.powerSupply - 20 && !has('nuclear_plant') && pc.population[2] >= 30 && (has('uranium_mine') > 0 || bot.noLand.includes('uranium_mine')), 'nuclear_plant'],
+    [bot.nation && pc.age >= 1 && !has('mech_foundry') && pop >= 600 && has('vehicle_factory') > 0, 'mech_foundry'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];
-  const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school']);
+  const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school', 'data_exchange', 'hospital']);
   const centre = houseCentre(world, p);
 
   // Coverage: wherever houses lack a service the town already has, add one among them.
   if (!busy) {
-    const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school', boolean]> = [
+    const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school' | 'data', boolean]> = [
       ['market', 'market', has('market') > 0],
       ['water_tower', 'water', has('water_tower') > 0 && has('pumping_station') > 0],
       ['police_station', 'police', has('police_station') > 0],
       ['clinic', 'health', has('clinic') > 0],
       ['school', 'school', has('school') > 0],
+      ['data_exchange', 'data', has('data_exchange') > 0],
     ];
     for (const [type, kind, active] of kinds) {
       if (!active) continue;
-      const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : 1) && !h.city!.covered[kind]);
+      const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : kind === 'data' ? 3 : 1) && !h.city!.covered[kind]);
       if (lacking.length < 4) continue;
-      // Skip if one is already under construction.
-      if (world.buildings.some((b) => b.owner === p && b.type === type && !b.complete)) continue;
+      // Skip if one is already under construction, or the ones there are idle (no staff, no power).
+      if (world.buildings.some((b) => b.owner === p && b.type === type && (!b.complete || (b.city!.status !== '' && b.city!.served === 0)))) continue;
       const cx = lacking.reduce((s, h) => s + h.x, 0) / lacking.length;
       const cy = lacking.reduce((s, h) => s + h.y, 0) / lacking.length;
       const cmds = place(world, bot, type, [cx, cy]);
@@ -367,7 +420,7 @@ function expand(world: World, bot: BotState): Command[] {
   const mine = map.regions.filter((r) => city.regionOwner[r.id] === p);
   const options = map.regions
     .filter((r) => city.regionOwner[r.id] === -1 && r.siteX >= 0 && r.neighbors.some((n) => city.regionOwner[n] === p))
-    .map((r) => ({ r, d: Math.sqrt((r.cx - th.x) * (r.cx - th.x) + (r.cy - th.y) * (r.cy - th.y)), score: r.fertile / 300 + r.forest / 400 + (r.ore + r.stone + r.oil) / 60 + (r.ocean ? 1 : 0) }))
+    .map((r) => ({ r, d: Math.sqrt((r.cx - th.x) * (r.cx - th.x) + (r.cy - th.y) * (r.cy - th.y)), score: r.fertile / 300 + r.forest / 400 + (r.ore + r.stone + r.oil + r.rare + r.uranium) / 60 + (r.ocean ? 1 : 0) }))
     .sort((a, b) => b.score - b.d / 80 - (a.score - a.d / 80) || a.r.id - b.r.id);
   void mine;
   for (const { r } of options) {
@@ -403,7 +456,7 @@ function militaryStep(world: World, bot: BotState): Command[] {
   const p = bot.player;
   const pc = world.city!.players[p]!;
   const d = DIFFICULTY[bot.difficulty];
-  const pop = pc.population[0] + pc.population[1];
+  const pop = sumTiers(pc.population);
   const out: Command[] = [];
 
   // Grow: claim land while there is money and people.
@@ -415,10 +468,16 @@ function militaryStep(world: World, bot: BotState): Command[] {
   // Recruit up to a share of the army limit.
   const army = armyOf(world, p);
   const cap = armyCap(world, p);
-  if (army.length < cap * d.army && pc.credits > 1500) {
+  // Building sites come first: no recruiting while they wait for materials and money is short.
+  const starved = pc.credits < 6000 && world.buildings.some((b) => b.owner === p && !b.complete && b.type !== 'house' && /Waiting for (lumber|concrete|steel)/.test(b.city?.status ?? ''));
+  if (army.length < cap * d.army && pc.credits > 3000 && !starved) {
     for (const b of world.buildings) {
       if (b.owner !== p || !b.complete || b.queue.length >= 2) continue;
-      const types: UnitTypeId[] = b.type === 'barracks' ? ['rifleman', 'rocket_trooper', 'rifleman'] : b.type === 'vehicle_factory' ? ['battle_tank', 'scout_buggy', 'flak_track'] : [];
+      const digital = pc.age >= 1;
+      const types: UnitTypeId[] =
+        b.type === 'barracks' ? (digital ? ['exo_trooper', 'rocket_trooper', 'rifleman'] : ['rifleman', 'rocket_trooper', 'rifleman'])
+        : b.type === 'vehicle_factory' ? (digital ? ['battle_tank', 'rocket_artillery', 'flak_track', 'scout_buggy'] : ['battle_tank', 'scout_buggy', 'flak_track'])
+        : b.type === 'mech_foundry' ? ['warden'] : [];
       for (const t of types) {
         if (recruitProblem(world, p, b, t) === null) {
           out.push({ kind: 'recruit', player: p, building: b.id, unit: t });

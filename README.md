@@ -44,6 +44,12 @@ original **Twin Shores** skirmish.
   or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no
   defenders nearby and its region is yours; garrisoned infantry defend it. Lose every seat and
   the game is over.
+- **The Digital age (E7)**: 🔬 Ages shows what the next age needs: research from Research
+  Institutes, enough technicians, a yearly GDP and a price. The Digital age brings Engineers and
+  glass towers (they want electronics and the data network), rare-earth and uranium deposits,
+  electronics and pharmaceutical plants, hospitals, data exchanges, nuclear power, and
+  exo-troopers, rocket artillery and the Warden mech (Mech Foundry). Rival nations research and
+  advance too.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.
@@ -55,7 +61,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: rail, treaties and the later ages. See [docs/PLAN.md](docs/PLAN.md).
+Next: the Nano age, rail and treaties. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

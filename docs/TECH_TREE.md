@@ -361,28 +361,36 @@ seconds at normal speed.
 | **Maintenance Depot** | Logistics | 3×2 | ₡700 | 10 lumber + 20 concrete | 90 | 6 workers | — | Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down. |
 | **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |
 | **Warehouse** | Logistics | 4×3 | ₡600 | 30 lumber + 10 concrete | 80 | 6 workers | stores 400 | Takes in what producers make and sends it on to whoever needs it. Three trucks. 3 trucks |
-| **Trade Port** | Logistics | 4×3 | ₡3000 | 50 lumber | 200 | 8 workers | stores 400 | Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea. 3 trucks |
-| **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment as its needs are met. |
+| **Trade Port** | Logistics | 4×3 | ₡3000 | 50 lumber | 200 | 8 workers | stores 400 | Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea. 6 trucks |
+| **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 / 64 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment (and to a tower in the Digital age) as its needs are met. |
 | **Farm** | Resource | 4×4 | ₡400 | 10 lumber | 30 | 6 workers | 4 crops every 20s | Grows crops. Fertile floodplain yields full output, grassland 60%, sand 20%. 1 truck |
 | **Fishing Harbour** | Resource | 3×3 | ₡500 | 15 lumber | 40 | 4 workers | 3 food every 12s | Lands fish straight as food. Output depends on open water nearby. 1 truck |
 | **Logging Camp** | Resource | 2×2 | ₡250 | — | 20 | 4 workers | 4 timber every 18s | Fells timber. Output depends on forest within 5 tiles. 1 truck |
 | **Quarry** | Resource | 3×3 | ₡400 | 10 lumber | 40 | 6 workers | 4 stone every 18s | Cuts stone. Must stand on a stone deposit; more deposit under it, more output. 1 truck |
 | **Iron Mine** | Resource | 3×3 | ₡600 | 15 lumber + 5 concrete | 60 | 8 workers | 4 iron ore every 18s | Digs iron ore. Must stand on an ore deposit. 1 truck |
 | **Oil Well** | Resource | 2×2 | ₡700 | 5 steel + 5 concrete | 60 | 4 workers | 4 crude oil every 16s | Pumps crude oil. Must stand on an oil deposit. 1 truck |
+| **Rare-Earth Mine** | Resource | 3×3 | ₡1200 | 15 concrete + 10 steel | 90 | 8 workers | 3 rare earths every 20s | Digital age. Digs rare earths for electronics. Must stand on a rare-earth deposit (green). 1 truck |
+| **Uranium Mine** | Resource | 3×3 | ₡1500 | 20 concrete + 10 steel | 110 | 8 workers | 2 uranium every 24s | Digital age. Mines uranium for nuclear power. Must stand on a uranium deposit (yellow-green). 1 truck |
 | **Food Plant** | Industry | 3×3 | ₡700 | 20 lumber + 10 concrete | 60 | 8 workers | 2 crops → 3 food every 10s | Turns crops into food. 1 truck |
 | **Sawmill** | Industry | 3×3 | ₡500 | 10 lumber | 40 | 6 workers | 2 timber → 2 lumber every 8s | Saws timber into lumber. 1 truck |
 | **Cement Works** | Industry | 3×3 | ₡800 | 20 lumber + 5 steel | 70 | 8 workers | 2 stone → 2 concrete every 8s | Grinds and fires stone into concrete. Needs power. needs 4 MW 1 truck |
 | **Steel Mill** | Industry | 4×4 | ₡1500 | 20 lumber + 30 concrete | 120 | 12 workers | 2 iron ore → 1 steel every 8s | Smelts iron ore into steel. Needs a lot of power. needs 10 MW 1 truck |
 | **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 1 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
 | **Goods Factory** | Industry | 3×3 | ₡1400 | 15 steel + 15 concrete | 100 | 10 technicians | 1 steel + 1 plastics → 2 consumer goods every 10s | Makes consumer goods from steel and plastics. Needs technicians. needs 6 MW 1 truck |
+| **Electronics Plant** | Industry | 4×3 | ₡3000 | 30 concrete + 20 steel | 220 | 12 technicians | 2 rare earths + 1 plastics → 2 electronics every 12s | Digital age. Electronics from rare earths and plastics. Needs technicians and power. needs 10 MW 1 truck |
+| **Pharmaceutical Plant** | Industry | 3×3 | ₡2600 | 30 concrete + 10 steel | 200 | 8 engineers | 2 crops + 1 plastics → 2 pharmaceuticals every 12s | Digital age. Medicines from crops and plastics, for hospitals. Needs engineers. needs 6 MW 1 truck |
 | **Oil Power Plant** | Utility | 4×3 | ₡1200 | 10 lumber + 20 concrete + 10 steel | 100 | 6 workers | 1 crude oil → power every 6s; 30 MW | Burns crude oil: 30 MW for every building connected to it by road. |
 | **Hydro Plant** | Utility | 3×3 | ₡2200 | 40 concrete + 10 steel | 120 | 4 workers | power every 10s; 20 MW | A dam on a river or lake: 20 MW with no fuel. Needs concrete and steel to build. |
+| **Nuclear Plant** | Utility | 4×4 | ₡6000 | 80 concrete + 40 steel | 400 | 8 engineers | 1 uranium → power every 30s; 100 MW | Digital age. 100 MW from a little uranium, with no smoke. Needs engineers. |
 | **Pumping Station** | Utility | 2×2 | ₡500 | 10 concrete + 5 steel | 50 | 2 workers | water for 600 | Pumps river or lake water for 600 residents. Water Towers spread it to houses. |
 | **Water Tower** | Utility | 2×2 | ₡250 | 5 concrete + 2 steel | 20 | — | water: 400 residents within 24 road tiles | Gives running water to houses within 24 road tiles, fed by a Pumping Station on the same roads. |
-| **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food and consumer goods to households within 26 road tiles. Trucks keep it stocked. |
+| **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food, consumer goods and (Digital age) electronics to households within 26 road tiles. Trucks keep it stocked. |
 | **Police Station** | Service | 2×2 | ₡500 | 10 lumber + 10 concrete | 90 | 4 workers | police: 600 residents within 28 road tiles | Keeps the peace within 28 road tiles. Terraces and apartments need it. |
 | **Clinic** | Service | 3×2 | ₡700 | 15 concrete + 5 steel | 120 | 4 technicians | health: 500 residents within 26 road tiles | Healthcare within 26 road tiles. Apartments need it. needs 2 MW |
 | **School** | Service | 3×3 | ₡700 | 15 lumber + 15 concrete | 120 | 4 technicians | school: 500 residents within 26 road tiles | Education within 26 road tiles. Apartments need it. |
+| **Hospital** | Service | 4×3 | ₡3000 | 40 concrete + 15 steel | 300 | 10 technicians | 1 pharmaceuticals → power every 20s; health: 1600 residents within 40 road tiles | Digital age. Healthcare for 1,600 residents within 40 road tiles, while trucks bring it pharmaceuticals. needs 6 MW |
+| **Research Institute** | Service | 3×3 | ₡3500 | 40 concrete + 20 steel | 300 | 8 technicians | — | Research towards the next age (see 🔬 Ages). Needs technicians and power. needs 6 MW |
+| **Data Exchange** | Service | 2×2 | ₡1200 | 10 concrete + 5 steel | 120 | 3 technicians | data: 800 residents within 32 road tiles | Digital age. Connects houses within 32 road tiles to the data network. Towers need it. needs 3 MW |
 <!-- /gen:city_buildings -->
 
 ### Goods
@@ -390,18 +398,22 @@ seconds at normal speed.
 <!-- gen:goods -->
 | Good | Reference price | Made by | Used by |
 |---|---|---|---|
-| 🌾 **Crops** | ₡4 | Farm | Food Plant |
+| 🌾 **Crops** | ₡4 | Farm | Food Plant, Pharmaceutical Plant |
 | 🍞 **Food** | ₡9 | Fishing Harbour, Food Plant | households (markets) |
 | 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
 | 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
 | 🪨 **Stone** | ₡3 | Quarry | Cement Works |
-| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
+| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction), Hospital (construction), Research Institute (construction), Data Exchange (construction) |
 | ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
-| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction) |
+| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Rare-Earth Mine (construction), Uranium Mine (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Electronics Plant (construction), Pharmaceutical Plant (construction), Oil Power Plant (construction), Hydro Plant (construction), Nuclear Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction), Hospital (construction), Research Institute (construction), Data Exchange (construction) |
 | 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |
 | ⛽ **Fuel** | ₡14 | Oil Refinery | — |
-| 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory |
+| 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory, Electronics Plant, Pharmaceutical Plant |
 | 📦 **Consumer goods** | ₡30 | Goods Factory | households (markets) |
+| 🧲 **Rare earths** | ₡14 | Rare-Earth Mine | Electronics Plant |
+| ☢ **Uranium** | ₡24 | Uranium Mine | Nuclear Plant |
+| 💾 **Electronics** | ₡55 | Electronics Plant | households (markets) |
+| 💊 **Pharmaceuticals** | ₡45 | Pharmaceutical Plant | Hospital |
 <!-- /gen:goods -->
 
 ### Houses
@@ -416,4 +428,5 @@ when a need of their current level has been missing for 30 seconds.
 | **House** | 16 | Workers | ₡10 | food, water |
 | **Terrace** | 24 | Technicians | ₡22 | food, water, power, police |
 | **Apartment** | 40 | Technicians | ₡22 | food, water, goods, power, police, health, school |
+| **Tower** | 64 | Engineers | ₡40 | food, water, goods, power, police, health, school, electronics, data |
 <!-- /gen:house_levels -->

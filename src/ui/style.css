@@ -839,7 +839,7 @@ body {
 
 .palette {
   flex: none;
-  width: 430px;
+  width: 520px;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
@@ -881,8 +881,9 @@ body {
 }
 
 .pal-items {
-  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
   max-height: 128px;
+  overflow-y: auto;
 }
 
 .cmd.on {
@@ -1328,3 +1329,18 @@ table.trade td.rule span {
   border-color: rgba(255, 90, 74, 0.6);
   background: rgba(255, 90, 74, 0.15);
 }
+
+/* Ages (E7) */
+.pal-item.locked { opacity: 0.45; }
+.pal-item.locked .cmd-cost { color: var(--muted, #9aa4b2); }
+.res-age.pos { color: #7be08a; }
+.age-ladder { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin: 4px 0 8px; }
+.age-step { padding: 3px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.06); font-size: 12px; color: #9aa4b2; }
+.age-step.done { color: #cfd8e3; background: rgba(120, 200, 140, 0.18); }
+.age-step.now { color: #fff; background: rgba(90, 150, 255, 0.35); font-weight: 600; }
+.age-arrow { color: #6b7685; }
+table.age-req { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+table.age-req td { padding: 4px 6px 4px 0; white-space: nowrap; }
+table.age-req td:nth-child(2) { width: 45%; }
+table.age-req .bar { width: 100%; }
+.btn.wide { width: 100%; margin: 6px 0; }

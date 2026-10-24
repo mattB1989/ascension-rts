@@ -41,9 +41,9 @@ export const TERRAIN_NAMES: Record<TerrainId, string> = {
 export type ResourceKind = 'ore' | 'oil';
 
 /** Underground deposits on generated maps (one per tile). Mines, quarries and wells sit on them. */
-export const Deposit = { None: 0, Ore: 1, Oil: 2, Stone: 3 } as const;
+export const Deposit = { None: 0, Ore: 1, Oil: 2, Stone: 3, Rare: 4, Uranium: 5 } as const;
 export type DepositId = (typeof Deposit)[keyof typeof Deposit];
-export const DEPOSIT_NAMES: Record<DepositId, string> = { 0: '', 1: 'Iron ore', 2: 'Oil', 3: 'Stone' };
+export const DEPOSIT_NAMES: Record<DepositId, string> = { 0: '', 1: 'Iron ore', 2: 'Oil', 3: 'Stone', 4: 'Rare earths', 5: 'Uranium' };
 
 export type Biome = 'twin' | 'temperate' | 'arid' | 'alpine' | 'archipelago';
 
@@ -66,6 +66,8 @@ export interface RegionInfo {
   ore: number;
   stone: number;
   oil: number;
+  rare: number;
+  uranium: number;
   coast: number;
   river: number;
   /** Touches water connected to the open sea (a trade port can go here). */

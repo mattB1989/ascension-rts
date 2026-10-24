@@ -13,6 +13,7 @@ import { placeRoads, removeRoads, setRoad } from './roads.ts';
 import { createCityState } from './state.ts';
 import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } from './diplomacy.ts';
 import { atWar, recruit, setWar } from './military.ts';
+import { advanceAge } from './ages.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 
@@ -38,7 +39,9 @@ export type CityCommand =
   /** Train a unit at a barracks or vehicle factory (economy game costs). */
   | { kind: 'recruit'; player: number; building: number; unit: UnitTypeId }
   | { kind: 'declareWar'; player: number; target: number }
-  | { kind: 'makePeace'; player: number; target: number };
+  | { kind: 'makePeace'; player: number; target: number }
+  /** Reach the next age (all requirements met). */
+  | { kind: 'advanceAge'; player: number };
 
 export function applyCityCommand(world: World, c: CityCommand): void {
   if (!world.city) return;
@@ -142,6 +145,9 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       world.emit({ kind: 'notify', player: -1, text: `🕊 ${world.players[c.player]!.name} and ${world.players[c.target]!.name} made peace` });
       break;
     }
+    case 'advanceAge':
+      say(advanceAge(world, c.player));
+      break;
     case 'taxRate': {
       const pc = world.city.players[c.player];
       if (pc) pc.taxRate = Math.max(0.5, Math.min(1.5, Math.round(c.rate * 20) / 20));

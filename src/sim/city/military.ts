@@ -3,8 +3,9 @@
 // declared between players; a region changes hands when enemy troops hold its
 // seat (town hall or regional office) with no defenders nearby.
 
+import { AGES } from '../../data/ages.ts';
 import { ARMY, CAPTURE, UNIT_ECON } from '../../data/city.ts';
-import { YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
+import { sumTiers, YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
 import { UNITS, type UnitTypeId } from '../../data/units.ts';
 import { MAX_QUEUE, type Building } from '../types.ts';
 import type { World } from '../world.ts';
@@ -27,7 +28,7 @@ export function setWar(world: World, a: number, b: number, on: boolean): void {
 /** Army size limit: grows with population. */
 export function armyCap(world: World, player: number): number {
   const pc = world.city!.players[player]!;
-  return ARMY.base + Math.floor((pc.population[0] + pc.population[1]) / ARMY.perResidents);
+  return ARMY.base + Math.floor(sumTiers(pc.population) / ARMY.perResidents);
 }
 
 /** Why this unit can't be recruited here now, or null. */
@@ -36,6 +37,7 @@ export function recruitProblem(world: World, player: number, b: Building, type: 
   const def = UNITS[type];
   if (!cost || def.trainedAt !== b.type) return 'Not trained here';
   if (b.owner !== player || !b.complete || !b.city) return 'Not ready';
+  if (AGES[def.age].index > world.city!.players[player]!.age) return `Needs the ${AGES[def.age].name}`;
   if (b.city.workers <= 0) return 'No staff';
   if ((b.def.econ?.power ?? 0) > 0 && !b.city.powered) return 'No power';
   if (b.queue.length >= MAX_QUEUE) return 'Queue full';

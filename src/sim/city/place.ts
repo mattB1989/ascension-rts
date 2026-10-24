@@ -1,6 +1,7 @@
 // Placing and demolishing buildings in the economy game, and how good the land
 // under a raw producer is.
 
+import { AGES } from '../../data/ages.ts';
 import { BUILDINGS, type BuildingTypeId } from '../../data/buildings.ts';
 import type { BuildingDef } from '../../data/types.ts';
 import { Deposit, isOpenLand, Terrain, type GameMap, type TerrainId } from '../map.ts';
@@ -16,6 +17,8 @@ const FERTILITY: Partial<Record<TerrainId, number>> = {
   [Terrain.Beach]: 0.3,
   [Terrain.Sand]: 0.2,
 };
+
+const DEPOSIT_OF = { stone: Deposit.Stone, ore: Deposit.Ore, oil: Deposit.Oil, rare: Deposit.Rare, uranium: Deposit.Uranium } as const;
 
 const isWaterT = (t: number) => t === Terrain.Shallow || t === Terrain.Deep;
 
@@ -62,8 +65,10 @@ export function landYield(map: GameMap, def: BuildingDef, tx: number, ty: number
     }
     case 'stone':
     case 'ore':
-    case 'oil': {
-      const d = def.placement === 'stone' ? Deposit.Stone : def.placement === 'ore' ? Deposit.Ore : Deposit.Oil;
+    case 'oil':
+    case 'rare':
+    case 'uranium': {
+      const d = DEPOSIT_OF[def.placement];
       const n = deposit(d);
       const y = Math.min(1, n / Math.max(2, Math.ceil(tiles.length * 0.6)));
       return { yield: y, note: `Deposit under it: ${Math.round(y * 100)}%` };
@@ -119,6 +124,12 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
     case 'oil':
       if (y <= 0) return 'Must be on an oil deposit';
       break;
+    case 'rare':
+      if (y <= 0) return 'Must be on a rare-earth deposit';
+      break;
+    case 'uranium':
+      if (y <= 0) return 'Must be on a uranium deposit';
+      break;
     case 'coast':
       if (!touches(map, tx, ty, w, h, (i) => isWaterT(map.terrain[i]!))) return 'Must touch the water';
       if (type === 'trade_port') {
@@ -136,6 +147,8 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
 export function cityBuildProblem(world: World, player: number, type: BuildingTypeId): string | null {
   const def: BuildingDef = BUILDINGS[type];
   if (def.mode === 'skirmish' || !def.econ) return 'Not available';
+  const age = AGES[def.age].index;
+  if (age > world.city!.players[player]!.age) return `Needs the ${AGES[def.age].name}`;
   if (def.limit !== undefined && world.buildings.filter((b) => b.owner === player && b.type === type).length >= def.limit) return `Limit ${def.limit}`;
   if (world.city!.players[player]!.credits < def.econ.credits) return 'Not enough credits';
   return null;

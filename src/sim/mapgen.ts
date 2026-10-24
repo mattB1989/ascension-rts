@@ -467,7 +467,8 @@ function bfsDistance(w: number, h: number, source: (i: number) => boolean, cap: 
 const buildable = (t: number) => t === Terrain.Grass || t === Terrain.Sand || t === Terrain.Fertile || t === Terrain.Beach;
 
 // ---------------------------------------------------------------------------
-// 5a. Deposits: ore in the hills, stone at the foot of the rock, oil in the plains and offshore.
+// 5a. Deposits: ore in the hills, stone at the foot of the rock, oil in the plains and offshore,
+// rare earths and uranium (Digital age) in hills and deserts.
 
 function placeDeposits(map: GameMap, mount: Float32Array): void {
   const { width: w, height: h, seed } = map;
@@ -515,6 +516,9 @@ function placeDeposits(map: GameMap, mount: Float32Array): void {
         else if (roll < 0.47) blob(px, py, 2, Deposit.Stone, ok);
         else if (roll < 0.5) blob(px, py, 2, Deposit.Ore, ok);
         else if (t !== Terrain.Fertile && roll > 0.88) blob(px, py, 2.4, Deposit.Oil, ok);
+        // Digital-age deposits: rarer, so they are worth trading for.
+        else if (roll < 0.56 && (hilly || nearRock(i, 6))) blob(px, py, 2, Deposit.Rare, ok);
+        else if (roll < 0.6 && (hilly || t === Terrain.Sand)) blob(px, py, 1.8, Deposit.Uranium, ok);
       } else if (t === Terrain.Shallow && roll > 0.8) {
         blob(px, py, 2.4, Deposit.Oil, (j) => map.terrain[j] === Terrain.Shallow || map.terrain[j] === Terrain.Deep);
       }
@@ -645,7 +649,7 @@ function buildRegions(map: GameMap): void {
   for (const id of ids.values()) {
     regions.push({
       id, name: regionName(seed, id), tiles: 0, cx: 0, cy: 0, siteX: -1, siteY: -1, neighbors: [],
-      fertile: 0, forest: 0, ore: 0, stone: 0, oil: 0, coast: 0, river: 0, ocean: false,
+      fertile: 0, forest: 0, ore: 0, stone: 0, oil: 0, rare: 0, uranium: 0, coast: 0, river: 0, ocean: false,
     });
   }
   const sumX = new Float64Array(regions.length + 1);
@@ -668,6 +672,8 @@ function buildRegions(map: GameMap): void {
     if (d === Deposit.Ore) r.ore++;
     if (d === Deposit.Stone) r.stone++;
     if (d === Deposit.Oil) r.oil++;
+    if (d === Deposit.Rare) r.rare++;
+    if (d === Deposit.Uranium) r.uranium++;
     for (let k = 0; k < 4; k++) {
       const x = tx + DX4[k]!;
       const y = ty + DY4[k]!;

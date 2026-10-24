@@ -675,8 +675,8 @@ export function roadsByOwner(world: World): number[] {
   for (let i = 0; i < city.road.length; i++) {
     if (!city.road[i]) continue;
     const o = city.regionOwner[near[i]!] ?? -1;
+    // Roads on unclaimed land (links between towns) are public: nobody pays their upkeep.
     if (o >= 0) counts[o]++;
-    else counts[0]++; // roads on unclaimed land: whoever is building there is the human for now
   }
   roadOwners = { world, version: city.roadVersion, counts };
   return counts;

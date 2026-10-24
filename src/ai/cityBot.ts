@@ -81,7 +81,7 @@ export type Personality = 'trader' | 'builder' | 'expansionist' | 'warlike';
 export const PERSONALITIES: Record<Personality, { name: string; blurb: string; expand: number; war: number; army: number; treaty: number }> = {
   trader: { name: 'Traders', blurb: 'courts city-states and signs treaties readily', expand: 1.2, war: 1.4, army: 0.8, treaty: -15 },
   builder: { name: 'Builders', blurb: 'grows its cities first, slow to fight', expand: 1.1, war: 1.6, army: 0.7, treaty: -5 },
-  expansionist: { name: 'Expansionists', blurb: 'claims land early and often', expand: 0.7, war: 1.0, army: 1.0, treaty: 5 },
+  expansionist: { name: 'Expansionists', blurb: 'claims land early and often, and guards it', expand: 0.85, war: 1.1, army: 1.25, treaty: 0 },
   warlike: { name: 'Warlords', blurb: 'arms early and picks fights', expand: 1.0, war: 0.75, army: 1.3, treaty: 15 },
 };
 

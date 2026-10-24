@@ -151,6 +151,22 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams, recor
       // Settings are a convenience only.
     }
     renderer.dayNight = hud.dayNight = dayNight;
+    let quality: 'high' | 'low' = 'high';
+    try {
+      quality = localStorage.getItem('ascension.quality') === 'low' ? 'low' : 'high';
+    } catch {
+      // Settings are a convenience only.
+    }
+    hud.quality = quality;
+    renderer.setQuality(quality);
+    hud.onQuality = (q) => {
+      renderer.setQuality(q);
+      try {
+        localStorage.setItem('ascension.quality', q);
+      } catch {
+        // ignore
+      }
+    };
     hud.onDayNight = (on) => {
       renderer.dayNight = on;
       try {

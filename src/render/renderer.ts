@@ -15,6 +15,7 @@ import { UnitsView } from './unitsView.ts';
 import { Water } from './water.ts';
 import { CarsView, StreetLights } from './ambient.ts';
 import { windowMaterial } from './cityModels.ts';
+import { detailUniforms } from './textures.ts';
 
 const SKY = 0x9cc4e4;
 /** Day and night: real seconds per day (independent of game speed). */
@@ -215,6 +216,15 @@ export class GameRenderer {
     this.effects.viewer = this.viewer;
     this.effects.update(frameDt, this.world, alpha);
     this.renderer.render(this.scene, this.rig.camera);
+  }
+
+  /** Graphics quality: 'high' (textures, shadows, sharp on high-DPI screens) or 'low' (faster on weak devices). */
+  setQuality(q: 'high' | 'low'): void {
+    const high = q === 'high';
+    this.sun.castShadow = high;
+    detailUniforms.uDetailOn.value = high ? 1 : 0;
+    this.renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, this.lowPower ? 1.5 : 2) : 1);
+    this.resize();
   }
 
   /** Light, sky and lit windows for the time of day (economy game only; the skirmish stays in daylight). */

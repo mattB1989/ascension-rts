@@ -354,6 +354,9 @@ const KINDS: Record<DetailKind, { tex: 0 | 1; chan: number; size: number; streng
   lawn: { tex: 1, chan: 3, size: 3, strength: 0.6 },
 };
 
+/** Graphics quality: detail textures on (1) or off (0), shared by every patched material. */
+export const detailUniforms = { uDetailOn: { value: 1 } };
+
 const MASKS = [new THREE.Vector4(1, 0, 0, 0), new THREE.Vector4(0, 1, 0, 0), new THREE.Vector4(0, 0, 1, 0), new THREE.Vector4(0, 0, 0, 1)];
 
 const detailPatched = new WeakSet<THREE.Material>();
@@ -373,6 +376,7 @@ export function applyDetail(material: THREE.MeshStandardMaterial, kind: DetailKi
     shader.uniforms.uDetailMask = { value: MASKS[k.chan] };
     shader.uniforms.uDetailScale = { value: 1 / k.size };
     shader.uniforms.uDetailStrength = { value: k.strength };
+    shader.uniforms.uDetailOn = detailUniforms.uDetailOn;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vDetPos;')
       .replace(
@@ -385,7 +389,7 @@ export function applyDetail(material: THREE.MeshStandardMaterial, kind: DetailKi
         vDetPos = (modelMatrix * detWorld).xyz;`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vDetPos;\nuniform sampler2D uDetail;\nuniform vec4 uDetailMask;\nuniform float uDetailScale;\nuniform float uDetailStrength;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vDetPos;\nuniform sampler2D uDetail;\nuniform vec4 uDetailMask;\nuniform float uDetailScale;\nuniform float uDetailStrength;\nuniform float uDetailOn;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -398,7 +402,7 @@ export function applyDetail(material: THREE.MeshStandardMaterial, kind: DetailKi
           float dy = dot(texture2D(uDetail, p.xz), uDetailMask);
           float dz = dot(texture2D(uDetail, vec2(p.x, -p.y)), uDetailMask);
           float d = dx * w.x + dy * w.y + dz * w.z;
-          diffuseColor.rgb *= mix(1.0, d * 2.0, uDetailStrength);
+          diffuseColor.rgb *= mix(1.0, d * 2.0, uDetailStrength * uDetailOn);
         }`,
       );
   };
@@ -420,11 +424,12 @@ export function applyGroundDetail(material: THREE.MeshStandardMaterial, colors: 
     shader.uniforms.uTileColor = { value: colors };
     shader.uniforms.uTileKind = { value: kinds };
     shader.uniforms.uTileSize = { value: new THREE.Vector2(width, height) };
+    shader.uniforms.uDetailOn = detailUniforms.uDetailOn;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vGPos;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvGPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vGPos;\nuniform sampler2D uGround;\nuniform sampler2D uTileColor;\nuniform sampler2D uTileKind;\nuniform vec2 uTileSize;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGPos;\nuniform sampler2D uGround;\nuniform sampler2D uTileColor;\nuniform sampler2D uTileKind;\nuniform vec2 uTileSize;\nuniform float uDetailOn;')
       .replace(
         '#include <color_fragment>',
         `#include <color_fragment>
@@ -448,7 +453,7 @@ export function applyGroundDetail(material: THREE.MeshStandardMaterial, colors: 
           float detail = total > 0.01 ? dot(kw, d) / total : 0.5;
           // Large, soft patches break up the repeat.
           float blotch = texture2D(uGround, vGPos.xz * 0.013).a;
-          diffuseColor.rgb = base * mix(1.0, detail * 2.0, 0.75) * (0.9 + 0.2 * blotch);
+          diffuseColor.rgb = base * mix(1.0, mix(1.0, detail * 2.0, 0.75) * (0.9 + 0.2 * blotch), uDetailOn);
         }`,
       );
   };

@@ -95,11 +95,12 @@ export class Effects {
     this.add(mesh, 0.09, (_f, k) => (m.opacity = 1 - k), () => m.dispose());
   }
 
-  private tracer(ax: number, ay: number, az: number, bx: number, by: number, bz: number): void {
+  private tracer(ax: number, ay: number, az: number, bx: number, by: number, bz: number, color?: number, life = 0.08): void {
     const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(ax, az, ay), new THREE.Vector3(bx, bz, by)]);
     const m = this.tracerMat.clone();
+    if (color) m.color.setHex(color);
     const line = new THREE.Line(g, m);
-    this.add(line, 0.08, (_f, k) => (m.opacity = 0.9 * (1 - k)), () => {
+    this.add(line, life, (_f, k) => (m.opacity = 0.9 * (1 - k)), () => {
       g.dispose();
       m.dispose();
     });
@@ -179,7 +180,9 @@ export class Effects {
         const bz = this.base(e.x, e.y) + e.z;
         const tz = this.base(e.tx, e.ty) + e.tz;
         this.flash(e.x, e.y, bz, e.weapon.type === 'bullet' ? 0.12 : 0.22);
-        if (e.weapon.projectile === 'instant') this.tracer(e.x, e.y, bz, e.tx, e.ty, tz);
+        // Lasers burn red, EMP pulses crackle blue; both linger a little longer than a tracer.
+        const beam = e.weapon.type === 'laser' ? 0xff4030 : e.weapon.type === 'emp' ? 0x60e0ff : undefined;
+        if (e.weapon.projectile === 'instant') this.tracer(e.x, e.y, bz, e.tx, e.ty, tz, beam, beam ? 0.2 : 0.08);
       } else if (e.kind === 'impact') {
         this.impact(e.x, e.y, this.base(e.x, e.y) + e.z, e.weapon);
       } else if (e.kind === 'died') {

@@ -61,7 +61,7 @@ export const WEAPONS: Record<string, readonly WeaponDef[]> = {
   battle_tank: [{ name: '120 mm cannon', type: 'ap', damage: 60, range: 7, cooldown: 2.5, targets: LAND_SEA, projectile: 'shell', speed: 30 }],
   flak_track: [{ name: 'Twin flak', type: 'aa', damage: 22, range: 8, cooldown: 0.6, targets: AIR, projectile: 'instant', splash: 1 }],
   howitzer: [{ name: '155 mm howitzer', type: 'explosive', damage: 90, range: 14, minRange: 4, cooldown: 5, targets: LAND_SEA, projectile: 'shell', speed: 12, splash: 1.5 }],
-  disruptor: [{ name: 'Pulse cannon', type: 'laser', damage: 38, range: 6.5, cooldown: 1.2, targets: GROUND, projectile: 'instant' }],
+  disruptor: [{ name: 'EMP pulse', type: 'emp', damage: 90, range: 6.5, cooldown: 2, targets: GROUND, projectile: 'instant' }],
   // --- Mechs ------------------------------------------------------------------
   warden: [
     { name: 'Twin autocannons', type: 'ap', damage: 38, range: 7, cooldown: 1.0, targets: LAND_SEA, projectile: 'instant' },

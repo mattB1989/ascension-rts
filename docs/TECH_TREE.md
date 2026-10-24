@@ -214,7 +214,7 @@ Armor classes: **Inf** infantry, **Lt** light vehicle, **Hv** heavy vehicle, **M
 <!-- gen:units_nano -->
 | Unit | From | Class | Cost | Pop | HP | Speed | Weapons | Strong vs | Weak vs |
 |---|---|---|---|---|---|---|---|---|---|
-| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 400 | 2.6 | Pulse cannon: 38 laser / 1.2s, range 6.5 | mechs and vehicles (EMP stun), shields | infantry |
+| **Disruptor** | Vehicle Factory | Lt | 400 / 300 | 3 | 400 | 2.6 | EMP pulse: 90 EMP / 2s, range 6.5 | mechs and vehicles (EMP stun), shields | infantry |
 | **Juggernaut** | Mech Foundry | Mech | 1800 / 1200 | 10 | 5000 | 1.5 | Arm cannons: 120 AP / 2.2s, range 8, splash 1<br>Shoulder rockets: 50 explosive / 3s, range 9 | structures, heavy vehicles; smashes walls | Disruptor, Arclight, Laser Tower |
 | **Arclight** | Mech Foundry | Mech | 1500 / 1300 | 8 | 3500 | 1.8 | Eye laser: 90 laser / 1.6s, range 9 | mechs, heavy vehicles (eye laser) | infantry swarms, aircraft |
 | **Leviathan** | Mech Foundry | Mech | 2000 / 1500 | 10 | 5000 | 1.6 | — | ships and coasts (walks the seabed, hidden while submerged) | submarines, Disruptor |

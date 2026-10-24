@@ -70,6 +70,8 @@ export interface Unit {
   cargo: number[];
   /** Transport this unit is riding in, or 0. */
   carrier: number;
+  /** Seconds left stunned by an EMP (can't move or fire). */
+  stun?: number;
   /** Seconds left under a parachute (0 when on the ground). */
   chute: number;
   /** Aircraft that must land: fuel left (seconds of flight), parked state and home airfield. */

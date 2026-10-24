@@ -730,3 +730,19 @@ test('pipelines carry oil from wells to refineries without trucks', async () => 
   assert.ok((refinery.city!.stock.oil ?? 0) >= 4, `oil flowed (${refinery.city!.stock.oil})`);
   assert.ok((well.city!.stock.oil ?? 0) <= 16);
 });
+
+test("a Disruptor's EMP stuns vehicles: they stop moving and firing for a while", async () => {
+  const { EMP_STUN } = await import('../src/sim/combat.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1 });
+  world.step([{ kind: 'declareWar', player: 0, target: 1 }]);
+  const hall = world.buildings[0]!;
+  const d = world.spawnUnit('disruptor', 0, hall.x + 10, hall.y + 10);
+  const tank = world.spawnUnit('battle_tank', 1, hall.x + 14, hall.y + 10);
+  let stunned = 0;
+  for (let i = 0; i < 15 * 6; i++) {
+    world.step();
+    stunned = Math.max(stunned, tank.stun ?? 0);
+  }
+  assert.ok(stunned > 0 && stunned <= EMP_STUN, `tank stunned (${stunned})`);
+  assert.ok(d.hp > 0);
+});

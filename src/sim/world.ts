@@ -337,6 +337,7 @@ export class World {
       for (const c of q) this.apply(c);
     }
     for (const u of this.units) {
+      if (u.stun) u.stun = Math.max(0, u.stun - DT);
       if (u.carrier) continue;
       if (u.chute > 0) {
         updateChute(this, u);

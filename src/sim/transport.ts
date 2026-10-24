@@ -435,7 +435,7 @@ export function syncCargo(world: World): void {
 
 /** Is this unit out of play for movement (riding, parachuting or parked)? */
 export function immobile(u: Unit): boolean {
-  return u.carrier !== 0 || u.chute > 0 || u.parked;
+  return u.carrier !== 0 || u.chute > 0 || u.parked || (u.stun ?? 0) > 0;
 }
 
 export function isAircraftType(type: UnitTypeId): boolean {

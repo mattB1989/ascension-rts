@@ -153,9 +153,14 @@ function fire(world: World, owner: number, w: WeaponDef, t: Entity, sx: number, 
   world.projectiles.push(p);
 }
 
+/** Seconds an EMP hit stuns a vehicle or mech. */
+export const EMP_STUN = 3;
+
 /** Damage one entity. */
 export function hit(world: World, owner: number, w: WeaponDef, damage: number, e: Entity): void {
   const amount = damage * DAMAGE[w.type][armorOf(e)];
+  // EMP: vehicles and mechs are stunned for a few seconds.
+  if (w.type === 'emp' && e.kind === 'unit' && ['lt', 'hv', 'mech'].includes(armorOf(e))) e.stun = Math.max(e.stun ?? 0, EMP_STUN);
   if (amount <= 0) return;
   e.hp -= amount;
   alert(world, e);

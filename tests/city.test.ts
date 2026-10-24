@@ -183,7 +183,7 @@ test('a regional office claims the neighbouring region', () => {
   for (let y = Math.min(row, ty); y <= Math.max(row, ty); y++) tiles.push([tx, y]);
   world.step([{ kind: 'road', player: 0, tiles }]);
   world.step([{ kind: 'place', player: 0, building: 'regional_office', tx: nb.siteX + 2, ty: nb.siteY }]);
-  const office = world.buildings.find((b) => b.type === 'regional_office');
+  const office = world.buildings.find((b) => b.type === 'regional_office' && b.tx === nb.siteX + 2 && b.ty === nb.siteY);
   if (!office) return; // the L road did not reach (river or rock in the way): placement rules are covered elsewhere
   run(world, 180, bot);
   if (office.complete) assert.ok(mine(nb.id), 'region claimed');

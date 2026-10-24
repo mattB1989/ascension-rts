@@ -16,6 +16,7 @@ import type { Building, Unit } from '../sim/types.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { hasTreaty, opinionOf } from '../sim/city/treaties.ts';
+import { spyStep } from './spies.ts';
 import { DIPLO, marketOf, purchasePrice, relationsOf } from '../sim/city/diplomacy.ts';
 import { roadsByOwner } from '../sim/city/economy.ts';
 import { buyPrice } from '../sim/city/trade.ts';
@@ -410,6 +411,8 @@ export function botStep(world: World, bot: BotState): Command[] {
   if (bot.nation) {
     const e = embargoStep(world, bot);
     if (e.length) return e;
+    const sp = spyStep(world, bot);
+    if (sp.length) return sp;
     const m = militaryStep(world, bot);
     // Claiming land, or going to war, is a decision of its own; orders to troops, recruits and offers of peace
     // go with the town's business (a war must not stop the economy: an army marching every turn would).

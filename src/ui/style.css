@@ -1318,3 +1318,13 @@ table.trade td.rule span {
 .bar.bad > span {
   background: #ff8a7a;
 }
+
+.cmd-grid.recruit {
+  margin-top: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+}
+
+.mini.danger {
+  border-color: rgba(255, 90, 74, 0.6);
+  background: rgba(255, 90, 74, 0.15);
+}

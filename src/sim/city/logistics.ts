@@ -49,6 +49,8 @@ export function demandFor(b: Building, g: GoodId, world?: World): number {
     if (per) return Math.max(0, Math.max(TRUCK_LOAD, per * INPUT_CYCLES) - get(c.stock, g) - incoming);
   }
   if (e.service?.kind === 'market' && (g === 'food' || g === 'goods')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
+  const sup = e.supplies?.[g];
+  if (sup) return Math.max(0, sup - get(c.stock, g) - incoming);
   return 0;
 }
 

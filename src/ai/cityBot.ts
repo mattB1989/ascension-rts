@@ -11,7 +11,9 @@ import type { Command } from '../sim/commands.ts';
 import { cityBuildProblem, cityPlacementProblem, landYield } from '../sim/city/place.ts';
 import { roadProblem } from '../sim/city/roads.ts';
 import { get } from '../sim/city/state.ts';
-import type { Building } from '../sim/types.ts';
+import type { Building, Unit } from '../sim/types.ts';
+import type { UnitTypeId } from '../data/units.ts';
+import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import type { World } from '../sim/world.ts';
 
 const BLOCK = 8; // street spacing
@@ -24,6 +26,13 @@ export interface BotState {
   tradeAt: number;
   /** Stop adding houses at this population (city-states stay small). */
   maxPop: number;
+  /** Nations: expand into new regions and keep an army. */
+  nation: boolean;
+  difficulty: Difficulty;
+  /** Game time of the next military decision, and of the earliest war it may start. */
+  warAt: number;
+  /** Current attack target (a seat building id), 0 when defending. */
+  attackTarget: number;
   /** Grid rings laid out so far. */
   rings: number;
   /** Seconds until the next decision. */
@@ -31,8 +40,17 @@ export interface BotState {
   log: string[];
 }
 
-export function newBot(player: number, maxPop = Infinity): BotState {
-  return { player, noLand: [], tradeAt: 0, maxPop, rings: 0, wait: 0, log: [] };
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+/** How each difficulty plays: decision pace, expansion, when it may go to war. */
+export const DIFFICULTY: Record<Difficulty, { think: number; expandPop: number; warYear: number; warRatio: number; army: number }> = {
+  easy: { think: 5, expandPop: 260, warYear: Infinity, warRatio: Infinity, army: 0.35 },
+  normal: { think: 3, expandPop: 180, warYear: 14, warRatio: 1.6, army: 0.5 },
+  hard: { think: 2, expandPop: 140, warYear: 9, warRatio: 1.2, army: 0.7 },
+};
+
+export function newBot(player: number, maxPop = Infinity, nation = false, difficulty: Difficulty = 'normal'): BotState {
+  return { player, noLand: [], tradeAt: 0, maxPop, nation, difficulty, warAt: 0, attackTarget: 0, rings: 0, wait: 0, log: [] };
 }
 
 function hall(world: World, player: number): Building | undefined {
@@ -127,6 +145,9 @@ function roadTo(world: World, player: number, sx: number, sy: number, spot: [num
   const prev = new Map<number, number>();
   const start = sy * W + sx;
   if (roadProblem(world, player, sx, sy) !== null) return null;
+  // Join our own road network (the one the town hall is on), not a neighbour's.
+  const th = hall(world, player);
+  const home = th?.city && th.city.access >= 0 ? city.comp[th.city.access]! : -1;
   const queue = [start];
   prev.set(start, -1);
   for (let q = 0; q < queue.length && q < 40000; q++) {
@@ -140,12 +161,12 @@ function roadTo(world: World, player: number, sx: number, sy: number, spot: [num
       const j = ny * W + nx;
       if (prev.has(j)) continue;
       prev.set(j, i);
-      if (city.road[j]) {
+      if (city.road[j] && (home < 0 || city.comp[j] === home)) {
         const path: Array<[number, number]> = [];
         for (let k = i; k >= 0; k = prev.get(k)!) path.push([k % W, Math.floor(k / W)]);
         return path.reverse();
       }
-      if (roadProblem(world, player, nx, ny) === null) queue.push(j);
+      if (roadProblem(world, player, nx, ny) === null || city.road[j]) queue.push(j);
     }
   }
   return null;
@@ -202,9 +223,14 @@ function place(world: World, bot: BotState, type: BuildingTypeId, near?: [number
 /** Decide what to do this second. Returns commands to issue. */
 export function botStep(world: World, bot: BotState): Command[] {
   if (world.tick % 15 !== 0) return [];
+  if (world.players[bot.player]?.defeated || !hall(world, bot.player)) return [];
   if (--bot.wait > 0) return [];
-  bot.wait = 3;
+  bot.wait = bot.nation ? DIFFICULTY[bot.difficulty].think : 3;
   reserved = [];
+  if (bot.nation) {
+    const m = militaryStep(world, bot);
+    if (m.length) return m;
+  }
   const p = bot.player;
   const pc = world.city!.players[p]!;
   if (bot.rings === 0) {
@@ -277,6 +303,8 @@ export function botStep(world: World, bot: BotState): Command[] {
     [has('pumping_station') * 550 < pop, 'pumping_station'],
     [has('police_station') * 550 < pop && pop >= 60, 'police_station'],
     [!has('clinic') && pc.population[1] >= 30, 'clinic'],
+    [bot.nation && !has('barracks') && pop >= 120, 'barracks'],
+    [bot.nation && !has('vehicle_factory') && has('barracks') > 0 && pop >= 300 && has('oil_refinery') > 0, 'vehicle_factory'],
     [has('maintenance_depot') * 300 < world.city!.roadCount && world.city!.roadCount > 150, 'maintenance_depot'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];
@@ -308,8 +336,9 @@ export function botStep(world: World, bot: BotState): Command[] {
     if (!cond) continue;
     // Producers of building materials are never held back: everything else waits on them.
     if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port'].includes(type)) continue;
-    // City-states keep money in hand to trade with.
+    // City-states keep money in hand to trade with; nations save up to expand when it is time.
     if (bot.maxPop < Infinity && credits < 2500 + buildingDef(type).econ!.credits && type !== 'house') continue;
+    if (bot.nation && pop >= DIFFICULTY[bot.difficulty].expandPop * (1 + seatsOf(world, p).length * 0.5) && credits < 5500 && !['house', 'logging_camp', 'sawmill', 'farm', 'food_plant', 'market'].includes(type)) continue;
     if (type === 'house') {
       if (pop >= bot.maxPop) continue;
       const out: Command[] = [];
@@ -321,4 +350,131 @@ export function botStep(world: World, bot: BotState): Command[] {
     if (cmds.length) return cmds;
   }
   return [];
+}
+
+
+// ---------------------------------------------------------------------------
+// Nations: expansion and war
+
+/** Claim an unclaimed neighbouring region with a Regional Office (and a road to it). */
+function expand(world: World, bot: BotState): Command[] {
+  const p = bot.player;
+  const map = world.map;
+  const city = world.city!;
+  if (world.buildings.some((b) => b.owner === p && b.type === 'regional_office' && !b.complete)) return [];
+  const th = hall(world, p);
+  if (!th) return [];
+  const mine = map.regions.filter((r) => city.regionOwner[r.id] === p);
+  const options = map.regions
+    .filter((r) => city.regionOwner[r.id] === -1 && r.siteX >= 0 && r.neighbors.some((n) => city.regionOwner[n] === p))
+    .map((r) => ({ r, d: Math.sqrt((r.cx - th.x) * (r.cx - th.x) + (r.cy - th.y) * (r.cy - th.y)), score: r.fertile / 300 + r.forest / 400 + (r.ore + r.stone + r.oil) / 60 + (r.ocean ? 1 : 0) }))
+    .sort((a, b) => b.score - b.d / 80 - (a.score - a.d / 80) || a.r.id - b.r.id);
+  void mine;
+  for (const { r } of options) {
+    // The office sits on the region's clear site; look for a spot near it.
+    for (let dy = 0; dy <= 3; dy++) {
+      for (let dx = 0; dx <= 3; dx++) {
+        const tx = r.siteX + dx;
+        const ty = r.siteY + dy;
+        if (cityPlacementProblem(world, p, 'regional_office', tx, ty) !== null) continue;
+        const road = roadTo(world, p, tx + 1, ty + 3, [tx, ty], [3, 3]);
+        if (!road) continue;
+        bot.log.push(`expand into ${r.name}`);
+        return [
+          { kind: 'road', player: p, tiles: road },
+          { kind: 'place', player: p, building: 'regional_office', tx, ty },
+        ];
+      }
+    }
+  }
+  return [];
+}
+
+function armyOf(world: World, player: number): Unit[] {
+  return world.units.filter((u) => u.owner === player && u.def.domain === 'land' && !u.def.builder);
+}
+
+function seatsOf(world: World, player: number): Building[] {
+  return world.buildings.filter((b) => b.owner === player && b.complete && (b.type === 'town_hall' || b.type === 'regional_office'));
+}
+
+/** Expansion, recruiting, defence, and (on Normal and Hard) wars of conquest. */
+function militaryStep(world: World, bot: BotState): Command[] {
+  const p = bot.player;
+  const pc = world.city!.players[p]!;
+  const d = DIFFICULTY[bot.difficulty];
+  const pop = pc.population[0] + pc.population[1];
+  const out: Command[] = [];
+
+  // Grow: claim land while there is money and people.
+  if (pop >= d.expandPop * (1 + seatsOf(world, p).length * 0.5) && pc.credits > 4000) {
+    const e = expand(world, bot);
+    if (e.length) return e;
+  }
+
+  // Recruit up to a share of the army limit.
+  const army = armyOf(world, p);
+  const cap = armyCap(world, p);
+  if (army.length < cap * d.army && pc.credits > 1500) {
+    for (const b of world.buildings) {
+      if (b.owner !== p || !b.complete || b.queue.length >= 2) continue;
+      const types: UnitTypeId[] = b.type === 'barracks' ? ['rifleman', 'rocket_trooper', 'rifleman'] : b.type === 'vehicle_factory' ? ['battle_tank', 'scout_buggy', 'flak_track'] : [];
+      for (const t of types) {
+        if (recruitProblem(world, p, b, t) === null) {
+          out.push({ kind: 'recruit', player: p, building: b.id, unit: t });
+          break;
+        }
+      }
+    }
+  }
+
+  // War: pick a fight with the weakest neighbour when strong enough (not on Easy).
+  const year = world.time / 120;
+  const enemies = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && atWar(world, p, o.id));
+  if (!enemies.length && year >= d.warYear && world.time >= bot.warAt) {
+    bot.warAt = world.time + 120;
+    const rivals = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState');
+    for (const o of rivals) {
+      const theirs = armyOf(world, o.id).length;
+      if (army.length >= Math.max(6, theirs * d.warRatio)) {
+        out.push({ kind: 'declareWar', player: p, target: o.id });
+        bot.log.push(`war on ${o.name}`);
+        break;
+      }
+    }
+  }
+
+  // At war: send the army at the nearest enemy seat; make peace when it is spent.
+  if (enemies.length) {
+    const th = hall(world, p);
+    const targets = enemies.flatMap((o) => seatsOf(world, o.id));
+    if (army.length < 3 && targets.length) {
+      for (const o of enemies) out.push({ kind: 'makePeace', player: p, target: o.id });
+      bot.attackTarget = 0;
+      bot.warAt = world.time + 240;
+      return out;
+    }
+    const current = world.getBuilding(bot.attackTarget);
+    let target = current && atWar(world, p, current.owner) ? current : undefined;
+    if (!target && th) {
+      targets.sort((a, b) => (a.x - th.x) * (a.x - th.x) + (a.y - th.y) * (a.y - th.y) - ((b.x - th.x) * (b.x - th.x) + (b.y - th.y) * (b.y - th.y)) || a.id - b.id);
+      target = targets[0];
+    }
+    if (target && army.length >= 4) {
+      bot.attackTarget = target.id;
+      // March on the seat (shooting what comes in range); fight enemy troops that are near.
+      const enemyNear = (u: Unit) => world.units.some((e) => atWar(world, p, e.owner) && (e.x - u.x) * (e.x - u.x) + (e.y - u.y) * (e.y - u.y) < 64);
+      const tx = target.x;
+      const ty = target.y + target.h / 2 + 1.5;
+      // Anyone not already heading there (e.g. still walking home from peacetime) turns round.
+      const going = army.filter((u) => !u.order && !enemyNear(u) && (u.goalX - tx) * (u.goalX - tx) + (u.goalY - ty) * (u.goalY - ty) > 16 && (u.x - tx) * (u.x - tx) + (u.y - ty) * (u.y - ty) > 9);
+      if (going.length) out.push({ kind: 'move', player: p, units: going.map((u) => u.id), x: tx, y: ty });
+    }
+  } else if (army.length) {
+    // Peace: keep the army near home.
+    const th = hall(world, p);
+    const far = army.filter((u) => th && (u.x - th.x) * (u.x - th.x) + (u.y - th.y) * (u.y - th.y) > 18 * 18 && u.state === 'idle').map((u) => u.id);
+    if (th && far.length) out.push({ kind: 'move', player: p, units: far, x: th.x + 4, y: th.y + 8 });
+  }
+  return out;
 }

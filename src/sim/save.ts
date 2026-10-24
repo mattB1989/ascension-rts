@@ -59,6 +59,11 @@ function migrate(w: World): void {
   city.nextShipId ??= 1;
   city.prices ??= Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>;
   city.bots ??= [];
+  city.war ??= w.players.map(() => w.players.map(() => 0));
+  for (const b of w.buildings) if (b.city) {
+    b.city.capture ??= 0;
+    b.city.captureBy ??= -1;
+  }
   city.aiQueue ??= [];
   for (const t of city.trucks) t.buy ??= null;
   for (const pc of city.players) {
@@ -68,6 +73,8 @@ function migrate(w: World): void {
     pc.stockpile ??= {};
     pc.year.imports ??= 0;
     pc.lastYear.imports ??= 0;
+    pc.year.military ??= 0;
+    pc.lastYear.military ??= 0;
   }
   if (!w.map.nearRegion) (w.map as { nearRegion: Uint16Array }).nearRegion = new Uint16Array(w.map.region);
   for (const r of w.map.regions) (r as { ocean?: boolean }).ocean ??= false;

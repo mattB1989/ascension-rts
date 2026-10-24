@@ -12,7 +12,9 @@ import { addCityBuilding, demolish, placeCityBuilding, stockUp } from './place.t
 import { placeRoads, removeRoads, setRoad } from './roads.ts';
 import { createCityState } from './state.ts';
 import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } from './diplomacy.ts';
-import { newBot } from '../../ai/cityBot.ts';
+import { atWar, recruit, setWar } from './military.ts';
+import type { UnitTypeId } from '../../data/units.ts';
+import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
@@ -32,7 +34,11 @@ export type CityCommand =
   /** Accept a city-state's request to join. */
   | { kind: 'acceptUnion'; player: number; state: number }
   /** Buy a city-state outright (it must like you enough). */
-  | { kind: 'buyState'; player: number; state: number };
+  | { kind: 'buyState'; player: number; state: number }
+  /** Train a unit at a barracks or vehicle factory (economy game costs). */
+  | { kind: 'recruit'; player: number; building: number; unit: UnitTypeId }
+  | { kind: 'declareWar'; player: number; target: number }
+  | { kind: 'makePeace'; player: number; target: number };
 
 export function applyCityCommand(world: World, c: CityCommand): void {
   if (!world.city) return;
@@ -112,6 +118,30 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       annex(world, c.state, c.player);
       break;
     }
+    case 'recruit': {
+      const b = world.getBuilding(c.building);
+      if (b) say(recruit(world, c.player, b, c.unit));
+      break;
+    }
+    case 'declareWar': {
+      const t = world.players[c.target];
+      if (!t || t.defeated || c.target === c.player || atWar(world, c.player, c.target)) break;
+      setWar(world, c.player, c.target, true);
+      world.emit({ kind: 'notify', player: -1, text: `⚔ ${world.players[c.player]!.name} declared war on ${t.name}` });
+      // Attacking a city-state angers all of them; declaring war on anyone makes city-states wary.
+      for (const p of world.players) {
+        const rel = world.city.players[p.id]?.relations;
+        if (rel && p.id !== c.player) rel.opinion[c.player] = Math.max(-100, (rel.opinion[c.player] ?? 0) - (t.role === 'cityState' ? 25 : 5));
+      }
+      if (t.role === 'cityState') relationsOf(world, c.target)!.offer = -1;
+      break;
+    }
+    case 'makePeace': {
+      if (!atWar(world, c.player, c.target)) break;
+      setWar(world, c.player, c.target, false);
+      world.emit({ kind: 'notify', player: -1, text: `🕊 ${world.players[c.player]!.name} and ${world.players[c.target]!.name} made peace` });
+      break;
+    }
     case 'taxRate': {
       const pc = world.city.players[c.player];
       if (pc) pc.taxRate = Math.max(0.5, Math.min(1.5, Math.round(c.rate * 20) / 20));
@@ -131,22 +161,34 @@ export interface CityOptions {
   biome: GenBiome;
   /** Neutral city-states (default: 3 on small maps, 5 on standard). */
   cityStates?: number;
+  /** Rival AI nations (default: 1 on small maps, 2 on standard). */
+  nations?: number;
+  difficulty?: Difficulty;
 }
+
+const NATION_COLORS = [0xd64541, 0x8e44ad, 0x16a085];
+const NATION_NAMES = ['Red Union', 'Violet Republic', 'Teal Federation'];
 
 /** A new economy game: generated map, a Town Hall in the best region, a little stock. */
 export function createCity(opts: CityOptions): World {
   const states = opts.cityStates ?? (opts.size >= 512 ? 5 : 3);
-  const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + states });
-  return startCity(map, opts.seed, states);
+  const nations = opts.nations ?? (opts.size >= 512 ? 2 : 1);
+  const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + nations + states });
+  return startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
 }
 
-export function startCity(map: GameMap, seed: number, cityStates = 0): World {
-  // Players: you, then one per city-state, each in a start region the generator picked far apart.
+export function startCity(map: GameMap, seed: number, cityStates = 0, nations = 0, difficulty: Difficulty = 'normal'): World {
+  // Players: you, rival nations (the starts farthest from you), then city-states.
   const players: PlayerInfo[] = [...CITY_PLAYERS];
-  const stateRegions = map.startRegions.slice(1, 1 + cityStates);
+  const nationRegions = map.startRegions.slice(1, 1 + nations);
+  nationRegions.forEach((_, k) => {
+    players.push({ id: players.length, name: NATION_NAMES[k % NATION_NAMES.length]!, color: NATION_COLORS[k % NATION_COLORS.length]!, isHuman: false, role: 'nation' });
+  });
+  const stateRegions = map.startRegions.slice(1 + nations, 1 + nations + cityStates);
   stateRegions.forEach((reg, k) => {
     players.push({ id: players.length, name: map.regions[reg - 1]?.name ?? `City ${k + 1}`, color: STATE_COLORS[k % STATE_COLORS.length]!, isHuman: false, role: 'cityState' });
   });
+  const firstState = 1 + nationRegions.length;
   const world = new World(map, players, seed, 'city');
   world.city = createCityState(map.width, map.height, map.regions.length, players.length, START_CREDITS);
   const reg = map.startRegions[0] ?? 0;
@@ -164,8 +206,24 @@ export function startCity(map: GameMap, seed: number, cityStates = 0): World {
     if (y < map.height && x >= 0 && x < map.width && !world.occupancy[y * map.width + x]) setRoad(world, x, y, true);
   }
   hall.city!.access = -1;
-  stateRegions.forEach((reg, k) => {
+  // Rival nations start like you, and are played by the city builder with expansion and war.
+  nationRegions.forEach((reg, k) => {
     const id = k + 1;
+    const info = map.regions[reg - 1]!;
+    world.city!.regionOwner[reg] = id;
+    world.city!.players[id]!.credits = START_CREDITS * (difficulty === 'hard' ? 1.3 : difficulty === 'easy' ? 0.8 : 1);
+    const th = addCityBuilding(world, 'town_hall', id, info.siteX, info.siteY, true);
+    stockUp(th, START_STOCK);
+    const [w, h] = BUILDINGS.town_hall.size;
+    for (let x = info.siteX - 1; x <= info.siteX + w; x++) {
+      const y = info.siteY + h;
+      if (y < map.height && x >= 0 && x < map.width && !world.occupancy[y * map.width + x]) setRoad(world, x, y, true);
+    }
+    world.city!.bots.push(newBot(id, Infinity, true, difficulty));
+    for (let i = 0; i < map.region.length; i++) if (map.nearRegion[i] === reg) world.players[0]!.explored[i] = 1;
+  });
+  stateRegions.forEach((reg, k) => {
+    const id = firstState + k;
     const info = map.regions[reg - 1]!;
     world.city!.regionOwner[reg] = id;
     world.city!.players[id]!.credits = START_CREDITS * 0.6;

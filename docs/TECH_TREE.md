@@ -356,7 +356,7 @@ seconds at normal speed.
 <!-- gen:city_buildings -->
 | Building | Category | Size | Price | Materials | Upkeep /yr | Staff | Makes | Notes |
 |---|---|---|---|---|---|---|---|---|
-| **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. 2 trucks 2 crews max 1 |
+| **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. Its militia and up to 8 garrisoned infantry defend it: lose it and its region falls. 2 trucks 2 crews max 1 |
 | **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
 | **Maintenance Depot** | Logistics | 3×2 | ₡700 | 10 lumber + 20 concrete | 90 | 6 workers | — | Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down. |
 | **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |

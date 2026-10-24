@@ -128,6 +128,16 @@ export interface EconDef {
   waterSupply?: number;
   /** Ground made worse for housing nearby (0..1). */
   pollution?: number;
+  /** Military buildings: goods kept in stock for training (trucks deliver them). */
+  supplies?: Readonly<Partial<Record<GoodId, number>>>;
+}
+
+/** What a unit costs in the economy game. */
+export interface UnitEcon {
+  credits: number;
+  goods: Readonly<Partial<Record<GoodId, number>>>;
+  /** Credits per game year while it lives. */
+  upkeep: number;
 }
 
 export interface UnitDef {

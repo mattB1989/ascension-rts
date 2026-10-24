@@ -57,6 +57,9 @@ export interface CityBuildingState {
   covered: Record<ServiceKind, boolean>;
   /** Houses: pollution from industry nearby, 0..1. */
   pollution: number;
+  /** Seats (town hall, regional office): capture progress 0..1 and by whom (-1: nobody). */
+  capture: number;
+  captureBy: number;
 }
 
 export interface Truck {
@@ -88,6 +91,8 @@ export interface Budget {
   upkeep: number;
   roads: number;
   construction: number;
+  /** Recruiting and army upkeep. */
+  military: number;
 }
 
 /** What to do with a good at the trade port: import up to `import` (0: never), export everything above `export` (-1: never). */
@@ -174,12 +179,14 @@ export interface CityState {
   /** AI players (city-states, later nations): their planner state, and commands for the next tick. */
   bots: BotState[];
   aiQueue: Command[];
+  /** war[a][b] = 1 while players a and b are at war. */
+  war: number[][];
   /** Overseas market price multiplier per good (drifts over time). */
   prices: Record<GoodId, number>;
 }
 
 export function emptyBudget(): Budget {
-  return { taxes: 0, trade: 0, imports: 0, upkeep: 0, roads: 0, construction: 0 };
+  return { taxes: 0, trade: 0, imports: 0, upkeep: 0, roads: 0, construction: 0, military: 0 };
 }
 
 export function newPlayerCity(credits: number): PlayerCity {
@@ -237,6 +244,8 @@ export function newCityBuilding(): CityBuildingState {
     market: 0,
     covered: { market: false, water: false, police: false, health: false, school: false },
     pollution: 0,
+    capture: 0,
+    captureBy: -1,
   };
 }
 
@@ -257,6 +266,7 @@ export function createCityState(width: number, height: number, regions: number, 
     nextShipId: 1,
     bots: [],
     aiQueue: [],
+    war: Array.from({ length: players }, () => new Array(players).fill(0)),
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
   };
 }

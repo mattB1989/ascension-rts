@@ -147,7 +147,7 @@ Each milestone ends with a playable build on GitHub Pages.
 | **E3** ✅ | A living city | Housing, Workers and Technicians, jobs and labour, Modern chains (food, lumber, concrete, steel, fuel, goods), warehouses and logistics, power grid, water, services coverage, happiness, overlays and info sheets. **Checkpoint: is the solo city fun?** |
 | **E4** ◐ | Networks and trade | ✅ overseas market, trade ports and ships, network condition and maintenance, hydro power. Still to do: rail, river barges, pipelines, pirates raiding convoys |
 | **E5** ◐ | Neighbours | ✅ city-states with their own economies (AI on the same rules), local prices, trade deals by road, opinion and dependence, regional offices, economic union, purchase. Still to do: treaties |
-| **E6** | Rivals and war | Nation AI (Easy / Normal / Hard), units paid in goods, supply depots and attrition, conquest and occupation, war weariness, blockades, embargoes, harness |
+| **E6** ◐ | Rivals and war | ✅ nation AI (Easy / Normal / Hard) that builds, trades, expands and makes war; units paid in credits and goods with upkeep; army limit by population; war and peace; capturing seats and their regions; garrisons; defeat. Still to do: supply depots and attrition, war weariness, blockades, embargoes, harness |
 | **E7** | Digital age | Engineers tier, electronics, pharmaceuticals, nuclear power, airports, data network, research pacts, Digital units (subs, carriers, first mech) |
 | **E8** | Nano age | Scientists tier, nanomaterials, robotics and automation, fusion, maglev, heavy mechs, EMP, shields |
 | **E9** | Space age | Orbital industry, launch site, Space Elevator; all victory types |

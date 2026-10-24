@@ -64,13 +64,37 @@ export function showMenu(root: HTMLElement): void {
   }
   card.append(el('div', 'menu-label', 'Landscape'), biomes);
 
+  let difficulty = 'normal';
+  const diff = el('div', 'seg');
+  for (const [label, v, hint] of [['Easy', 'easy', 'rivals never attack'], ['Normal', 'normal', 'war when they are strong'], ['Hard', 'hard', 'early, aggressive rivals']] as const) {
+    const b = el('button', `btn ${v === difficulty ? 'active' : ''}`, `${label} <small>${hint}</small>`);
+    b.addEventListener('click', () => {
+      difficulty = v;
+      for (const c of diff.children) c.classList.remove('active');
+      b.classList.add('active');
+    });
+    diff.appendChild(b);
+  }
+  let rivals = -1;
+  const riv = el('div', 'seg');
+  for (const [label, v] of [['Auto', -1], ['None', 0], ['1', 1], ['2', 2], ['3', 3]] as const) {
+    const b = el('button', `btn ${v === rivals ? 'active' : ''}`, label);
+    b.addEventListener('click', () => {
+      rivals = v;
+      for (const c of riv.children) c.classList.remove('active');
+      b.classList.add('active');
+    });
+    riv.appendChild(b);
+  }
+  card.append(el('div', 'menu-label', 'Rival nations'), diff, riv);
+
   const seedRow = el('div', 'menu-row');
   const seed = el('input', 'seed') as HTMLInputElement;
   seed.type = 'number';
   seed.value = String(1 + Math.floor(Math.random() * 99999));
   seed.title = 'Map seed: the same seed gives the same map';
   const start = el('button', 'btn primary', 'Found the nation →');
-  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1 }));
+  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}) }));
   seedRow.append(el('span', 'menu-label', 'Seed'), seed, start);
   card.appendChild(seedRow);
 
@@ -82,7 +106,7 @@ export function showMenu(root: HTMLElement): void {
   sand.addEventListener('click', () => go({ mode: 'sandbox' }));
   sk.append(twin, sand);
   card.appendChild(sk);
-  card.appendChild(el('p', 'muted menu-foot', 'Works offline. Desktop and touch. Rival nations and trade partners arrive in later milestones.'));
+  card.appendChild(el('p', 'muted menu-foot', 'Works offline. Desktop and touch. City-states are neutral neighbours you can trade with, buy, or unite with; rival nations grow, expand and, above Easy, go to war.'));
 
   wrap.addEventListener('pointerdown', (e) => e.stopPropagation());
   root.appendChild(wrap);

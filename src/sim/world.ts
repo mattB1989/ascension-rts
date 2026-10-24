@@ -314,7 +314,8 @@ export class World {
     let cap = 0;
     for (const b of this.buildings) if (b.owner === p.id && b.complete) cap += b.def.pop;
     p.popUsed = used;
-    p.popCap = Math.min(POP_LIMIT, cap);
+    // Economy game: the army limit grows with population (checked when recruiting).
+    p.popCap = this.city ? POP_LIMIT : Math.min(POP_LIMIT, cap);
   }
 
   // -------------------------------------------------------------------------
@@ -403,6 +404,9 @@ export class World {
       case 'deal':
       case 'acceptUnion':
       case 'buyState':
+      case 'recruit':
+      case 'declareWar':
+      case 'makePeace':
         applyCityCommand(this, c);
         break;
       case 'move': {

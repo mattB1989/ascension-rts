@@ -25,8 +25,8 @@ export const FOG_INTERVAL = 4; // ticks
 export function updateFog(world: World): void {
   const { width: w, height: h } = world.map;
   for (const p of world.players) {
-    // AI players in the economy game don't use the fog: skip the work.
-    if (world.city && !p.isHuman) continue;
+    // City-states don't fight: they need no fog of war.
+    if (world.city && p.role === 'cityState') continue;
     const vis = p.visible;
     vis.fill(0);
     const stamp = (x: number, y: number, r: number) => {

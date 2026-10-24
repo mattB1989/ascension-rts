@@ -1,7 +1,7 @@
 // Buildings of the economy game, Modern age (DESIGN.md §4-6). Starting values
 // for the balance harness. Time: a game year is 120 s; recipes are per cycle.
 
-import type { BuildingDef } from './types.ts';
+import type { BuildingDef, EconDef, UnitEcon } from './types.ts';
 
 const NONE = { ore: 0, energy: 0 } as const;
 const common = { age: 'modern', cost: NONE, pop: 0, builtBy: 'engineer', mode: 'city' } as const;
@@ -10,13 +10,13 @@ export const CITY_BUILDINGS = {
   // --- Core and logistics ---------------------------------------------------
   town_hall: {
     ...common, id: 'town_hall', name: 'Town Hall', category: 'core', requires: [], buildTime: 120, hp: 4000, size: [5, 5],
-    placement: 'land', vision: 12, limit: 1,
+    placement: 'land', vision: 12, limit: 1, garrison: 8,
     econ: { credits: 0, materials: {}, upkeep: 0, storage: 500, trucks: 2, crews: 2 },
-    description: 'Seat of government. Stores goods, sends trucks and runs two construction crews.',
+    description: 'Seat of government. Stores goods, sends trucks and runs two construction crews. Its militia and up to 8 garrisoned infantry defend it: lose it and its region falls.',
   },
   regional_office: {
     ...common, id: 'regional_office', name: 'Regional Office', category: 'core', requires: [], buildTime: 40, hp: 2000, size: [3, 3],
-    placement: 'land', vision: 10,
+    placement: 'land', vision: 10, garrison: 4,
     econ: { credits: 2500, materials: { lumber: 30, concrete: 20 }, upkeep: 150, jobs: { tier: 0, count: 4 } },
     description: 'Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road.',
   },
@@ -195,7 +195,34 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'pumping_station', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school'] },
+  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'watchtower', 'bunker', 'gun_turret'] },
 ];
+
+/** Economy-game costs for the skirmish's military buildings (DESIGN.md §9: war is paid for by the economy). */
+export const MILITARY_ECON: Record<string, EconDef> = {
+  barracks: { credits: 1200, materials: { lumber: 20, concrete: 20 }, upkeep: 120, jobs: { tier: 0, count: 4 }, supplies: { steel: 8, fuel: 4 } },
+  vehicle_factory: { credits: 2500, materials: { concrete: 30, steel: 20 }, upkeep: 200, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 30, fuel: 12 } },
+  watchtower: { credits: 300, materials: { lumber: 10, concrete: 5 }, upkeep: 20 },
+  bunker: { credits: 500, materials: { concrete: 30 }, upkeep: 30 },
+  gun_turret: { credits: 600, materials: { concrete: 10, steel: 10 }, upkeep: 40 },
+};
+
+/** What units cost in the economy game: credits now, goods from the building's stock, upkeep. */
+export const UNIT_ECON: Record<string, UnitEcon> = {
+  rifleman: { credits: 120, goods: { steel: 1 }, upkeep: 15 },
+  rocket_trooper: { credits: 220, goods: { steel: 2, fuel: 1 }, upkeep: 20 },
+  skyguard: { credits: 260, goods: { steel: 2, fuel: 1 }, upkeep: 20 },
+  scout_buggy: { credits: 300, goods: { steel: 3, fuel: 2 }, upkeep: 30 },
+  battle_tank: { credits: 700, goods: { steel: 10, fuel: 4 }, upkeep: 60 },
+  flak_track: { credits: 500, goods: { steel: 7, fuel: 3 }, upkeep: 45 },
+  howitzer: { credits: 800, goods: { steel: 10, fuel: 3 }, upkeep: 60 },
+};
+
+/** Army size: this many units, plus one per this many residents. */
+export const ARMY = { base: 6, perResidents: 12 } as const;
+
+/** Taking a region: seconds attackers must hold its seat with no defenders near. */
+export const CAPTURE = { seconds: 30, attackerRange: 4, defenderRange: 8 } as const;
 
 /** Consumption per resident per game year. */
 export const CONSUMPTION = { food: 0.4, goods: 0.2 } as const;

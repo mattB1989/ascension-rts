@@ -3,7 +3,9 @@
 // placed, and the goods, budget and game panels.
 
 import { buildingDef, type BuildingTypeId } from '../data/buildings.ts';
-import { CITY_PALETTE, HOUSE_LEVELS, OVERSEAS, ROAD } from '../data/city.ts';
+import { CAPTURE, CITY_PALETTE, HOUSE_LEVELS, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
+import { UNITS, type UnitTypeId } from '../data/units.ts';
+import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { GOOD_IDS, GOODS, TIERS, type GoodId } from '../data/goods.ts';
 import type { Game } from '../game.ts';
 import { houseCapacity, gameMonth, gameYear } from '../sim/city/economy.ts';
@@ -253,6 +255,23 @@ export class CityHud {
       case 'union':
         this.game.issue({ kind: 'acceptUnion', player: this.game.humanPlayer, state: Number(arg) });
         break;
+      case 'recruit': {
+        const [bid, unit] = arg.split(':');
+        this.game.issue({ kind: 'recruit', player: this.game.humanPlayer, building: Number(bid), unit: unit as UnitTypeId });
+        this.lastInfo = '';
+        break;
+      }
+      case 'war':
+        this.game.issue({ kind: 'declareWar', player: this.game.humanPlayer, target: Number(arg) });
+        this.lastPanel = '';
+        break;
+      case 'peace':
+        this.game.issue({ kind: 'makePeace', player: this.game.humanPlayer, target: Number(arg) });
+        this.lastPanel = '';
+        break;
+      case 'stop':
+        this.input.stopSelected();
+        break;
       case 'buy':
         this.game.issue({ kind: 'buyState', player: this.game.humanPlayer, state: Number(arg) });
         break;
@@ -302,6 +321,14 @@ export class CityHud {
   handleEvents(events: readonly GameEvent[]): void {
     const me = this.game.humanPlayer;
     for (const e of events) {
+      if (e.kind === 'defeated' && e.player === me) {
+        this.showDefeat(this.world.players[e.by]?.name ?? 'the enemy');
+        continue;
+      }
+      if (e.kind === 'underAttack' && e.player === me) {
+        this.onAlert(e.x, e.y);
+        continue;
+      }
       if (!('player' in e) || (e.player !== me && e.player !== -1)) continue;
       if (e.kind === 'notify') this.toast(e.text);
       else if (e.kind === 'buildingComplete') {
@@ -312,6 +339,25 @@ export class CityHud {
   }
 
   // -------------------------------------------------------------------------
+
+  /** Called with the location of an attack (the minimap pings it). */
+  onAlert: (x: number, y: number) => void = () => {};
+
+  private showDefeat(by: string): void {
+    const o = el('div', 'gameover');
+    const card = el('div', 'gameover-card');
+    card.append(el('h1', 'lose', 'Defeat'), el('p', 'muted', `Your last seat of government has fallen to ${by}.`));
+    const again = el('button', 'btn primary', 'New game');
+    again.addEventListener('click', () => this.onNew());
+    const look = el('button', 'btn', 'Keep watching');
+    look.addEventListener('click', () => o.remove());
+    const row = el('div', 'gameover-actions');
+    row.append(again, look);
+    card.append(row);
+    o.appendChild(card);
+    o.addEventListener('pointerdown', (e) => e.stopPropagation());
+    document.getElementById('ui')!.appendChild(o);
+  }
 
   private renderOverlayBar(): void {
     const active = this.overlay;
@@ -358,12 +404,13 @@ export class CityHud {
     // Net per year: last full year, or this year so far scaled up.
     const frac = (this.world.time % 120) / 120;
     const src = y.taxes + y.upkeep > 0 ? y : null;
-    const net = src ? src.taxes + src.trade - src.imports - src.upkeep - src.roads : frac > 0.05 ? (cur.taxes + cur.trade - cur.imports - cur.upkeep - cur.roads) / frac : 0;
+    const net = src ? src.taxes + src.trade - src.imports - src.upkeep - src.roads - src.military : frac > 0.05 ? (cur.taxes + cur.trade - cur.imports - cur.upkeep - cur.roads - cur.military) / frac : 0;
     const pop = pc.population[0] + pc.population[1];
     const happy = Math.round(pc.happiness * 100);
     const date = `${MONTHS[gameMonth(this.world)]} ${gameYear(this.world)}`;
     const powerShort = pc.powerDemand > pc.powerSupply + 0.01;
-    const s = [Math.floor(pc.credits), Math.round(net), pop, pc.population.join(','), happy, Math.round(pc.powerSupply), Math.round(pc.powerDemand), date, this.game.paused, this.game.timeScale].join('|');
+    const wars = this.world.players.filter((p) => p.id !== this.game.humanPlayer && atWar(this.world, this.game.humanPlayer, p.id)).map((p) => p.name);
+    const s = [wars.join(','), Math.floor(pc.credits), Math.round(net), pop, pc.population.join(','), happy, Math.round(pc.powerSupply), Math.round(pc.powerDemand), date, this.game.paused, this.game.timeScale].join('|');
     if (s === this.lastTop) return;
     this.lastTop = s;
     this.topRes.innerHTML = `
@@ -371,7 +418,7 @@ export class CityHud {
       <span class="res" title="Population: ${TIERS.map((t) => `${t.name} ${pc.population[t.id]}`).join(', ')}"><b>👥</b> ${fmt(pop)} <small>${pc.population[0]}W · ${pc.population[1]}T</small></span>
       <span class="res ${happy < 40 ? 'neg' : ''}" title="Happiness"><b>${happy >= 60 ? '😊' : happy >= 40 ? '😐' : '😟'}</b> ${happy}%</span>
       <span class="res ${powerShort ? 'neg' : ''}" title="Power supply / demand (MW)"><b class="c-energy">⚡</b> ${Math.round(pc.powerSupply)}<small>/${Math.round(pc.powerDemand)} MW</small></span>
-      <span class="res res-date" title="Date">📅 ${date}</span>`;
+      <span class="res res-date" title="Date">📅 ${date}</span>${wars.length ? `<span class="res neg" title="At war with ${esc(wars.join(', '))}">⚔ War</span>` : ''}`;
     this.speedBtns.forEach((b, i) => b.classList.toggle('active', i === 0 ? this.game.paused : !this.game.paused && this.game.timeScale === SPEEDS[i - 1]));
   }
 
@@ -423,7 +470,10 @@ export class CityHud {
   private infoHtml(): string {
     const pl = this.input.placing;
     if (pl) return this.placingHtml(pl.type, pl.problem, this.input.lineInfo);
-    const id = this.selection.list()[0] ?? (this.selection.inspect?.kind === 'entity' ? this.selection.inspect.id : 0);
+    const sel = this.selection.list();
+    const unitIds = sel.filter((x) => this.world.getUnit(x));
+    if (unitIds.length) return this.unitsHtml(unitIds);
+    const id = sel[0] ?? (this.selection.inspect?.kind === 'entity' ? this.selection.inspect.id : 0);
     const b = id ? this.world.getBuilding(id) : undefined;
     if (b?.city) return this.buildingHtml(b);
     const ins = this.selection.inspect;
@@ -483,11 +533,41 @@ export class CityHud {
       const held = GOOD_IDS.filter((g) => get(c.stock, g) >= 0.5);
       if (held.length) rows.push(`<div class="stock">${held.map((g) => chip(g, `${Math.floor(get(c.stock, g))}`)).join('')}</div>`);
       if (e.trucks || e.crews) rows.push(`<div class="muted">${e.trucks ? `🚚 ${c.trucksOut}/${e.trucks} out` : ''}${e.trucks && e.crews ? ' · ' : ''}${e.crews ? `👷 ${c.crewsOut}/${e.crews} crews out` : ''}</div>`);
+      if (b.garrison.length) rows.push(`<div>🛡 ${b.garrison.length} garrisoned</div>`);
+      if (c.capture > 0) rows.push(`<div class="info-problem">Being taken by ${esc(this.world.players[c.captureBy]?.name ?? 'the enemy')}: ${Math.round(c.capture * 100)}%</div>`);
+      if (own && (b.type === 'barracks' || b.type === 'vehicle_factory')) rows.push(this.recruitHtml(b));
     }
     if (!own) title = `${this.world.players[b.owner]?.name ?? 'Foreign'} · ${title}`;
     const head = `<div class="card-head"><div class="card-title">${esc(title)}</div><div class="card-status ${status && status !== '' ? 'warn' : ''}">${esc(status || (b.complete ? 'Working' : ''))}</div></div>`;
     const actions = own && b.type !== 'town_hall' ? `<div class="info-actions"><button class="cmd danger" data-action="demolish" data-arg="${b.id}">🗑 Demolish</button></div>` : '';
     return head + rows.join('') + actions;
+  }
+
+  private recruitHtml(b: Building): string {
+    const me = this.game.humanPlayer;
+    const units = (Object.keys(UNIT_ECON) as UnitTypeId[]).filter((u) => UNITS[u].trainedAt === b.type);
+    const army = this.world.units.filter((u) => u.owner === me).reduce((s, u) => s + u.def.pop, 0);
+    const btns = units.map((u) => {
+      const cost = UNIT_ECON[u]!;
+      const why = recruitProblem(this.world, me, b, u);
+      const goods = Object.entries(cost.goods).map(([g, n]) => `${GOODS[g as GoodId].icon}${n}`).join(' ');
+      return `<button class="cmd ${why ? 'disabled' : ''}" data-action="recruit" data-arg="${b.id}:${u}" title="${esc(UNITS[u].description)}${why ? `
+${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span class="cmd-cost">₡${cost.credits} ${goods}</span>${why ? `<span class="cmd-lock">${esc(why)}</span>` : ''}</button>`;
+    }).join('');
+    const queue = b.queue.map((q) => (q.kind === 'unit' ? `${UNITS[q.unit].name} ${Math.floor((q.progress / q.total) * 100)}%` : '')).join(', ');
+    return `<div class="muted">Army ${army}/${armyCap(this.world, me)} · units cost upkeep${queue ? ` · training: ${esc(queue)}` : ''}</div><div class="cmd-grid recruit">${btns}</div>`;
+  }
+
+  private unitsHtml(ids: number[]): string {
+    const counts = new Map<string, number>();
+    for (const id of ids) {
+      const u = this.world.getUnit(id);
+      if (u) counts.set(u.def.name, (counts.get(u.def.name) ?? 0) + 1);
+    }
+    const list = [...counts].map(([n, k]) => `${esc(n)} ×${k}`).join(', ');
+    const hint = this.input.touchDevice ? 'Tap the map to move, an enemy to attack, a tower or seat to garrison.' : 'Right click: move, attack an enemy, garrison a tower or seat. F: attack-move.';
+    return `<div class="card-head"><div class="card-title">${ids.length} unit${ids.length > 1 ? 's' : ''}</div></div><div>${list}</div><div class="card-hint">${hint}</div>
+      <div class="info-actions"><button class="cmd" data-action="stop">■ Stop</button><button class="cmd" data-action="cancel">✕ Deselect</button></div>`;
   }
 
   private groundHtml(x: number, y: number): string {
@@ -514,11 +594,31 @@ export class CityHud {
   // -------------------------------------------------------------------------
   // Panels
 
+  private nationsHtml(): string {
+    const me = this.game.humanPlayer;
+    const w = this.world;
+    const nations = w.players.filter((p) => p.role === 'nation' && !p.defeated);
+    if (!nations.length) return '';
+    return `<h3>Rival nations</h3>${nations.map((p) => {
+      const pc = w.city!.players[p.id]!;
+      const war = atWar(w, me, p.id);
+      const color = '#' + p.color.toString(16).padStart(6, '0');
+      const army = w.units.filter((u) => u.owner === p.id).length;
+      const regions = Array.from(w.city!.regionOwner).filter((o) => o === p.id).length;
+      const hall = w.buildings.find((b) => b.owner === p.id && b.type === 'town_hall');
+      return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
+        <span class="muted">👥 ${pc.population[0] + pc.population[1]} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'}</span></div>
+        <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>
+        <div class="state-actions">${hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : ''}
+        ${war ? `<button class="mini wide" data-action="peace" data-arg="${p.id}">Make peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div></div>`;
+    }).join('')}`;
+  }
+
   private diplomacyHtml(): string {
     const me = this.game.humanPlayer;
     const w = this.world;
     const states = w.players.filter((p) => p.role === 'cityState' && !p.defeated);
-    if (!states.length) return '<p class="muted">No city-states left: every one has joined a nation.</p>';
+    if (!states.length) return `<p class="muted">No city-states left: every one has joined a nation.</p>${this.nationsHtml()}`;
     const pc = w.city!.players[me]!;
     const mine = w.buildings.filter((b) => b.owner === me && b.complete && b.def.econ?.storage && b.city!.access >= 0);
     return states.map((p) => {
@@ -537,6 +637,7 @@ export class CityHud {
         `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>`,
         offer ? `<button class="mini wide primary" data-action="union" data-arg="${p.id}">Accept union</button>` : '',
         `<button class="mini wide ${op >= DIPLO.buyOpinion && pc.credits >= price ? '' : 'disabled'}" data-action="buy" data-arg="${p.id}" title="${op >= DIPLO.buyOpinion ? '' : `They sell only to friends (opinion ${DIPLO.buyOpinion}+)`}">Buy ₡${fmt(price)}</button>`,
+        atWar(w, me, p.id) ? `<button class="mini wide" data-action="peace" data-arg="${p.id}">Make peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}" title="Take their town hall by force: every city-state will like you less">Declare war</button>`,
       ].join('');
       let deals = '';
       if (this.dealsWith === p.id) {
@@ -554,7 +655,7 @@ export class CityHud {
         <div class="state-row">Opinion ${bar(op, -100, 100, op >= 40 ? 'good' : op < 0 ? 'bad' : '')} ${op} · Dependence ${bar(dep, 0, 1, dep >= DIPLO.unionDependence ? 'good' : '')} ${Math.round(dep * 100)}%</div>
         <div class="state-row ${connected ? 'pos' : 'neg'}">${connected ? 'Connected by road' : 'Not connected: build a road to their town hall to trade'}${offer ? ' · <b>They ask to join you!</b>' : ''}</div>
         <div class="state-actions">${actions}</div>${deals}</div>`;
-    }).join('') + `<p class="muted">Trade raises their opinion of you. When a city-state likes you (${DIPLO.unionOpinion}+) and most of its economy is trade with you (${Math.round(DIPLO.unionDependence * 100)}%+), it asks to join your nation. Friends (${DIPLO.buyOpinion}+) can also be bought.</p>`;
+    }).join('') + this.nationsHtml() + `<p class="muted">Trade raises their opinion of you. When a city-state likes you (${DIPLO.unionOpinion}+) and most of its economy is trade with you (${Math.round(DIPLO.unionDependence * 100)}%+), it asks to join your nation. Friends (${DIPLO.buyOpinion}+) can also be bought.</p>`;
   }
 
   private renderPanel(): void {
@@ -603,14 +704,14 @@ export class CityHud {
           <p class="muted">Import tops your stock up to the amount; export ships out everything above it. Ships carry ${OVERSEAS.capacity} each way. World prices drift over time. This year: exports ₡${fmt(pc.year.trade)}, imports ₡${fmt(pc.year.imports)}.</p>`;
       }
       case 'diplomacy':
-        return `${close}<h3>City-states</h3>${this.diplomacyHtml()}`;
+        return `${close}<h3>City-states</h3>${this.diplomacyHtml()}<p class="muted">War: troops that hold an enemy town hall or regional office for ${CAPTURE.seconds} seconds, with no defenders near, take its region. Garrisoned infantry defend a seat.</p>`;
       case 'budget': {
         const y = pc.year;
         const l = pc.lastYear;
         const row = (name: string, a: number, b: number, neg = false) => `<tr><td>${name}</td><td class="${neg ? 'neg' : 'pos'}">${neg ? '−' : ''}${fmt(a)}</td><td class="${neg ? 'neg' : 'pos'}">${neg ? '−' : ''}${fmt(b)}</td></tr>`;
-        const net = (x: typeof y) => x.taxes + x.trade - x.imports - x.upkeep - x.roads - x.construction;
+        const net = (x: typeof y) => x.taxes + x.trade - x.imports - x.upkeep - x.roads - x.construction - x.military;
         return `${close}<h3>Budget</h3><table class="goods"><tr><th></th><th>This year</th><th>Last year</th></tr>
-          ${row('Taxes', y.taxes, l.taxes)}${row('Exports', y.trade, l.trade)}${row('Imports', y.imports, l.imports, true)}${row('Building upkeep', y.upkeep, l.upkeep, true)}${row('Road upkeep', y.roads, l.roads, true)}${row('Construction', y.construction, l.construction, true)}
+          ${row('Taxes', y.taxes, l.taxes)}${row('Exports', y.trade, l.trade)}${row('Imports', y.imports, l.imports, true)}${row('Building upkeep', y.upkeep, l.upkeep, true)}${row('Road upkeep', y.roads, l.roads, true)}${row('Construction', y.construction, l.construction, true)}${row('Military', y.military, l.military, true)}
           <tr class="total"><td>Net</td><td>${sign(net(y))}</td><td>${sign(net(l))}</td></tr></table>
           <div class="tax-row">Taxes <button class="btn" data-action="tax" data-arg="-0.1">−</button><b>${Math.round(pc.taxRate * 100)}%</b><button class="btn" data-action="tax" data-arg="0.1">+</button>
           <span class="muted">Higher taxes bring money but make people unhappy.</span></div>

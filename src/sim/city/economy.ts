@@ -14,6 +14,7 @@ import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, emptyBudget, get, type PlayerCity, type Stock } from './state.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
+import { updateMilitary } from './military.ts';
 import { botStep } from '../../ai/cityBot.ts';
 
 const SECOND = 15; // ticks
@@ -151,6 +152,7 @@ function everySecond(world: World): void {
   budget(world);
   updateTrade(world);
   updateDiplomacy(world, sec);
+  updateMilitary(world);
   roadUpkeep(world, sec);
   for (const pc of city.players) {
     pc.made = sumLog(pc.madeLog);

@@ -37,6 +37,13 @@ original **Twin Shores** skirmish.
   per good: your trucks sell to them and buy from them at their local prices. Trade raises their
   opinion and their dependence on you; a friendly, dependent city-state asks to join your nation,
   and friends can be bought outright. 🤝 Diplomacy shows it all.
+- **Rival nations and war (E6)**: 1–3 AI nations (Easy never attacks, Normal goes to war when
+  it is stronger, Hard early and often) build, trade and expand with Regional Offices. The
+  Military tab has barracks, vehicle factories and defences; units cost credits plus steel or
+  fuel delivered to the building, and upkeep; the army limit grows with population. Declare war
+  or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no
+  defenders nearby and its region is yours; garrisoned infantry defend it. Lose every seat and
+  the game is over.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.
@@ -48,7 +55,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: rival nations and war (**E6**), then rail. See [docs/PLAN.md](docs/PLAN.md). See [docs/PLAN.md](docs/PLAN.md).
+Next: rail, treaties and the later ages. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

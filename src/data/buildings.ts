@@ -1,4 +1,4 @@
-import { CITY_BUILDINGS } from './city.ts';
+import { CITY_BUILDINGS, MILITARY_ECON } from './city.ts';
 import type { BuildingDef } from './types.ts';
 
 // Starting values; the balance harness (M4) will tune them. See TECH_TREE.md §3 and §4.
@@ -203,7 +203,14 @@ const RTS_BUILDINGS = {
   },
 } as const satisfies Record<string, BuildingDef>;
 
-export const BUILDINGS = { ...RTS_BUILDINGS, ...CITY_BUILDINGS } as const;
+/** Skirmish military buildings get economy-game costs too (they exist in both games). */
+const withEcon = <T extends Record<string, BuildingDef>>(defs: T): T => {
+  const out = { ...defs } as Record<string, BuildingDef>;
+  for (const [id, econ] of Object.entries(MILITARY_ECON)) if (out[id]) out[id] = { ...out[id]!, econ };
+  return out as T;
+};
+
+export const BUILDINGS = { ...withEcon(RTS_BUILDINGS), ...CITY_BUILDINGS } as const;
 
 export type BuildingTypeId = keyof typeof BUILDINGS;
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingTypeId[];

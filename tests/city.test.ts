@@ -345,3 +345,59 @@ test('city-states grow on their own, trade by road with you, and can join your n
   assert.equal(world.city!.regionOwner[theirRegion], 0, 'their region is ours');
   run(world, 30);
 });
+
+test('recruiting costs credits and goods from the barracks, and the army limit grows with population', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { armyCap, recruitProblem } = await import('../src/sim/city/military.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 20; x <= hall.tx + 20; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  const [bx, by] = spotOnStreet(world, 'barracks', hall.tx + 10, row);
+  const barracks = addCityBuilding(world, 'barracks', 0, bx, by, true);
+  const [hx, hy] = spotOnStreet(world, 'house', hall.tx - 10, row);
+  const house = addCityBuilding(world, 'house', 0, hx, hy, true);
+  house.city!.residents = 16;
+  run(world, 2);
+  assert.match(recruitProblem(world, 0, barracks, 'rifleman') ?? '', /steel/);
+  stockUp(barracks, { steel: 5 });
+  const credits = world.city!.players[0]!.credits;
+  world.step([{ kind: 'recruit', player: 0, building: barracks.id, unit: 'rifleman' }]);
+  assert.ok(world.city!.players[0]!.credits < credits, 'paid');
+  assert.equal(barracks.city!.stock.steel, 4, 'steel used');
+  run(world, 12);
+  assert.equal(world.units.filter((u) => u.owner === 0 && u.type === 'rifleman').length, 1, 'trained');
+  assert.ok(armyCap(world, 0) >= 6);
+});
+
+test('war: an undefended seat falls to troops holding it, a garrisoned one does not', async () => {
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, difficulty: 'easy' });
+  const me = 0;
+  const rival = world.players.find((p) => p.role === 'nation')!.id;
+  const hall = world.buildings.find((b) => b.owner === me && b.type === 'town_hall')!;
+  run(world, 1);
+  // Rival troops appear beside our hall; nothing happens while at peace.
+  const raiders = [0, 1, 2, 3, 4, 5].map((k) => world.spawnUnit('battle_tank', rival, hall.x - 3 + k, hall.y + 4.5));
+  run(world, 20);
+  assert.equal(hall.owner, me, 'peace: nothing happens');
+  // A garrison holds the seat even when war comes.
+  const guards = [0, 1, 2].map((k) => world.spawnUnit('rifleman', me, hall.x + k, hall.y + 4));
+  world.step([{ kind: 'garrison', player: me, units: guards.map((u) => u.id), building: hall.id }]);
+  run(world, 5);
+  assert.equal(hall.garrison.length, 3, 'garrisoned');
+  world.step([{ kind: 'declareWar', player: rival, target: me }]);
+  run(world, 10);
+  assert.equal(hall.owner, me, 'held while defended');
+  // Without defenders (and with the tanks still there), it falls.
+  world.step([{ kind: 'eject', player: me, building: hall.id }]);
+  for (const g of guards) if (world.getUnit(g.id)) world.removeUnit(world.getUnit(g.id)!, 'test', true);
+  for (const r of raiders) {
+    if (!world.getUnit(r.id)) continue;
+    r.hp = r.maxHp;
+  }
+  run(world, 100);
+  assert.notEqual(hall.owner, me, 'the town hall fell');
+  assert.ok(world.players[me]!.defeated, 'no seat left: defeated');
+});

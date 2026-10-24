@@ -225,7 +225,9 @@ export type GameEvent =
   | { kind: 'died'; entity: 'unit' | 'building'; type: string; owner: number; x: number; y: number; size: number; air: boolean }
   /** Your stuff is being shot at (throttled). */
   | { kind: 'underAttack'; player: number; x: number; y: number }
-  | { kind: 'gameOver'; winner: number };
+  | { kind: 'gameOver'; winner: number }
+  /** Economy game: a player lost their last seat of government. */
+  | { kind: 'defeated'; player: number; by: number };
 
 export const POP_LIMIT = 200;
 export const CARRY_CAPACITY = 10;

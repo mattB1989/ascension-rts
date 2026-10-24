@@ -79,6 +79,9 @@ export const WEAPONS: Record<string, readonly WeaponDef[]> = {
   fighter_jet: [{ name: 'Air-to-air missiles', type: 'aa', damage: 50, range: 7, cooldown: 1.8, targets: AIR, projectile: 'missile', speed: 26 }],
   attack_helicopter: [{ name: 'Hellfire missiles', type: 'ap', damage: 40, range: 7, cooldown: 1.6, targets: LAND_SEA, projectile: 'missile', speed: 18 }],
   // --- Defenses ---------------------------------------------------------------
+  // Economy game: seats of government defend themselves a little.
+  town_hall: [{ name: 'Militia rifles', type: 'bullet', damage: 12, range: 7, cooldown: 0.9, targets: ['land'], projectile: 'instant' }],
+  regional_office: [{ name: 'Militia rifles', type: 'bullet', damage: 9, range: 6, cooldown: 1.1, targets: ['land'], projectile: 'instant' }],
   watchtower: [{ name: 'Machine gun', type: 'bullet', damage: 10, range: 8, cooldown: 0.8, targets: ['land', 'air'], projectile: 'instant' }],
   bunker: [{ name: 'Heavy machine gun', type: 'bullet', damage: 14, range: 6, cooldown: 0.8, targets: ['land'], projectile: 'instant' }],
   gun_turret: [{ name: 'Autocannon', type: 'ap', damage: 25, range: 8, cooldown: 0.8, targets: ['land', 'sea'], projectile: 'instant' }],

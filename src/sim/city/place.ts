@@ -135,7 +135,7 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
 /** Lock reason that isn't about position: limits, credits. */
 export function cityBuildProblem(world: World, player: number, type: BuildingTypeId): string | null {
   const def: BuildingDef = BUILDINGS[type];
-  if (def.mode !== 'city' || !def.econ) return 'Not available';
+  if (def.mode === 'skirmish' || !def.econ) return 'Not available';
   if (def.limit !== undefined && world.buildings.filter((b) => b.owner === player && b.type === type).length >= def.limit) return `Limit ${def.limit}`;
   if (world.city!.players[player]!.credits < def.econ.credits) return 'Not enough credits';
   return null;

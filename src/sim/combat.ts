@@ -16,6 +16,7 @@ import { DT } from './time.ts';
 import { immobile, spotsAround } from './transport.ts';
 import type { Building, Entity, Projectile, Unit } from './types.ts';
 import type { World } from './world.ts';
+import { atWar } from './city/military.ts';
 
 const LEASH = 10; // tiles an idle unit will chase before giving up
 const ACQUIRE_EVERY = 4; // ticks between target scans (staggered by id)
@@ -76,7 +77,7 @@ function reachFrom(b: Building, e: Entity): number {
 }
 
 function isEnemy(world: World, a: number, b: number): boolean {
-  return a !== b && !world.players[b]?.defeated;
+  return a !== b && !world.players[b]?.defeated && atWar(world, a, b);
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +91,8 @@ function acquire(world: World, s: Shooter, ws: readonly WeaponDef[], radius: num
   let bestScore = Infinity;
   const consider = (e: Entity) => {
     if (!isEnemy(world, s.owner, e.owner)) return;
+    // Economy game: houses, farms and factories are not fair game unless ordered; defences are.
+    if (world.city && e.kind === 'building' && !weaponsOf(e.type).length && !e.garrison.length) return;
     if (!ws.some((w) => canHit(w, e))) return;
     const d = s.from ? reachFrom(s.from, e) : reach(s.x, s.y, e);
     if (d > radius) return;
@@ -156,6 +159,8 @@ export function hit(world: World, owner: number, w: WeaponDef, damage: number, e
   if (amount <= 0) return;
   e.hp -= amount;
   alert(world, e);
+  // Economy game: seats of government are taken, not razed (they bottom out at a fifth of their health).
+  if (world.city && e.kind === 'building' && (e.type === 'town_hall' || e.type === 'regional_office') && e.complete) e.hp = Math.max(e.hp, e.maxHp * 0.2);
   if (e.hp <= 0) {
     if (e.kind === 'unit') killUnit(world, e, owner);
     else destroyBuilding(world, e);

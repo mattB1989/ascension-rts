@@ -54,7 +54,10 @@ async function boot(): Promise<void> {
     const size = Number(params.get('size')) === MAP_SIZES.small ? MAP_SIZES.small : MAP_SIZES.standard;
     const b = params.get('biome') as GenBiome;
     const biome = BIOME_IDS.includes(b) ? b : 'temperate';
-    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome });
+    const d = params.get('difficulty');
+    const difficulty = d === 'easy' || d === 'hard' ? d : 'normal';
+    const rivals = params.has('rivals') ? Math.max(0, Math.min(3, Number(params.get('rivals')))) : undefined;
+    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals });
     l.remove();
   } else if (mode === 'skirmish' || mode === 'sandbox') {
     world = createMatch({ seed: Number(params.get('seed')) || 1337, mode: mode === 'sandbox' ? 'sandbox' : 'standard' });
@@ -87,6 +90,7 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
     hud.onNew = () => (location.search = '');
     hud.hasSave = () => !!saveInfo('manual');
     hud.onMarks = (m) => renderer.marks.set(m);
+    hud.onAlert = (x, y) => minimap.ping(x, y);
     handleEvents = (ev) => hud.handleEvents(ev);
     updateHud = () => {
       hud.update();

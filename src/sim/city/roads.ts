@@ -38,7 +38,10 @@ export function roadAllowed(world: World, player: number, region: number): boole
   if (!region) return false;
   const owner = world.city!.regionOwner[region]!;
   if (owner === player) return true;
-  if (!world.players[player]?.isHuman) return false;
+  const role = world.players[player]?.role;
+  if (role === 'cityState') return false;
+  // Nations may cross unclaimed land too (to reach the regions they expand into); only you may build through city-states.
+  if (role === 'nation') return owner === -1;
   return owner === -1 || world.players[owner]?.role === 'cityState';
 }
 

@@ -8,7 +8,7 @@ import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS
 import { nextAge } from '../sim/city/ages.ts';
 import { RAIL } from '../sim/city/rail.ts';
 import { PIPE } from '../sim/city/pipes.ts';
-import { canTrade, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
+import { canTrade, EMBARGO, hasEmbargo, honouredEmbargo, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import type { Sound } from './sound.ts';
 import { PERSONALITIES } from '../ai/cityBot.ts';
@@ -299,6 +299,11 @@ export class CityHud {
       }
       case 'war':
         this.game.issue({ kind: 'declareWar', player: this.game.humanPlayer, target: Number(arg) });
+        this.lastPanel = '';
+        break;
+      case 'embargo':
+      case 'unembargo':
+        this.game.issue({ kind: 'embargo', player: this.game.humanPlayer, target: Number(arg), on: a === 'embargo' });
         this.lastPanel = '';
         break;
       case 'peace':
@@ -738,15 +743,19 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
       const offered = war && w.city!.peaceOffers.some((o) => o.from === p.id && o.to === me);
       const peaceWhy = war && !offered ? peaceProblem(w, me, p.id) : null;
       const trade = canTrade(w, me, p.id);
+      const mine = hasEmbargo(w, me, p.id);
+      const theirs = hasEmbargo(w, p.id, me);
+      const embargo = mine || theirs ? `<div class="state-row neg">⛔ ${mine && theirs ? 'Embargoes both ways' : mine ? 'Under your embargo' : 'Their embargo on you'}: no trade; city-states that like ${mine && !theirs ? 'you' : 'them'} (${EMBARGO.honourOpinion}+) follow it</div>` : '';
       const persona = w.city!.bots.find((b) => b.player === p.id)?.personality;
       const trait = persona ? PERSONALITIES[persona] : null;
       return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>${trait ? ` <span class="persona" title="${esc(trait.blurb)}">${esc(trait.name)}</span>` : ''}
         <span class="muted">👥 ${sumTiers(pc.population)} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'} · ${esc(AGE_NAMES[pc.age]!.replace(' Age', ''))}</span></div>
         <div class="state-row">Opinion of you ${bar(op, -100, 100, op >= 20 ? 'good' : op < 0 ? 'bad' : '')} ${op}</div>
-        <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>${treaties}
+        <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>${embargo}${treaties}
         ${offers ? `<div class="state-actions">${offers}</div>` : ''}
         <div class="state-actions">${hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : ''}
         ${trade ? `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>` : ''}
+        <button class="mini wide" data-action="${mine ? 'unembargo' : 'embargo'}" data-arg="${p.id}" title="${esc(mine ? 'Trade again (they will like you a little more)' : 'Stop all trade with them; city-states that like you more than them stop too. They will like you less.')}">${mine ? 'Lift embargo' : 'Embargo'}</button>
         ${war ? `<button class="mini wide ${offered ? 'primary' : peaceWhy ? 'disabled' : ''}" data-action="peace" data-arg="${p.id}" title="${esc(offered ? 'They asked for peace' : peaceWhy ?? 'They will accept')}">${offered ? 'Accept their peace offer' : 'Offer peace'}</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div>
         ${this.dealsWith === p.id && trade ? this.dealsHtml(p.id) : ''}</div>`;
     }).join('')}<p class="muted">Nations sign treaties when they like you enough: trade with them, sign pacts, and don't break your word.</p>`;
@@ -784,6 +793,7 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
       const color = '#' + p.color.toString(16).padStart(6, '0');
       const price = purchasePrice(w, p.id);
       const offer = rel.offer === me;
+      const honours = honouredEmbargo(w, p.id, me);
       const actions = [
         hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : '',
         `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>`,
@@ -796,6 +806,7 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         <span class="muted">👥 ${v.population} · ₡${fmt(w.city!.players[p.id]!.credits)}</span></div>
         <div class="state-row">Opinion ${bar(op, -100, 100, op >= 40 ? 'good' : op < 0 ? 'bad' : '')} ${op} · Dependence ${bar(dep, 0, 1, dep >= DIPLO.unionDependence ? 'good' : '')} ${Math.round(dep * 100)}%</div>
         <div class="state-row ${connected ? 'pos' : 'neg'}">${connected ? 'Connected by road' : 'Not connected: build a road to their town hall to trade'}${offer ? ' · <b>They ask to join you!</b>' : ''}</div>
+        ${honours >= 0 ? `<div class="state-row neg">⛔ They honour ${esc(w.players[honours]!.name)}'s embargo on you: no trade until they like you more</div>` : ''}
         <div class="state-actions">${actions}</div>${deals}</div>`;
     }).join('') + this.nationsHtml() + `<p class="muted">Trade raises their opinion of you. When a city-state likes you (${DIPLO.unionOpinion}+) and most of its economy is trade with you (${Math.round(DIPLO.unionDependence * 100)}%+), it asks to join your nation. Friends (${DIPLO.buyOpinion}+) can also be bought.</p>`;
   }

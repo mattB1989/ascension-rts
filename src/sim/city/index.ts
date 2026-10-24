@@ -16,7 +16,7 @@ import { atWar, recruit, setWar } from './military.ts';
 import { advanceAge } from './ages.ts';
 import { placeRails, removeRails } from './rail.ts';
 import { placePipes, removePipes } from './pipes.ts';
-import { canTrade, cancelTreaty, changeOpinion, hasTreaty, offerPeace, proposeTreaty, type TreatyKind } from './treaties.ts';
+import { canTrade, cancelTreaty, changeOpinion, hasEmbargo, hasTreaty, offerPeace, proposeTreaty, setEmbargo, type TreatyKind } from './treaties.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 
@@ -50,6 +50,8 @@ export type CityCommand =
   /** Propose a treaty to a nation (they accept or refuse at once), or end one. */
   | { kind: 'proposeTreaty'; player: number; target: number; treaty: TreatyKind }
   | { kind: 'cancelTreaty'; player: number; target: number; treaty: TreatyKind }
+  /** Place (or lift) an embargo on a nation. */
+  | { kind: 'embargo'; player: number; target: number; on: boolean }
   /** Reach the next age (all requirements met). */
   | { kind: 'advanceAge'; player: number };
 
@@ -155,6 +157,8 @@ export function applyCityCommand(world: World, c: CityCommand): void {
         say(`You have a non-aggression pact with ${t.name}: end it first`);
         break;
       }
+      // An embargo on you is a cause for war: others don't hold it against you.
+      const cause = hasEmbargo(world, c.target, c.player);
       setWar(world, c.player, c.target, true);
       changeOpinion(world, c.target, c.player, -60);
       // A war ends trade and research pacts.
@@ -163,7 +167,7 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       // Attacking a city-state angers all of them; declaring war on anyone makes city-states wary.
       for (const p of world.players) {
         const rel = world.city.players[p.id]?.relations;
-        if (rel && p.id !== c.player) rel.opinion[c.player] = Math.max(-100, (rel.opinion[c.player] ?? 0) - (t.role === 'cityState' ? 25 : 5));
+        if (rel && p.id !== c.player) rel.opinion[c.player] = Math.max(-100, (rel.opinion[c.player] ?? 0) - (t.role === 'cityState' ? 25 : cause ? 0 : 5));
       }
       if (t.role === 'cityState') relationsOf(world, c.target)!.offer = -1;
       break;
@@ -194,6 +198,9 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       break;
     case 'cancelTreaty':
       cancelTreaty(world, c.player, c.target, c.treaty);
+      break;
+    case 'embargo':
+      say(setEmbargo(world, c.player, c.target, c.on));
       break;
     case 'advanceAge':
       say(advanceAge(world, c.player));

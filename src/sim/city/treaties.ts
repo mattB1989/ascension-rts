@@ -36,11 +36,87 @@ export function hasTreaty(world: World, a: number, b: number, kind: TreatyKind):
   return world.city!.treaties.some((t) => t.kind === kind && ((t.a === a && t.b === b) || (t.a === b && t.b === a)));
 }
 
-/** Can `player`'s trucks trade with `partner`'s town hall? City-states always; nations with a trade agreement. */
+/** Can `player`'s trucks trade with `partner`'s town hall? City-states unless they honour an embargo on you; nations with a trade agreement. */
 export function canTrade(world: World, player: number, partner: number): boolean {
   if (player === partner || world.players[partner]?.defeated) return false;
-  if (isCityState(world, partner)) return true;
+  if (embargoBetween(world, player, partner)) return false;
+  if (isCityState(world, partner)) return honouredEmbargo(world, partner, player) < 0;
   return hasTreaty(world, player, partner, 'trade') && !atWar(world, player, partner);
+}
+
+// --- Embargoes (DESIGN.md §8): the peaceful weapon. A nation stops all trade with
+// another, and city-states that like it enough (and more than the target) follow suit.
+
+export interface Embargo {
+  by: number;
+  on: number;
+  /** Game time it was declared. */
+  since: number;
+}
+
+export const EMBARGO = {
+  /** How much the target's opinion of you drops when you declare one. */
+  opinion: -25,
+  /** A city-state honours a nation's embargo when it likes that nation this much (and more than the target). */
+  honourOpinion: 40,
+  /** Lifting one mends a little. */
+  lift: 10,
+} as const;
+
+export function hasEmbargo(world: World, by: number, on: number): boolean {
+  return (world.city!.embargoes ?? []).some((e) => e.by === by && e.on === on);
+}
+
+/** Either side has an embargo on the other. */
+export function embargoBetween(world: World, a: number, b: number): boolean {
+  return hasEmbargo(world, a, b) || hasEmbargo(world, b, a);
+}
+
+/** The nation whose embargo on `player` this city-state honours (-1: none). */
+export function honouredEmbargo(world: World, state: number, player: number): number {
+  const list = world.city!.embargoes;
+  if (!list?.length) return -1;
+  const rel = relationsOf(world, state);
+  if (!rel) return -1;
+  const theirs = rel.opinion[player] ?? DIPLO.baseline;
+  for (const e of list) {
+    if (e.on !== player || e.by === state || world.players[e.by]?.defeated) continue;
+    const op = rel.opinion[e.by] ?? DIPLO.baseline;
+    if (op >= EMBARGO.honourOpinion && op > theirs) return e.by;
+  }
+  return -1;
+}
+
+/** Why `by` can't put an embargo on `on` (null: it can). */
+export function embargoProblem(world: World, by: number, on: number): string | null {
+  const them = world.players[on];
+  const me = world.players[by];
+  if (!them || !me || them.defeated || by === on) return 'Nobody to embargo';
+  if (me.role !== 'nation' && me.role !== 'human') return 'Only nations declare embargoes';
+  if (them.role !== 'nation' && them.role !== 'human') return 'Only nations can be embargoed';
+  if (hasEmbargo(world, by, on)) return 'Already under your embargo';
+  return null;
+}
+
+export function setEmbargo(world: World, by: number, on: number, active: boolean): string | null {
+  const city = world.city!;
+  city.embargoes ??= [];
+  if (active) {
+    const why = embargoProblem(world, by, on);
+    if (why) return why;
+    city.embargoes.push({ by, on, since: world.time });
+    // It ends any trade agreement between them.
+    city.treaties = city.treaties.filter((t) => !(t.kind === 'trade' && ((t.a === by && t.b === on) || (t.a === on && t.b === by))));
+    changeOpinion(world, on, by, EMBARGO.opinion);
+    world.emit({ kind: 'notify', player: -1, text: `⛔ ${world.players[by]!.name} placed an embargo on ${world.players[on]!.name}` });
+    return null;
+  }
+  const before = city.embargoes.length;
+  city.embargoes = city.embargoes.filter((e) => !(e.by === by && e.on === on));
+  if (city.embargoes.length === before) return null;
+  changeOpinion(world, on, by, EMBARGO.lift);
+  world.emit({ kind: 'notify', player: -1, text: `✅ ${world.players[by]!.name} lifted its embargo on ${world.players[on]!.name}` });
+  return null;
 }
 
 /** How a nation (or city-state) feels about another player. */
@@ -72,6 +148,7 @@ export function treatyProblem(world: World, from: number, to: number, kind: Trea
   if (them.role !== 'nation' && them.role !== 'human') return 'Only nations sign treaties';
   if (atWar(world, from, to)) return 'You are at war: offer peace first';
   if (hasTreaty(world, from, to, kind)) return 'Already signed';
+  if (kind === 'trade' && embargoBetween(world, from, to)) return 'An embargo stands between you: lift it first';
   const op = opinionOf(world, to, from);
   const bot = world.city!.bots.find((b) => b.player === to);
   const need = TREATIES[kind].opinion + (kind === 'peace' && bot?.difficulty === 'hard' ? 25 : 0) + (bot?.personality ? PERSONALITIES[bot.personality].treaty : 0);
@@ -128,6 +205,8 @@ export function offerPeace(world: World, from: number, to: number): string | nul
 /** Once a second: treaties run out. */
 export function updateTreaties(world: World): void {
   const city = world.city!;
+  const gone = (e: Embargo) => !!world.players[e.by]?.defeated || !!world.players[e.on]?.defeated;
+  if (city.embargoes?.some(gone)) city.embargoes = city.embargoes.filter((e) => !gone(e));
   if (!city.treaties.length) return;
   const keep = city.treaties.filter((t) => t.until > world.time && !world.players[t.a]?.defeated && !world.players[t.b]?.defeated);
   if (keep.length === city.treaties.length) return;

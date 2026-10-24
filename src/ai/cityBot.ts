@@ -42,6 +42,8 @@ export interface BotState {
   personality?: Personality;
   /** Nations: game time of the next look at city-states (deals, unions, roads), and those out of road reach. */
   dealAt?: number;
+  /** Nations: game time of the next look at embargoes. */
+  embargoAt?: number;
   noRoadTo?: number[];
   difficulty: Difficulty;
   /** Game time of the next military decision, and of the earliest war it may start. */
@@ -335,6 +337,8 @@ export function botStep(world: World, bot: BotState): Command[] {
   // A new age as soon as it is ready (nations and the scripted player; city-states stay as they are).
   if (bot.maxPop === Infinity && nextAge(world, bot.player)?.ready) return [{ kind: 'advanceAge', player: bot.player }];
   if (bot.nation) {
+    const e = embargoStep(world, bot);
+    if (e.length) return e;
     const m = militaryStep(world, bot);
     if (m.length) return m;
   }
@@ -579,6 +583,29 @@ export function botStep(world: World, bot: BotState): Command[] {
 
 // ---------------------------------------------------------------------------
 // Nations and city-states
+
+/** Nations: embargoes on whoever they fight (Hard bots and Traders also on a rival they loathe), lifted once tempers cool. */
+function embargoStep(world: World, bot: BotState): Command[] {
+  const p = bot.player;
+  if (world.time < (bot.embargoAt ?? 0)) return [];
+  bot.embargoAt = world.time + 10;
+  const grudge = bot.difficulty === 'hard' || bot.personality === 'trader';
+  for (const o of world.players) {
+    if (o.id === p || o.defeated || (o.role !== 'nation' && o.role !== 'human')) continue;
+    const op = opinionOf(world, p, o.id);
+    const hostile = atWar(world, p, o.id) || (grudge && op < -40);
+    const mine = world.city!.embargoes.find((e) => e.by === p && e.on === o.id);
+    if (hostile && !mine) {
+      bot.log.push(`embargo on ${o.name}`);
+      return [{ kind: 'embargo', player: p, target: o.id, on: true }];
+    }
+    if (!hostile && mine && (op >= -20 || world.time - mine.since > 6 * 120)) {
+      bot.log.push(`lift embargo on ${o.name}`);
+      return [{ kind: 'embargo', player: p, target: o.id, on: false }];
+    }
+  }
+  return [];
+}
 
 function nationDiplomacy(world: World, bot: BotState, stock: (g: GoodId) => number): Command[] {
   const p = bot.player;

@@ -9,7 +9,7 @@ import type { BotState } from '../../ai/cityBot.ts';
 import type { Command } from '../commands.ts';
 import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
-import type { Treaty } from './treaties.ts';
+import type { Embargo, Treaty } from './treaties.ts';
 import type { Train } from './rail.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
@@ -215,6 +215,8 @@ export interface CityState {
   warStart: number[][];
   /** Treaties in force between nations. */
   treaties: Treaty[];
+  /** Embargoes in force: no trade between the two, and friendly city-states follow suit. */
+  embargoes: Embargo[];
   /** Peace offered by an AI nation to you, waiting for your answer. */
   peaceOffers: Array<{ from: number; to: number }>;
   /** Overseas market price multiplier per good (drifts over time). */
@@ -322,6 +324,7 @@ export function createCityState(width: number, height: number, regions: number, 
     war: Array.from({ length: players }, () => new Array(players).fill(0)),
     warStart: Array.from({ length: players }, () => new Array(players).fill(0)),
     treaties: [],
+    embargoes: [],
     peaceOffers: [],
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
     victory: newVictoryState(players),

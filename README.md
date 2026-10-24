@@ -60,6 +60,9 @@ original **Twin Shores** skirmish.
   peace wait for your answer. Long wars make people weary (less happy) until peace returns.
   Troops far from your seats and Supply Depots wear down; near them they mend. Shipyards and
   Airfields build a navy and an air force; enemy warships off a trade port blockade it.
+  An **embargo** stops all trade with a nation, and city-states that like you (40+) more than
+  them stop trading with them too; it ends any trade agreement and is a cause for war. AI
+  nations embargo whoever they fight, and Hard or Trader nations also those they loathe.
 - **The Digital age (E7)**: 🔬 Ages shows what the next age needs: research from Research
   Institutes, enough technicians, a yearly GDP and a price. The Digital age brings Engineers and
   glass towers (they want electronics and the data network), rare-earth and uranium deposits,

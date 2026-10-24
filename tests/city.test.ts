@@ -795,7 +795,7 @@ test('a save from before E6-E10 (no rail, pipes, treaties, ages, victory) still 
   run(world, 5);
   const snap = structuredClone(snapshot(world, 'old')) as unknown as { world: { city: Record<string, unknown>; buildings: Array<{ city?: Record<string, unknown> }> } };
   const c = snap.world.city;
-  for (const k of ['rail', 'railComp', 'railCount', 'railVersion', 'railCompVersion', 'trains', 'nextTrainId', 'pipe', 'pipeComp', 'pipeCount', 'pipeVersion', 'pipeCompVersion', 'treaties', 'warStart', 'peaceOffers', 'victory']) delete c[k];
+  for (const k of ['rail', 'railComp', 'railCount', 'railVersion', 'railCompVersion', 'trains', 'nextTrainId', 'pipe', 'pipeComp', 'pipeCount', 'pipeVersion', 'pipeCompVersion', 'treaties', 'embargoes', 'warStart', 'peaceOffers', 'victory']) delete c[k];
   for (const pc of c.players as Array<Record<string, unknown>>) {
     delete pc.age;
     delete pc.research;
@@ -895,4 +895,46 @@ test('enemy warships off a trade port blockade it', async () => {
   assert.equal(blockadedBy(world, port), -1, 'not at war: no blockade');
   world.step([{ kind: 'declareWar', player: 1, target: 0 }]);
   assert.equal(blockadedBy(world, port), 1, 'blockaded');
+});
+
+test('embargoes: no trade either way, friendly city-states follow, a cause for war, and AI nations use them', async () => {
+  const { canTrade, changeOpinion, hasEmbargo, hasTreaty, honouredEmbargo, opinionOf } = await import('../src/sim/city/treaties.ts');
+  const { relationsOf } = await import('../src/sim/city/diplomacy.ts');
+  const { atWar } = await import('../src/sim/city/military.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, difficulty: 'normal' });
+  const nation = world.players.find((p) => p.role === 'nation')!.id;
+  const state = world.players.find((p) => p.role === 'cityState')!.id;
+  changeOpinion(world, nation, 0, 40);
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'trade' }]);
+  assert.ok(canTrade(world, 0, nation));
+  const before = opinionOf(world, nation, 0);
+  world.step([{ kind: 'embargo', player: 0, target: nation, on: true }]);
+  assert.ok(hasEmbargo(world, 0, nation));
+  assert.equal(canTrade(world, 0, nation), false, 'no trade with them');
+  assert.equal(canTrade(world, nation, 0), false, 'nor they with you');
+  assert.equal(hasTreaty(world, 0, nation, 'trade'), false, 'the trade agreement is gone');
+  assert.ok(opinionOf(world, nation, 0) <= before - 20, 'they resent it');
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'trade' }]);
+  assert.equal(hasTreaty(world, 0, nation, 'trade'), false, 'no trade agreement under an embargo');
+  // A city-state that likes you more than them follows your embargo.
+  const rel = relationsOf(world, state)!;
+  rel.opinion[0] = 50;
+  rel.opinion[nation] = 10;
+  assert.equal(honouredEmbargo(world, state, nation), 0);
+  assert.equal(canTrade(world, nation, state), false);
+  assert.ok(canTrade(world, 0, state), 'you still trade with it');
+  rel.opinion[nation] = 60;
+  assert.ok(canTrade(world, nation, state), 'not if it likes them better');
+  rel.opinion[nation] = 10;
+  // Declaring war on whoever embargoes you is a cause others accept.
+  const stateBefore = rel.opinion[nation]!;
+  world.step([{ kind: 'declareWar', player: nation, target: 0 }]);
+  assert.ok(atWar(world, 0, nation));
+  assert.equal(rel.opinion[nation], stateBefore, 'city-states do not hold it against them');
+  // At war, the AI nation embargoes you back.
+  run(world, 30);
+  assert.ok(hasEmbargo(world, nation, 0), 'the AI embargoes its enemy');
+  // Lifting yours.
+  world.step([{ kind: 'embargo', player: 0, target: nation, on: false }]);
+  assert.equal(hasEmbargo(world, 0, nation), false);
 });

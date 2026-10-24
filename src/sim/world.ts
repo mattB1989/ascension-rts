@@ -413,6 +413,7 @@ export class World {
       case 'advanceAge':
       case 'proposeTreaty':
       case 'cancelTreaty':
+      case 'embargo':
         applyCityCommand(this, c);
         break;
       case 'move': {

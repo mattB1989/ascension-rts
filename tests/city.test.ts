@@ -706,3 +706,27 @@ test('pirates raid unguarded trade ports from 1955; a coast guard keeps them awa
   guard.city!.workers = 6;
   assert.ok(portGuarded(world, port));
 });
+
+test('pipelines carry oil from wells to refineries without trucks', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { updatePipes, pipeNetwork } = await import('../src/sim/city/pipes.ts');
+  const { demandFor } = await import('../src/sim/city/logistics.ts');
+  const { updateComponents } = await import('../src/sim/city/roads.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const city = world.city!;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 8;
+  const line: Array<[number, number]> = [];
+  for (let x = hall.tx - 20; x <= hall.tx + 20; x++) line.push([x, row]);
+  world.step([{ kind: 'pipe', player: 0, tiles: line }]);
+  assert.ok(city.pipeCount > 30, `pipes (${city.pipeCount})`);
+  // A refinery and a "well" (any oil producer) touching the line, far apart.
+  const refinery = addCityBuilding(world, 'oil_refinery', 0, hall.tx + 12, row + 1, true);
+  const well = addCityBuilding(world, 'oil_well', 0, hall.tx - 16, row + 1, true);
+  stockUp(well, { oil: 20 });
+  updateComponents(city, world.map);
+  assert.ok(pipeNetwork(world, refinery) > 0 && pipeNetwork(world, refinery) === pipeNetwork(world, well), 'same network');
+  updatePipes(world, (b, g) => demandFor(b, g, world));
+  assert.ok((refinery.city!.stock.oil ?? 0) >= 4, `oil flowed (${refinery.city!.stock.oil})`);
+  assert.ok((well.city!.stock.oil ?? 0) <= 16);
+});

@@ -100,6 +100,7 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
       if (world.occupancy[i]) return 'Blocked';
       if (city.road[i]) return 'On a road';
       if (city.rail?.[i]) return 'On a railway';
+      if (city.pipe?.[i]) return 'On a pipeline';
       const t = map.terrain[i] as TerrainId;
       if (!isOpenLand(t) && !(t === Terrain.Forest && def.placement !== 'forest')) return 'Must be on open ground';
     }

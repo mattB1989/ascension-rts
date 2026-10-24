@@ -77,6 +77,13 @@ function migrate(w: World): void {
   city.warStart ??= w.players.map(() => w.players.map(() => 0));
   city.treaties ??= [];
   city.peaceOffers ??= [];
+  if (!city.pipe) {
+    city.pipe = new Uint8Array(n);
+    city.pipeComp = new Int32Array(n);
+    city.pipeCount = 0;
+    city.pipeVersion = 1;
+    city.pipeCompVersion = 0;
+  }
   if (!city.rail) {
     city.rail = new Uint8Array(n);
     city.railComp = new Int32Array(n);

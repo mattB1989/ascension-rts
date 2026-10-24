@@ -7,6 +7,7 @@ import { AGES } from '../data/ages.ts';
 import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
 import { nextAge } from '../sim/city/ages.ts';
 import { RAIL } from '../sim/city/rail.ts';
+import { PIPE } from '../sim/city/pipes.ts';
 import { canTrade, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import type { Sound } from './sound.ts';
@@ -49,6 +50,7 @@ const AGE_NAMES = ['Modern Age', 'Digital Age', 'Nano Age', 'Space Age'] as cons
 
 const TOOL_INFO: Record<string, { name: string; text: string }> = {
   road: { name: 'Road', text: `Drag to draw a road (₡${ROAD.cost} a tile, ₡${ROAD.bridgeCost} over shallow water). Every building needs one.` },
+  pipe: { name: 'Pipeline', text: `Drag to lay a pipeline (₡${PIPE.cost} a tile). Oil wells, refineries, power plants and launch sites touching it share oil and fuel, no trucks needed.` },
   rail: { name: 'Railway', text: `Drag to lay track (₡${RAIL.cost} a tile). It crosses roads, and water on road bridges. Rail Stations on the line send trains.` },
   bulldoze: { name: 'Bulldozer', text: 'Drag over roads and railways to remove them, or click a building to demolish it. No refunds.' },
 };
@@ -491,6 +493,9 @@ export class CityHud {
         return `<button class="cmd pal-item" data-action="build" data-arg="road" data-id="road"><span class="cmd-name">🛣 Road</span><span class="cmd-cost">₡${ROAD.cost}/tile · R</span></button>`
           + `<button class="cmd pal-item" data-action="build" data-arg="bulldoze" data-id="bulldoze"><span class="cmd-name">🚜 Bulldozer</span><span class="cmd-cost">B</span></button>`;
       }
+      if (id === 'pipe') {
+        return `<button class="cmd pal-item" data-action="build" data-arg="pipe" data-id="pipe" title="Oil and fuel flow along pipelines from wells and refineries to the buildings that use them, no trucks needed"><span class="cmd-name">🛢 Pipeline</span><span class="cmd-cost">₡${PIPE.cost}/tile</span></button>`;
+      }
       if (id === 'rail') {
         return `<button class="cmd pal-item" data-action="build" data-arg="rail" data-id="rail" title="Trains carry 60 units fast between Rail Stations (Logistics) on the same line"><span class="cmd-name">🚆 Railway</span><span class="cmd-cost">₡${RAIL.cost}/tile</span></button>`;
       }
@@ -510,7 +515,7 @@ export class CityHud {
 
   /** Why a building is locked for now (a later age), or null. */
   private ageLock(id: string): string | null {
-    if (id === 'road' || id === 'rail' || id === 'bulldoze') return null;
+    if (id === 'road' || id === 'rail' || id === 'pipe' || id === 'bulldoze') return null;
     const def = buildingDef(id as BuildingTypeId);
     return AGES[def.age].index > this.world.city!.players[this.game.humanPlayer]!.age ? `Needs the ${AGES[def.age].name}` : null;
   }
@@ -523,7 +528,7 @@ export class CityHud {
     const active = this.input.placing?.type;
     for (const b of this.palette.querySelectorAll<HTMLElement>('.pal-item')) {
       const id = b.dataset.id!;
-      const price = id === 'road' ? ROAD.cost : id === 'rail' ? RAIL.cost : id === 'bulldoze' ? 0 : buildingDef(id as BuildingTypeId).econ?.credits ?? 0;
+      const price = id === 'road' ? ROAD.cost : id === 'rail' ? RAIL.cost : id === 'pipe' ? PIPE.cost : id === 'bulldoze' ? 0 : buildingDef(id as BuildingTypeId).econ?.credits ?? 0;
       b.classList.toggle('disabled', price > credits);
       b.classList.toggle('on', id === active);
     }
@@ -561,8 +566,8 @@ export class CityHud {
     const touch = this.input.touchDevice;
     const extra = def?.econ ? econSummary(type as BuildingTypeId) : '';
     const hint = touch
-      ? type === 'road' || type === 'rail' || type === 'bulldoze' || type === 'house' ? 'Tap the start, then the end, then ✓.' : 'Tap the map to position it, then ✓.'
-      : type === 'road' || type === 'rail' || type === 'bulldoze' || type === 'house' ? 'Drag to draw. Right click or Esc to stop.' : 'Click to place (Shift: keep placing). Right click or Esc to cancel.';
+      ? type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Tap the start, then the end, then ✓.' : 'Tap the map to position it, then ✓.'
+      : type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Drag to draw. Right click or Esc to stop.' : 'Click to place (Shift: keep placing). Right click or Esc to cancel.';
     const btns = `${touch ? `<button class="cmd primary ${problem ? 'disabled' : ''}" data-action="confirm">✓ Build</button>` : ''}<button class="cmd" data-action="cancel">✕ ${touch ? 'Cancel' : 'Stop'}</button>`;
     return `<div class="card-head"><div class="card-title">${esc(name)}</div><div class="card-status">${esc(info)}</div></div>
       <div class="info-text">${esc(text)}</div>${extra}
@@ -608,6 +613,7 @@ export class CityHud {
       if (e.storage) rows.push(`<div>Stored ${Math.floor(stockTotal(c.stock))}/${e.storage}</div>`);
       const held = GOOD_IDS.filter((g) => get(c.stock, g) >= 0.5);
       if (held.length) rows.push(`<div class="stock">${held.map((g) => chip(g, `${Math.floor(get(c.stock, g))}`)).join('')}</div>`);
+      if (c.pipe) rows.push(`<div class="muted">🛢 On a pipeline: oil and fuel flow without trucks</div>`);
       if (e.trains) {
         const wanted = GOOD_IDS.filter((g) => get(c.wants ?? {}, g) >= 1).map((g) => GOODS[g].icon).join(' ');
         rows.push(`<div>${(c.rail ?? -1) >= 0 ? `🚆 ${c.trainsOut ?? 0}/${e.trains} train out` : '<span class="neg">🚆 Not on a railway</span>'}${wanted ? ` · needed around here: ${wanted}` : ''}</div>`);

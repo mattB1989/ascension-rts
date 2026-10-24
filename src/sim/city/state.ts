@@ -68,6 +68,8 @@ export interface CityBuildingState {
   rail?: number;
   wants?: Stock;
   trainsOut?: number;
+  /** Pipeline network it touches (0: none). */
+  pipe?: number;
 }
 
 export interface Truck {
@@ -183,6 +185,12 @@ export interface CityState {
   railCompVersion: number;
   trains: Train[];
   nextTrainId: number;
+  /** Pipelines per tile, network ids. */
+  pipe: Uint8Array;
+  pipeComp: Int32Array;
+  pipeCount: number;
+  pipeVersion: number;
+  pipeCompVersion: number;
   /** Road network id per road tile (0: none). Recomputed when roads change. */
   comp: Int32Array;
   /** Bumped on every road change; buildings refresh their road access when it moves. */
@@ -293,6 +301,11 @@ export function createCityState(width: number, height: number, regions: number, 
     railCompVersion: 0,
     trains: [],
     nextTrainId: 1,
+    pipe: new Uint8Array(width * height),
+    pipeComp: new Int32Array(width * height),
+    pipeCount: 0,
+    pipeVersion: 1,
+    pipeCompVersion: 0,
     roadVersion: 1,
     compVersion: 0,
     regionOwner: new Int8Array(regions + 1).fill(-1),

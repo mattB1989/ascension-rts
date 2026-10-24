@@ -177,6 +177,10 @@ export function updateComponents(city: CityState, map: GameMap): void {
     city.railCompVersion = city.railVersion;
     label(city.rail, city.railComp, map);
   }
+  if (city.pipe && city.pipeCompVersion !== city.pipeVersion) {
+    city.pipeCompVersion = city.pipeVersion;
+    label(city.pipe, city.pipeComp, map);
+  }
   if (city.compVersion === city.roadVersion) return;
   city.compVersion = city.roadVersion;
   label(city.road, city.comp, map);

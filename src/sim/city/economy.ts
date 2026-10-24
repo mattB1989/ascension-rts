@@ -11,6 +11,7 @@ import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { accessIndex, demandFor, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
 import { RAIL, railsByOwner, updateRail } from './rail.ts';
+import { PIPE, pipesByOwner, updatePipes } from './pipes.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock } from './state.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
@@ -148,6 +149,7 @@ function everySecond(world: World): void {
   updateStockpiles(world);
   labour(world);
   power(world);
+  updatePipes(world, (b, g) => demandFor(b, g, world));
   if (sec % SERVICE_EVERY === 0) {
     coverage(world);
     pollution(world);
@@ -584,6 +586,13 @@ function budget(world: World): void {
     const pc = city.players[p];
     if (!pc || !n) return;
     const cost = (n * ROAD.upkeepPerYear) / YEAR_SECONDS;
+    pc.credits -= cost;
+    pc.year.roads += cost;
+  });
+  pipesByOwner(world).forEach((n, p) => {
+    const pc = city.players[p];
+    if (!pc || !n) return;
+    const cost = (n * PIPE.upkeepPerYear) / YEAR_SECONDS;
     pc.credits -= cost;
     pc.year.roads += cost;
   });

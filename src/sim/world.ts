@@ -396,6 +396,7 @@ export class World {
     switch (c.kind) {
       case 'road':
       case 'rail':
+      case 'pipe':
       case 'unroad':
       case 'place':
       case 'placeMany':

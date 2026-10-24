@@ -749,3 +749,96 @@ export class TrainsView {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Pipelines: a grey pipe on short posts, joints at bends.
+
+const PIPE_COL = new THREE.Color(0x9aa0a6);
+const POST_COL = new THREE.Color(0x5a5f64);
+const PIPE_H = 0.32;
+
+export class PipesView {
+  readonly group = new THREE.Group();
+  onPipe: (tx: number, ty: number) => void = () => {};
+  private readonly world: World;
+  private readonly chunks = new Map<number, THREE.Mesh>();
+  private last: Uint8Array;
+  private version = -1;
+
+  constructor(world: World) {
+    this.world = world;
+    this.last = new Uint8Array(world.map.width * world.map.height);
+  }
+
+  update(): void {
+    const city = this.world.city;
+    if (!city?.pipe || city.pipeVersion === this.version) return;
+    this.version = city.pipeVersion;
+    const map = this.world.map;
+    const w = map.width;
+    const cw = Math.ceil(w / RCHUNK);
+    const dirty = new Set<number>();
+    for (let i = 0; i < city.pipe.length; i++) {
+      if (city.pipe[i] === this.last[i]) continue;
+      const tx = i % w;
+      const ty = (i - tx) / w;
+      if (city.pipe[i]) this.onPipe(tx, ty);
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const x = tx + dx;
+        const y = ty + dy;
+        if (x < 0 || y < 0 || x >= w || y >= map.height) continue;
+        dirty.add(Math.floor(y / RCHUNK) * cw + Math.floor(x / RCHUNK));
+      }
+    }
+    this.last = new Uint8Array(city.pipe);
+    for (const c of dirty) this.rebuild(c, cw);
+  }
+
+  private rebuild(c: number, cw: number): void {
+    const old = this.chunks.get(c);
+    if (old) {
+      this.group.remove(old);
+      old.geometry.dispose();
+      this.chunks.delete(c);
+    }
+    const map = this.world.map;
+    const pipe = this.world.city!.pipe;
+    const w = map.width;
+    const x0 = (c % cw) * RCHUNK;
+    const y0 = Math.floor(c / cw) * RCHUNK;
+    const b = new Builder();
+    const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < map.height && pipe[y * w + x]! > 0;
+    for (let ty = y0; ty < Math.min(y0 + RCHUNK, map.height); ty++) {
+      for (let tx = x0; tx < Math.min(x0 + RCHUNK, w); tx++) {
+        if (!pipe[ty * w + tx]) continue;
+        const cx = tx + 0.5;
+        const cz = ty + 0.5;
+        // Offset towards the tile's north-west corner so it runs beside roads and rails.
+        const ox = cx - 0.3;
+        const oz = cz - 0.3;
+        const base = Math.max(surfaceHeight(map, ox, oz), 0) + LIFT;
+        const y = base + PIPE_H;
+        const n = at(tx, ty - 1);
+        const s = at(tx, ty + 1);
+        const e = at(tx + 1, ty);
+        const wv = at(tx - 1, ty);
+        b.box(ox, base, oz, 0.07, PIPE_H, 0.07, POST_COL);
+        b.box(ox, y - 0.06, oz, 0.16, 0.14, 0.16, PIPE_COL);
+        if (e) b.box(ox + 0.5, y - 0.05, oz, 1, 0.1, 0.1, PIPE_COL);
+        if (s) b.box(ox, y - 0.05, oz + 0.5, 0.1, 0.1, 1, PIPE_COL);
+        if (!(n || s || e || wv)) b.box(ox, y - 0.05, oz, 0.5, 0.1, 0.1, PIPE_COL);
+      }
+    }
+    if (!b.pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, railMat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    this.chunks.set(c, m);
+    this.group.add(m);
+  }
+}

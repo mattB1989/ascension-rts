@@ -8,14 +8,15 @@ import type { Game } from '../game.ts';
 import { cityBuildProblem, cityPlacementProblem, landYield } from '../sim/city/place.ts';
 import { roadProblem, roadTileCost } from '../sim/city/roads.ts';
 import { RAIL, railProblem } from '../sim/city/rail.ts';
+import { PIPE, pipeProblem } from '../sim/city/pipes.ts';
 import type { World } from '../sim/world.ts';
 
-export type CityTool = 'road' | 'rail' | 'bulldoze';
+export type CityTool = 'road' | 'rail' | 'pipe' | 'bulldoze';
 export type PlaceType = BuildingTypeId | CityTool;
 
 /** Tools that are dragged as a line in the economy game. */
 export function isCityLine(type: PlaceType): boolean {
-  return type === 'road' || type === 'rail' || type === 'bulldoze' || type === 'house';
+  return type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house';
 }
 
 /** Tiles from start to end: along the longer axis first, then the other (an L), like city builders. */
@@ -92,11 +93,24 @@ export function previewLine(world: World, player: number, type: PlaceType, tiles
     const problem = n === 0 ? firstProblem ?? 'Already a railway' : cost > credits(world, player) ? 'Not enough credits' : null;
     return { tiles, ok, valid: problem === null, problem, info: `${n} tile${n === 1 ? '' : 's'} of track · ₡${cost}` };
   }
+  if (type === 'pipe') {
+    const ok = (tx: number, ty: number) => pipeProblem(world, player, tx, ty) === null;
+    let n = 0;
+    let firstProblem: string | null = null;
+    for (const [tx, ty] of tiles) {
+      const why = pipeProblem(world, player, tx, ty);
+      if (why === null) n++;
+      else if (why !== 'Already a pipeline') firstProblem ??= why;
+    }
+    const cost = n * PIPE.cost;
+    const problem = n === 0 ? firstProblem ?? 'Already a pipeline' : cost > credits(world, player) ? 'Not enough credits' : null;
+    return { tiles, ok, valid: problem === null, problem, info: `${n} tile${n === 1 ? '' : 's'} of pipeline · ₡${cost}` };
+  }
   if (type === 'bulldoze') {
     const city = world.city!;
     const w = world.map.width;
-    const ok = (tx: number, ty: number) => tx >= 0 && ty >= 0 && tx < w && ty < world.map.height && (city.road[ty * w + tx]! > 0 || city.rail[ty * w + tx]! > 0 || world.occupancy[ty * w + tx]! > 0);
-    const roads = tiles.filter(([tx, ty]) => ok(tx, ty) && (city.road[ty * w + tx] || city.rail[ty * w + tx])).length;
+    const ok = (tx: number, ty: number) => tx >= 0 && ty >= 0 && tx < w && ty < world.map.height && (city.road[ty * w + tx]! > 0 || city.rail[ty * w + tx]! > 0 || city.pipe[ty * w + tx]! > 0 || world.occupancy[ty * w + tx]! > 0);
+    const roads = tiles.filter(([tx, ty]) => ok(tx, ty) && (city.road[ty * w + tx] || city.rail[ty * w + tx] || city.pipe[ty * w + tx])).length;
     const b = tiles.length === 1 ? world.getBuilding(world.occupancy[tiles[0]![1] * w + tiles[0]![0]] ?? 0) : undefined;
     const info = b ? `Demolish ${b.def.name}` : `Remove ${roads} road or rail tile${roads === 1 ? '' : 's'}`;
     const valid = !!b ? b.owner === player && b.type !== 'town_hall' : roads > 0;
@@ -143,6 +157,8 @@ export function confirmLine(game: Game, type: PlaceType, tiles: Array<[number, n
     game.issue({ kind: 'road', player, tiles });
   } else if (type === 'rail') {
     game.issue({ kind: 'rail', player, tiles });
+  } else if (type === 'pipe') {
+    game.issue({ kind: 'pipe', player, tiles });
   } else if (type === 'bulldoze') {
     const w = world.map.width;
     if (tiles.length === 1) {

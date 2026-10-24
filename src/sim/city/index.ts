@@ -15,6 +15,7 @@ import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } f
 import { atWar, recruit, setWar } from './military.ts';
 import { advanceAge } from './ages.ts';
 import { placeRails, removeRails } from './rail.ts';
+import { placePipes, removePipes } from './pipes.ts';
 import { canTrade, cancelTreaty, changeOpinion, hasTreaty, offerPeace, proposeTreaty, type TreatyKind } from './treaties.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
@@ -22,6 +23,8 @@ import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
   | { kind: 'road'; player: number; tiles: Array<[number, number]> }
+  /** Lay a pipeline along these tiles. */
+  | { kind: 'pipe'; player: number; tiles: Array<[number, number]> }
   /** Lay railway along these tiles. */
   | { kind: 'rail'; player: number; tiles: Array<[number, number]> }
   /** Remove roads (and railways) from these tiles. */
@@ -64,7 +67,13 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     case 'unroad':
       removeRoads(world, c.player, c.tiles.slice(0, 2000));
       removeRails(world, c.player, c.tiles.slice(0, 2000));
+      removePipes(world, c.player, c.tiles.slice(0, 2000));
       break;
+    case 'pipe': {
+      const r = placePipes(world, c.player, c.tiles.slice(0, 2000));
+      if (r.problem && r.built < c.tiles.length) say(r.built ? `Pipeline stopped: ${r.problem.toLowerCase()}` : `Can't lay a pipeline: ${r.problem.toLowerCase()}`);
+      break;
+    }
     case 'rail': {
       const r = placeRails(world, c.player, c.tiles.slice(0, 2000));
       if (r.problem && r.built < c.tiles.length) say(r.built ? `Railway stopped: ${r.problem.toLowerCase()}` : `Can't lay a railway: ${r.problem.toLowerCase()}`);

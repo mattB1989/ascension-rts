@@ -119,7 +119,7 @@ export function kitMaterial(): THREE.MeshStandardMaterial {
       .replace(
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
-        metalnessFactor = vSurf < 0.5 ? metalnessFactor : vSurf < 1.5 ? 0.65 : vSurf < 2.5 ? 0.55 : 0.1;`,
+        metalnessFactor = vSurf < 0.5 ? metalnessFactor : vSurf < 1.5 ? 0.35 : vSurf < 2.5 ? 0.4 : 0.1;`,
       )
       .replace(
         '#include <emissivemap_fragment>',

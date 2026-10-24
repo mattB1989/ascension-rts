@@ -195,6 +195,20 @@ function railStation(team: number): THREE.Group {
   return g;
 }
 
+function riverDock(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, paving());
+  // Timber jetty on the water side (+x), a shed, crates and a small crane.
+  g.add(box(0.8, 0.08, 2.6, timber(), 1.15, 0.14, 0));
+  for (const z of [-1.1, 0, 1.1]) g.add(cyl(0.05, 0.05, 0.4, 5, timber(), 1.5, 0.0, z));
+  g.add(box(1.4, 0.7, 1.2, mat(0x9a7a5a), -0.6, 0.47, -0.5));
+  g.add(gable(1.5, 1.3, 0.82, 0.35, roofGrey(), -0.6, -0.5));
+  crates(g, -1.1, 0.8, 5, 0x8a6a4a);
+  g.add(box(0.08, 1.2, 0.08, t.main, 0.6, 0.7, 0.9));
+  g.add(box(0.9, 0.06, 0.06, t.main, 0.95, 1.28, 0.9));
+  return g;
+}
+
 function coastGuard(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(3, 3, paving());
@@ -1073,6 +1087,7 @@ export function buildCityModel(type: string, team: number, level = 0, variant = 
     case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
     case 'coast_guard': return coastGuard(team);
+    case 'river_dock': return riverDock(team);
     case 'rail_station': return railStation(team);
     case 'airport': return airport(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team, variant);

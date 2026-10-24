@@ -35,7 +35,8 @@ original **Twin Shores** skirmish.
 - **Railways (E4)**: drag track like roads (it crosses roads, and water on road bridges). Rail
   Stations on a line are warehouses with a train: it carries 60 units at a time to stations
   whose surroundings need them, while trucks bring each station what the others want. In the
-  Digital age, Cargo Airports do the same by air between any of your airports. Towns far from
+  Digital age, Cargo Airports do the same by air between any of your airports, and River Docks
+  send barges between docks on the same river, lake or coast. Towns far from
   rivers get their water from Water Wells. Pipelines carry oil and fuel from wells and refineries
   straight to the power plants and refineries touching them, no trucks needed. From 1955 pirates raid cargo ships at ports that no
   Coast Guard station watches.

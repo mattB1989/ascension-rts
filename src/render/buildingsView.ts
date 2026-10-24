@@ -164,7 +164,7 @@ export class BuildingsView {
     root.position.set(b.x, base, b.y);
     const level = b.city?.level ?? 0;
     const model = buildBuildingModel(b.type, color, level, b.id);
-    if (b.type === 'shipyard' || b.type === 'fishing_harbour' || b.type === 'trade_port' || b.type === 'coast_guard' || b.type === 'hydro_plant' || b.type === 'pumping_station') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
+    if (b.type === 'shipyard' || b.type === 'fishing_harbour' || b.type === 'trade_port' || b.type === 'coast_guard' || b.type === 'river_dock' || b.type === 'hydro_plant' || b.type === 'pumping_station') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
     if (b.type === 'gate') {
       // Turn the gate to run along its wall: N/S neighbours mean the wall runs along y.
       const at = (dx: number, dy: number) => this.world.getBuilding(this.world.occupancy[(b.ty + dy) * map.width + b.tx + dx] ?? 0);

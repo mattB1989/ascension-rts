@@ -138,7 +138,7 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
       if (!touches(map, tx, ty, w, h, (i) => isWaterT(map.terrain[i]!))) return 'Must touch the water';
       if (type === 'trade_port') {
         if (dockTile(map, tx, ty, w, h) < 0) return 'Must be on water that reaches the open sea';
-      } else if (y < 0.2) return 'Needs open water';
+      } else if (type !== 'river_dock' && y < 0.2) return 'Needs open water';
       break;
     case 'freshWater':
       if (!touches(map, tx, ty, w, h, (i) => map.fresh[i] === 1)) return 'Must touch a river or lake';

@@ -5,6 +5,7 @@
 // short of), so trucks drop them at the nearest station and trains do the long haul.
 
 import { isOpenLand, Terrain, type TerrainId } from '../map.ts';
+import { NavLayer } from '../nav.ts';
 import { GOOD_IDS, type GoodId } from '../../data/goods.ts';
 import { DT } from '../time.ts';
 import type { Building } from '../types.ts';
@@ -42,6 +43,8 @@ export interface Train {
   amount: number;
   /** A cargo plane between airports (flies straight; no track). */
   air?: boolean;
+  /** A barge between river docks. */
+  boat?: boolean;
 }
 
 /** Why a railway (or maglev) cannot go on this tile (null: it can). Maglev may upgrade existing track. */
@@ -133,8 +136,10 @@ export function railAccess(world: World, b: Pick<Building, 'tx' | 'ty' | 'w' | '
 }
 
 /** Hubs: rail stations (connected by track) and airports (all of one owner's airports are connected). */
-export const HUBS = new Set(['rail_station', 'airport']);
+export const HUBS = new Set(['rail_station', 'airport', 'river_dock']);
 export const AIR = { speed: 14, load: 30 } as const;
+/** River barges between docks on the same water. */
+export const BARGE = { speed: 4, load: 40 } as const;
 
 export function isHub(b: Building): boolean {
   return HUBS.has(b.type);
@@ -143,6 +148,7 @@ export function isHub(b: Building): boolean {
 /** Which network a hub is on (0: none): its rail network, or -1 for the air network. */
 function network(world: World, b: Building): number {
   if (b.type === 'airport') return -1;
+  if (b.type === 'river_dock') return -2;
   const r = b.city!.rail;
   return r === undefined || r < 0 ? 0 : world.city!.railComp[r]!;
 }
@@ -186,7 +192,7 @@ export function stationDemand(world: World, s: Building, g: GoodId): number {
     if (d === s || network(world, d) !== net) continue;
     want += Math.max(0, get(d.city!.wants ?? {}, g) - get(d.city!.stock, g) - get(d.city!.incoming, g));
   }
-  const load = s.type === 'airport' ? AIR.load : RAIL.load;
+  const load = s.type === 'airport' ? AIR.load : s.type === 'river_dock' ? BARGE.load : RAIL.load;
   return Math.max(0, Math.min(load * 2, want) - get(c.stock, g) - get(c.incoming, g));
 }
 
@@ -203,19 +209,69 @@ function linePath(world: World, a: Building, b: Building): number[] {
   return out;
 }
 
+/** The water tile beside a dock (river, lake or sea), or -1. */
+export function waterBeside(world: World, b: Pick<Building, 'tx' | 'ty' | 'w' | 'h'>): number {
+  const map = world.map;
+  const W = map.width;
+  for (let y = b.ty - 1; y <= b.ty + b.h; y++) {
+    for (let x = b.tx - 1; x <= b.tx + b.w; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= map.height) continue;
+      if (x >= b.tx && x < b.tx + b.w && y >= b.ty && y < b.ty + b.h) continue;
+      const t = map.terrain[y * W + x];
+      if (t === Terrain.Shallow || t === Terrain.Deep) return y * W + x;
+    }
+  }
+  return -1;
+}
+
+/** Barge routes between two docks, as tiles (cached; null when the water doesn't connect). */
+const bargeRoutes = new WeakMap<World, Map<string, number[] | null>>();
+function bargePath(world: World, a: Building, b: Building): number[] | null {
+  let cache = bargeRoutes.get(world);
+  if (!cache) bargeRoutes.set(world, (cache = new Map()));
+  const key = `${a.id}:${b.id}`;
+  if (cache.has(key)) return cache.get(key)!;
+  const W = world.map.width;
+  const wa = waterBeside(world, a);
+  const wb = waterBeside(world, b);
+  let tiles: number[] | null = null;
+  if (wa >= 0 && wb >= 0) {
+    const p = world.pathfinder.findPath(NavLayer.Water, (wa % W) + 0.5, Math.floor(wa / W) + 0.5, (wb % W) + 0.5, Math.floor(wb / W) + 0.5);
+    if (p && p.length >= 2 && Math.floor(p[p.length - 2]!) === wb % W && Math.floor(p[p.length - 1]!) === Math.floor(wb / W)) {
+      // Waypoints to a tile-by-tile path.
+      tiles = [wa];
+      let px = (wa % W) + 0.5;
+      let py = Math.floor(wa / W) + 0.5;
+      for (let k = 0; k < p.length; k += 2) {
+        const qx = p[k]!;
+        const qy = p[k + 1]!;
+        const n = Math.max(1, Math.ceil(Math.hypot(qx - px, qy - py)));
+        for (let s = 1; s <= n; s++) tiles.push(Math.floor(py + ((qy - py) * s) / n) * W + Math.floor(px + ((qx - px) * s) / n));
+        px = qx;
+        py = qy;
+      }
+    }
+  }
+  cache.set(key, tiles);
+  cache.set(`${b.id}:${a.id}`, tiles ? tiles.slice().reverse() : null);
+  return tiles;
+}
+
 /** A hub with an idle train (or plane) sends it where its goods are wanted most. */
 function dispatchTrain(world: World, s: Building): void {
   const city = world.city!;
   const c = s.city!;
   const e = s.def.econ!;
   const air = s.type === 'airport';
+  const boat = s.type === 'river_dock';
   const net = network(world, s);
   if ((e.trains ?? 0) <= (c.trainsOut ?? 0) || !net || c.workers <= 0) return;
   if ((e.power ?? 0) > 0 && !c.powered) return;
-  const load = air ? AIR.load : RAIL.load;
+  const load = air ? AIR.load : boat ? BARGE.load : RAIL.load;
   let best: { d: Building; g: GoodId; n: number } | null = null;
   for (const d of hubs(world, s.owner)) {
     if (d === s || network(world, d) !== net) continue;
+    if (boat && !bargePath(world, s, d)) continue;
     for (const g of GOOD_IDS) {
       const spare = get(c.stock, g) - get(c.wants ?? {}, g);
       if (spare < 1) continue;
@@ -227,6 +283,7 @@ function dispatchTrain(world: World, s: Building): void {
   if (!best) return;
   let path: number[];
   if (air) path = linePath(world, s, best.d);
+  else if (boat) path = bargePath(world, s, best.d)!;
   else {
     const goal = best.d.city!.rail!;
     const end = searchRoads(world, c.rail!, 10000, (tile) => tile === goal, city.rail);
@@ -236,7 +293,7 @@ function dispatchTrain(world: World, s: Building): void {
   add(c.stock, best.g, -best.n);
   add(best.d.city!.incoming, best.g, best.n);
   c.trainsOut = (c.trainsOut ?? 0) + 1;
-  city.trains.push({ id: city.nextTrainId++, owner: s.owner, home: s.id, to: best.d.id, path, pos: 0, prevPos: 0, phase: 'out', good: best.g, amount: best.n, air });
+  city.trains.push({ id: city.nextTrainId++, owner: s.owner, home: s.id, to: best.d.id, path, pos: 0, prevPos: 0, phase: 'out', good: best.g, amount: best.n, air, boat });
 }
 
 function finishTrain(world: World, t: Train): void {
@@ -259,10 +316,10 @@ export function updateRail(world: World, idx: Map<number, Building[]>, demand: (
     t.prevPos = t.pos;
     const last = t.path.length - 1;
     const here = t.path[Math.min(last, Math.floor(t.pos))]!;
-    const speed = t.air ? AIR.speed : RAIL.speed * (city.rail[here] === 2 ? RAIL.maglevSpeed : 1);
+    const speed = t.air ? AIR.speed : t.boat ? BARGE.speed : RAIL.speed * (city.rail[here] === 2 ? RAIL.maglevSpeed : 1);
     const next = Math.min(last, t.pos + speed * DT);
     const k = Math.min(last, Math.ceil(next));
-    if (!t.air && !city.rail[t.path[k]!]) {
+    if (!t.air && !t.boat && !city.rail[t.path[k]!]) {
       // Track taken up: the train is lost, its cargo goes back to the station.
       if (t.phase === 'out' && t.good) {
         const dest = world.getBuilding(t.to);

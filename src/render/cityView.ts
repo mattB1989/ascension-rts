@@ -636,6 +636,9 @@ const planeGeo = (() => {
   return geo;
 })();
 const PLANE_ALT = 5;
+const bargeGeo = new THREE.BoxGeometry(1.5, 0.22, 0.5).translate(0, 0.08, 0);
+const bargeCabGeo = new THREE.BoxGeometry(0.3, 0.25, 0.4).translate(-0.6, 0.32, 0);
+const bargeLoadGeo = new THREE.BoxGeometry(0.9, 0.16, 0.4).translate(0.15, 0.27, 0);
 
 export class TrainsView {
   readonly group = new THREE.Group();
@@ -646,6 +649,9 @@ export class TrainsView {
   private wagon!: THREE.InstancedMesh;
   private load!: THREE.InstancedMesh;
   private plane!: THREE.InstancedMesh;
+  private barge!: THREE.InstancedMesh;
+  private bargeCab!: THREE.InstancedMesh;
+  private bargeLoad!: THREE.InstancedMesh;
 
   constructor(world: World) {
     this.world = world;
@@ -653,7 +659,7 @@ export class TrainsView {
   }
 
   private grow(n: number): void {
-    for (const m of [this.loco, this.cab, this.wagon, this.load, this.plane]) if (m) {
+    for (const m of [this.loco, this.cab, this.wagon, this.load, this.plane, this.barge, this.bargeCab, this.bargeLoad]) if (m) {
       this.group.remove(m);
       m.dispose();
     }
@@ -673,6 +679,9 @@ export class TrainsView {
     this.wagon = mk(wagonGeo, 0x6a5a4a, n * CARS);
     this.load = mk(loadGeo, 0xffffff, n * CARS);
     this.plane = mk(planeGeo, 0xe8ecf0, n);
+    this.barge = mk(bargeGeo, 0x5a4a3a, n);
+    this.bargeCab = mk(bargeCabGeo, 0xe8e4dc, n);
+    this.bargeLoad = mk(bargeLoadGeo, 0xffffff, n);
   }
 
   update(alpha: number): void {
@@ -717,8 +726,24 @@ export class TrainsView {
     let nw = 0;
     let nl = 0;
     let np = 0;
+    let nb = 0;
+    let nbl = 0;
     for (const t of trains) {
       const f = t.prevPos + (t.pos - t.prevPos) * alpha;
+      if (t.boat) {
+        place(t.path, f);
+        v.y = 0.04;
+        m.compose(v, q, one);
+        this.barge.setMatrixAt(nb, m);
+        this.bargeCab.setMatrixAt(nb, m);
+        nb++;
+        if (t.good && t.amount > 0) {
+          this.bargeLoad.setMatrixAt(nbl, m);
+          this.bargeLoad.setColorAt(nbl, c.set(GOODS[t.good].color));
+          nbl++;
+        }
+        continue;
+      }
       if (t.air) {
         // Climb out, cruise, descend.
         place(t.path, f);
@@ -751,7 +776,9 @@ export class TrainsView {
     this.wagon.count = nw;
     this.load.count = nl;
     this.plane.count = np;
-    for (const im of [this.loco, this.cab, this.wagon, this.load, this.plane]) {
+    this.barge.count = this.bargeCab.count = nb;
+    this.bargeLoad.count = nbl;
+    for (const im of [this.loco, this.cab, this.wagon, this.load, this.plane, this.barge, this.bargeCab, this.bargeLoad]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }

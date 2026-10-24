@@ -831,3 +831,48 @@ test('maglev (Nano age) upgrades track in place', async () => {
   assert.equal(city.rail[i], 2, 'maglev');
   assert.equal(city.railCount, n, 'same track, upgraded');
 });
+
+test('river docks: a barge carries goods between docks on the same water', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { waterBeside } = await import('../src/sim/city/rail.ts');
+  const { isOpenLand } = await import('../src/sim/map.ts');
+  const { NavLayer } = await import('../src/sim/nav.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const map = world.map;
+  const W = map.width;
+  // Two dock spots on land beside connected water, some way apart.
+  const fits = (x: number, y: number) => {
+    for (let yy = y; yy < y + 3; yy++) for (let xx = x; xx < x + 3; xx++) if (xx < 0 || yy < 0 || xx >= W || yy >= map.height || !isOpenLand(map.terrain[yy * W + xx]!) || world.occupancy[yy * W + xx]) return false;
+    return waterBeside(world, { tx: x, ty: y, w: 3, h: 3 }) >= 0;
+  };
+  const spots: Array<[number, number]> = [];
+  for (let y = 4; y < map.height - 4 && spots.length < 400; y += 3) for (let x = 4; x < W - 4; x += 3) if (fits(x, y)) spots.push([x, y]);
+  let pair: [[number, number], [number, number]] | null = null;
+  for (let i = 0; i < spots.length && !pair; i += 7) {
+    for (let j = spots.length - 1; j > i && !pair; j -= 11) {
+      const [a, b] = [spots[i]!, spots[j]!];
+      if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 25) continue;
+      const wa = waterBeside(world, { tx: a[0], ty: a[1], w: 3, h: 3 });
+      const wb = waterBeside(world, { tx: b[0], ty: b[1], w: 3, h: 3 });
+      const p = world.pathfinder.findPath(NavLayer.Water, (wa % W) + 0.5, Math.floor(wa / W) + 0.5, (wb % W) + 0.5, Math.floor(wb / W) + 0.5);
+      if (p && Math.floor(p[p.length - 2]!) === wb % W && Math.floor(p[p.length - 1]!) === Math.floor(wb / W)) pair = [a, b];
+    }
+  }
+  if (!pair) return; // no suitable water on this map
+  const a = addCityBuilding(world, 'river_dock', 0, pair[0][0], pair[0][1], true);
+  const b = addCityBuilding(world, 'river_dock', 0, pair[1][0], pair[1][1], true);
+  a.city!.workers = b.city!.workers = 6;
+  // B's surroundings "need" timber; A has plenty.
+  stockUp(a, { timber: 100 });
+  b.city!.wants = { timber: 30 };
+  a.city!.wants = {};
+  let barges = 0;
+  for (let i = 0; i < 15 * 3; i++) {
+    a.city!.workers = b.city!.workers = 6;
+    b.city!.wants = { timber: 30 };
+    a.city!.wants = {};
+    world.step();
+    barges = Math.max(barges, world.city!.trains.filter((t) => t.boat).length);
+  }
+  assert.ok(barges > 0, 'a barge set off');
+});

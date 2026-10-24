@@ -84,6 +84,10 @@ original **Twin Shores** skirmish.
 - **Sound and graphs (E10)**: procedural sound effects (building, roads, battles, alerts) and
   a slow generative music pad, all made in the browser; on/off and volume in ☰. ₡ Budget shows
   population and GDP over the years against the rival nations.
+- **Building models (E10)**: every economy building is modelled with a kit (src/render/kit.ts):
+  bevelled blocks with lit edges, baked shading, framed windows that glow at night and a surface
+  texture per part, merged into one mesh per building. `?mode=models` shows them all in a
+  gallery (`&night=1`, `&only=farm,house`).
 - **Textures (E10)**: procedural surface textures drawn at start-up (no image files): grass,
   rock strata on slopes, sand ripples and soil on smoothly blended ground; brick, roof tiles,
   concrete, timber, plaster, metal panels and glass curtain walls on buildings.

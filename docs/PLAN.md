@@ -1,187 +1,173 @@
 # Project plan
 
-Working title: **Ascension** (rename freely). A browser RTS inspired by the late ages of
-Empire Earth: modern armies, nuclear submarines and carriers, then giant mechs and finally
-orbital warfare. Single player against an AI with three difficulty levels. Mobile friendly.
+Working title: **Ascension**. A browser city and nation builder with real-time war, from
+the Modern age to the Space age, in the spirit of Pharaoh, Caesar III, Anno and SimCity.
+Economics is the core: production chains, infrastructure, trade, population. You grow
+through settling, trade, diplomacy or war. Single player against AI nations (Easy /
+Normal / Hard) and neutral city-states. Mobile friendly, works offline.
 
-All names, units and designs are original. Nothing is copied from Empire Earth.
+All names, units and designs are original.
 
-See [TECH_TREE.md](TECH_TREE.md) for the full catalog of ages, buildings, units, research
-and counters.
+- [DESIGN.md](DESIGN.md): the game design (economy, infrastructure, trade, regions,
+  diplomacy, war, ages, victory).
+- [TECH_TREE.md](TECH_TREE.md): the catalog of what is in the game today, generated
+  from `src/data/`. It grows as each part of the design is built.
+
+### History
+
+Milestones M0–M3 built an Empire Earth style RTS: engine, Twin Shores map, base
+building, and the full Modern-age combat and defense layer. In October 2026 the design
+moved to economy first. Everything built so far is kept: the engine, the deterministic
+sim, the command system, rendering, fog, transports and combat. The Twin Shores skirmish
+stays playable as a mode while the new game grows.
 
 ---
 
 ## 1. Technical approach
 
-### Stack
+### Stack (unchanged)
 
-- **TypeScript (strict)** for compile-time feedback on a large codebase, **Vite** as the
-  dev server and build tool, **three.js** from npm (pinned).
-- **Dev:** `npm install`, `npm run dev`, open the printed URL (also on your phone over the
-  LAN with `npm run dev -- --host`). Hot reload on save.
-- **Checks:** `npm run typecheck` (tsc, no emit) and `npm test` (Vitest, sim unit tests).
-  Both run in CI on every push.
-- **Deploy:** a GitHub Actions workflow builds and publishes to **GitHub Pages** on every
-  push to `main`. The output is static files only; no server.
-
-### Hard requirements: offline, mobile, desktop
-
-- **Offline:** the game is a **PWA**. A service worker precaches every asset, so after the
-  first visit it plays with no connection, and it can be installed to the home screen.
-  There are no external fetches at runtime: models, textures, sounds and music are all
-  generated in code.
-- **Single file too:** `npm run build:single` produces **one self-contained
-  `dist-single/ascension.html`** (all JS and CSS inlined). It opens by double-click from
-  disk, can be sent to someone, or published as a link.
-- **Mobile and desktop:** touch and mouse/keyboard are both first-class (see §3). Every
-  milestone is checked on a phone and a desktop browser before it's called done.
+- **TypeScript (strict)**, **Vite**, **three.js** (pinned). `npm run dev`, `npm run
+  typecheck`, `npm test` (Node's test runner), `npm run build`, `npm run build:single`.
+- **Offline:** PWA with every asset precached; no runtime fetches (all models, textures
+  and sounds are generated in code). Also a single self-contained HTML file.
+- **CI:** typecheck, tests, both builds, deploy to GitHub Pages on every push to `main`.
 
 ### Architecture
 
 ```
-index.html              entry page, canvas, UI root
-vite.config.ts          dev server, PWA plugin, single-file build mode
-src/
-  data/                 SINGLE SOURCE OF TRUTH: ages, resources, buildings, units, techs, counters
-  sim/                  deterministic simulation — no three.js, no DOM, runs in Node too
-    world.ts            entities, components, fixed tick (15 Hz)
-    rng.ts fmath.ts     seeded RNG, deterministic math
-    commands.ts         every action is a command (player, AI and future network alike)
-    pathfinding.ts      grid A* + flow fields, three nav layers: land / water / air
-    combat.ts economy.ts production.ts research.ts fog.ts
-  ai/                   strategic planner, build orders, squad tactics, difficulty profiles
-  render/               three.js: terrain, water, procedural models, effects, interpolation
-  ui/                   HUD, command card, minimap, tech tree screen, codex, touch controls
-  audio/                procedural SFX + adaptive music (WebAudio, no files)
-tools/
-  headless.ts           run AI-vs-AI matches in Node, output stats as JSON
-  gen-docs.ts           regenerate TECH_TREE tables from src/data so docs never drift
-tests/                  Vitest: sim determinism, pathfinding, combat math, data integrity
-.github/workflows/      typecheck + tests + build + deploy to Pages
+src/data/       single source of truth: goods, buildings, chains, tiers, networks, units, techs
+src/sim/        deterministic simulation, no DOM, no three.js, runs in Node
+  world.ts        entities, fixed tick
+  mapgen/         seeded generator: heightmap, rivers, biomes, resources, regions
+  network/        road/rail/pipeline/power graphs, routing, capacity, condition
+  logistics.ts    supply/demand matching, warehouses, freight vehicles on the networks
+  economy/        production, households and tiers, services, budget, happiness
+  trade.ts        markets, prices, routes, overseas market
+  regions.ts      ownership, claiming, annexation, unrest
+  diplomacy.ts    relations, treaties, war state
+  combat.ts …     (M3: weapons, garrisons, projectiles, victory) + supply and attrition
+  save.ts         serialize / load the whole world
+src/ai/         city-state AI, nation AI (economy, expansion, diplomacy, military), difficulty
+src/render/     chunked terrain with LOD, rivers, networks, buildings, traffic, overlays
+src/ui/         build palette, overlays, info sheets, economy / trade / diplomacy screens
+tools/          headless.ts (AI-vs-AI runs, stats as JSON), gen-docs.ts (catalog tables)
+tests/          determinism, map generation, networks, logistics, economy balance, combat
 ```
 
-Key rules:
-1. **The sim never imports three.js or touches the DOM.** It can run headless at 100× speed.
-2. **Everything is a command.** Player clicks, AI decisions and (later) network packets all
-   go through `commands.ts`. This gives us replays, AI-vs-AI, and lockstep multiplayer later.
-3. **Determinism:** seeded RNG, fixed tick, custom trig. A seed + command list reproduces a match.
-4. **Data-driven:** units, buildings and techs are plain objects in `src/data/`. The game, the
-   AI, the in-game tech tree and the docs all read from them.
+Key rules (unchanged, more important now):
+1. **The sim never imports three.js or touches the DOM.** It runs headless at high speed.
+2. **Everything is a command.** Player, AI and future network play all go through
+   `commands.ts`. Replays, AI-vs-AI and save files come from this.
+3. **Determinism:** seeded RNG, fixed tick, custom trig. Seed + commands reproduce a game.
+4. **Data-driven:** goods, chains and buildings are plain data. Game, AI, UI and docs read them.
+
+### Two clocks
+
+- **Movement and combat:** 15 Hz, as now.
+- **Economy:** production, logistics matching, households, prices run at 1 Hz in staggered
+  slices (one fifteenth of the cities' blocks each tick), so a large map stays cheap.
+
+### Scale
+
+- Maps up to 768² tiles: terrain in 64² chunks with distance LOD; instanced buildings and
+  vehicles; fog stored per tile but drawn per chunk.
+- Freight moves along network edges (position = edge + distance), which is cheap even for
+  thousands of vehicles. Off-road military movement uses hierarchical pathfinding over
+  the tile grid (clusters + A*), replacing plain A* for long trips.
+- Saves: the world serialized to IndexedDB, autosave every few game years, export a save
+  to a file.
 
 ---
 
-## 2. Core game rules
+## 2. Game rules
 
-- **Resources:** **Ore** (engineers mine it at deposits, drop it at a Refinery or HQ) and
-  **Energy** (Oil Derricks on land oil, Offshore Rigs on sea oil, later Fusion Plants).
-  Offshore oil gives a real reason to fight for the sea.
-- **Population:** each unit has a pop cost; capacity comes from housing. Hard cap 200.
-- **Ages:** Modern → Digital → Nano → Space. You advance at the HQ by paying a cost and
-  meeting building requirements. Each age unlocks buildings, units and research.
-- **Fog of war:** unexplored (black), explored (terrain + last-seen buildings), visible.
-- **Victory:** destroy all enemy production buildings and HQs, **or** complete the Space
-  Elevator wonder and hold it for 5 minutes.
-- **Defense is a real strategy:** cheap drag-to-build walls that upgrade with each age,
-  gates, and towers that infantry garrison and shoot from (+range, damage reduction).
-  Breaking a fortified base needs siege units (artillery, bombers, mechs, EMP, nukes).
-  Details in TECH_TREE.md §4. The AI builds walls too: Hard walls off chokepoints and bridges.
-- **Domains:** land, sea (surface and submerged), air, orbit. A counter system (see
-  TECH_TREE.md) means no single unit type wins alone.
-
-### Map
-
-First map, handcrafted: **"Twin Shores"**, 160×160 tiles, rotationally symmetric.
-- Each player has a home coast. A central sea separates them, with two bridges (land units
-  drive over, ships sail under, so the sea stays one body of water) and a chain of islands.
-- Ore on land, oil on land and offshore, rich contested deposits on the islands.
-- A random map generator (seeded, symmetric, multiple biomes) comes in a later milestone.
+See [DESIGN.md](DESIGN.md). In short: credits, materials and labour; four citizen tiers;
+production chains per age; networks with capacity and wear; physical trade routes;
+regions gained by settling, economic union, treaty, conquest or secession; war paid for by
+the economy with supply lines; ages reached by milestones; economic, federation, space or
+conquest victory, or endless sandbox.
 
 ---
 
 ## 3. Understanding the state of the game (UI)
 
-The player should always be able to answer "what do I have, what can I do next, what am
-I missing".
-
 | Element | What it shows |
 |---|---|
-| **Top bar** | Ore, Energy (with income/min), Population used/capacity, current age, age-up progress, game clock |
-| **Selection panel** | Unit/building stats, health, armor type, weapon vs. target effectiveness, current order |
-| **Command card** | Buildable/trainable/researchable items for the selection, greyed with the reason when locked ("Needs Radar Station", "Digital Age") |
-| **Production tray** | All active queues and research across the base, tap to jump |
-| **Tech tree screen** (key `T` / button) | Full tree by age, generated from `src/data`: researched (filled), available (outlined), locked (grey, with missing prerequisites). Tap a node to see what it unlocks |
-| **Empire overview** (key `O`) | Buildings grouped by category (Core, Housing, Resource, Military, Tech, Defense, Special), counts per type, idle engineers, idle production, army value by domain |
-| **Codex** | Encyclopedia of every unit/building: stats, cost, prereqs, strong vs / weak vs |
-| **Alerts** | "Base under attack", "Enemy reached Nano Age", "Idle engineers", "Nuke detected" |
-| **Post-game report** | Graphs of economy, army value and age timing for both sides |
+| **Top bar** | Credits (with net per year), population by tier, happiness, date and speed, current age and milestone progress, alerts |
+| **Overlays** (one button) | Traffic, network condition, power, water, coverage per service, happiness, pollution, land value, regions and opinion, supply lines |
+| **Info sheet** | Inputs, outputs, stock, workers filled, upkeep, and one line saying why it isn't working |
+| **Economy panel** | Budget by category, taxes, a goods table: production vs consumption with trend arrows |
+| **Trade / Diplomacy / Regions** | Routes and prices; relations and treaties; region owner, resources, unrest, dependence |
+| **Tech tree, codex** | Generated from `src/data`, as planned before |
+| **Graphs, post-game report** | Population, GDP, trade, army value, compared with rivals you know about |
 
-### Mobile controls
-
-- Tap select; tap ground to move; tap enemy to attack.
-- Drag on empty ground = box select (toggle button switches drag to camera pan).
-- Two fingers: pan / pinch zoom / rotate.
-- Bottom command card with large buttons; control-group buttons on the side.
-- Desktop gets the classic mouse + hotkeys on top.
-- Installable as a PWA, works offline.
+Mobile: build palette at the bottom, drag to draw roads/rail/walls (the M3 wall tool),
+bottom sheets for info, pause in one tap. Desktop gets hotkeys on top.
 
 ---
 
-## 4. AI opponent
+## 4. AI
 
-One AI, same commands as the player, sees only what its own fog of war shows (no cheating
-at any level). Three layers:
+Same commands as the player, own fog of war, no cheating at any level.
 
-1. **Strategic planner** (every ~2 s): economy target, when to age up, army composition
-   (counters what it has scouted), when to attack or defend.
-2. **Build manager:** turns the plan into build orders, placement, research queue.
-3. **Tactical squads:** groups units, moves, focus fire, retreat, regroup, uses abilities.
+- **City-state AI:** grows its city, produces what its regions allow, prices its market,
+  forms opinions, defends itself. No expansion. Simple and predictable on purpose.
+- **Nation AI**, three layers:
+  1. **Strategy** (every few game months): economic goals, which regions to claim, which
+     partners to court, when to go to war, when to make peace.
+  2. **City manager:** zoning, chains, networks, services, budget.
+  3. **Military:** defense, supply lines, campaigns, convoy escorts (the M3 combat layer).
 
 | | Easy | Normal | Hard |
 |---|---|---|---|
-| Reaction delay | 3–4 s | 1.5 s | 0.5 s |
-| Economy | ~60% engineers, idle time | standard | optimized, expands to islands |
-| Age-up timing | late | standard | aggressive |
-| Scouting & counters | none | reacts to what it sees | scouts actively, adapts composition |
-| Attacks | one blob, infrequent | timed waves | harassment + multi-front, naval landings |
-| Micro | none | basic focus fire | focus fire, retreat damaged units, kite |
-| Special units | rarely | uses subs, carriers, mechs | combined arms, superweapon timing |
+| City management | slow, leaves shortages | balanced | efficient chains, good networks |
+| Expansion | few regions | steady | contests key regions early |
+| Trade and diplomacy | passive | uses treaties | courts city-states, uses embargoes |
+| War | rarely, defends | when it has a reason | raids convoys, cuts supply, picks targets |
 
-**Balance harness:** `tools/headless.ts` runs hundreds of AI-vs-AI matches in Node.
-Targets: Hard beats Normal ~80%, Normal beats Easy ~90%, average game 20–35 min, no unit
-type dominating usage. Later this also powers an AI-vs-AI spectator mode.
+**Harness:** `tools/headless.ts` runs AI-only games in Node and reports GDP curves, game
+length, how regions changed hands (peaceful vs war), and which goods are always short.
+That is how the economy gets balanced.
 
 ---
 
 ## 5. Milestones
 
-Each milestone ends with a playable build on GitHub Pages and a short release note.
+Each milestone ends with a playable build on GitHub Pages.
 
 | # | Milestone | Done when |
 |---|---|---|
-| **M0** ✅ | Repo, plan | This plan and the tech tree committed. (The full data catalog in `src/data` and generated docs moved to M2, where the economy first needs buildings.) |
-| **M1** ✅ | Skeleton | Vite + TS project, CI, Pages deploy, PWA offline, single-file build; Twin Shores terrain with water and bridges, RTS camera (mouse + touch), selection, move orders, land/water/air pathfinding |
-| **M2** ✅ | Economy & base | Full data catalog in `src/data` + generated docs; engineers gather Ore/Energy, build with placement rules, housing/pop, production queues, fog, top bar |
-| **M3** ✅ | Modern-age combat & defense | Full Modern roster on land/sea/air, damage types and counters, transports; walls, gates, garrisonable Watchtowers/Bunkers, turrets, SAM, coastal batteries |
-| **M4** | AI v1 + harness | All three difficulty levels play Modern age; headless runner works; you can win and lose |
-| **M5** | Digital & Nano ages | Age-up, nuclear subs (submerge/sonar), carriers (launch/recover fighters), mechs, EMP, shields, nuke silo; AI uses them |
-| **M6** | Space age | Spaceport, orbital units, orbital uplink powers, Space Elevator wonder victory |
-| **M7** | Game-state UI | Tech tree screen, empire overview, codex, post-game report |
-| **M8** | Juice | Procedural explosions, sound, adaptive music, unit voices, polish pass, then a "make it a lot more fun" pass driven by harness stats |
-| **M9** | Content | Random map generator, more biomes, AI personalities, AI-vs-AI spectator, replays |
-| Later | Multiplayer | Lockstep over WebSocket relay or WebRTC, built on the command system |
+| **M0** ✅ | Repo, plan | Plan and catalog committed |
+| **M1** ✅ | Engine skeleton | Vite + TS, CI, Pages, PWA, single file; terrain, water, bridges, camera, selection, pathfinding |
+| **M2** ✅ | RTS economy | Data catalog + generated docs, gathering, building, production, fog |
+| **M3** ✅ | Combat and defense | Weapons and counters, transports, walls, gates, garrisons, turrets, victory |
+| **E1** | Big world | Seeded map generator (rivers, biomes, resources, regions), 512² map with chunked terrain and LOD, pause and game speeds, save/load, Twin Shores kept as a skirmish mode |
+| **E2** | Roads and building | Drag roads (tiers), road graph and routing, construction with credits + materials delivered by trucks, Construction Office, budget and upkeep |
+| **E3** | A living city | Housing, Workers and Technicians, jobs and labour, Modern chains (food, lumber, concrete, steel, fuel, goods), warehouses and logistics, power grid, water, services coverage, happiness, overlays and info sheets. **Checkpoint: is the solo city fun?** |
+| **E4** | Networks and trade | Rail, ports, river barges, pipelines, network condition and maintenance, overseas market, trade routes, pirates raiding convoys (first use of combat) |
+| **E5** | Neighbours | City-states with their own economies and markets, relations, treaties, region claiming, economic union, region purchase |
+| **E6** | Rivals and war | Nation AI (Easy / Normal / Hard), units paid in goods, supply depots and attrition, conquest and occupation, war weariness, blockades, embargoes, harness |
+| **E7** | Digital age | Engineers tier, electronics, pharmaceuticals, nuclear power, airports, data network, research pacts, Digital units (subs, carriers, first mech) |
+| **E8** | Nano age | Scientists tier, nanomaterials, robotics and automation, fusion, maglev, heavy mechs, EMP, shields |
+| **E9** | Space age | Orbital industry, launch site, Space Elevator; all victory types |
+| **E10** | Polish and content | Graphics pass, sound and music, post-game report, more biomes, scenarios, AI personalities, AI-vs-AI spectator, replays |
+| Later | Multiplayer | Lockstep over a relay or WebRTC, on the command system |
 
-M7 elements start appearing earlier (top bar in M2, codex stubs in M3); M7 is where they
-get finished.
+Graphics improve alongside each milestone (buildings and tier upgrades are the first
+visual priority, since a city builder is looked at a lot).
 
 ---
 
 ## 6. Risks and how we handle them
 
-- **Performance on phones:** instanced meshes, low-poly procedural models, LOD, capped
-  particles, simple water shader. Test on a mid-range Android from M1.
-- **Pathfinding with hundreds of units:** flow fields for group moves, A* for individuals,
-  hierarchical grid if needed.
-- **"Looks like a game but isn't fun":** the headless harness gives numbers (game length,
-  comebacks, unit usage) so balance isn't guesswork. Play-test every milestone.
-- **Scope creep:** the data catalog is big on purpose, but milestones only implement what
-  each needs. Space age can be cut without affecting anything before it.
+- **Scope.** This is a much bigger game. E3 is a checkpoint: if the solo city isn't fun,
+  we fix that before adding trade, neighbours or war.
+- **Economy balance.** Chains can deadlock or snowball. The harness and per-good
+  production vs consumption stats make this measurable; data tables keep tuning cheap.
+- **Phone performance on big maps.** Chunked terrain, LOD, instancing, staggered economy
+  ticks, aggregate citizens. Test on a mid-range Android from E1.
+- **UI density on mobile.** Overlays and bottom sheets instead of many floating windows;
+  every screen designed for a phone first.
+- **AI difficulty.** City-states first (simple), nations last, built on the harness.
+- **Long games.** Save/load and autosave arrive in E1, before anything else needs them.

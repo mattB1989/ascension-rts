@@ -1,6 +1,9 @@
 # Tech tree and catalog
 
-Everything a player can build, train and research, by age. All numbers are **starting
+The current data catalog: every building, unit and research by age, from the RTS
+groundwork (M1–M3; the Modern age is playable). The economy-first design it is growing into
+(goods, chains, citizen tiers, networks, trade) is in [DESIGN.md](DESIGN.md) and moves into
+the data milestone by milestone. All numbers are **starting
 values** for the balance harness to tune. The tables and the diagram in this file are
 generated from `src/data/` by `npm run docs` (CI fails if they drift), so the docs and the
 game never disagree. Edit the data, not the tables.
@@ -255,7 +258,7 @@ In game, a hit does *weapon damage × this multiplier × upgrades*.
 | EMP | — | 0.2 | 0.2 | 0.4 | 0.2 | — | — | — | 0.1 |
 <!-- /gen:damage -->
 
-EMP (Nano Age) also stuns vehicles and mechs and drains shields; that effect arrives with M5.
+EMP (Nano Age) also stuns vehicles and mechs and drains shields; that effect arrives with E8.
 
 \* Torpedo vs mech applies to Leviathan in water; vs structures to coastal buildings.
 
@@ -285,44 +288,44 @@ Full list, with what each does and from which milestone it works in game:
 |---|---|---|---|---|---|---|
 | **Fortified Masonry** | Command Center | Modern | 150 / 0 | 30 | Walls and gates +30% HP | yes |
 | **Efficient Logistics** | Command Center | Modern | 200 / 50 | 40 | Build speed +20% | yes |
-| **Command Network** | Command Center | Digital | 400 / 300 | 50 | +5 garrison slots in the HQ | from M5 |
-| **Planetary Defense Grid** | Command Center | Space | 1000 / 1000 | 80 | HQ gains a Point Defense Array | from M6 |
+| **Command Network** | Command Center | Digital | 400 / 300 | 50 | +5 garrison slots in the HQ | from E7 |
+| **Planetary Defense Grid** | Command Center | Space | 1000 / 1000 | 80 | HQ gains a Point Defense Array | from E9 |
 | **Deep Drilling** | Ore Refinery | Modern | 150 / 50 | 35 | +15% Ore gathering | yes |
 | **Automated Mining** | Ore Refinery | Digital | 300 / 150 | 45 | +20% Ore gathering | yes |
 | **Nano Extraction** | Ore Refinery | Nano | 600 / 400 | 60 | +25% Ore gathering | yes |
-| **Asteroid Capture** | Ore Refinery | Space | 1000 / 1000 | 80 | Passive Ore trickle | from M6 |
+| **Asteroid Capture** | Ore Refinery | Space | 1000 / 1000 | 80 | Passive Ore trickle | from E9 |
 | **Body Armor** | Barracks | Modern | 150 / 50 | 35 | Infantry +20% HP | yes |
 | **Murder Holes** | Barracks | Modern | 100 / 50 | 30 | Garrisoned infantry +1 more range | yes |
-| **Hardened Garrison** | Barracks | Digital | 300 / 200 | 45 | Garrison damage reduction 50% → 70% | from M5 |
-| **Exoskeletons** | Barracks | Digital | 250 / 150 | 40 | Infantry speed +20% | from M5 |
-| **Nano Weave** | Barracks | Nano | 400 / 300 | 50 | Infantry regenerate HP | from M5 |
+| **Hardened Garrison** | Barracks | Digital | 300 / 200 | 45 | Garrison damage reduction 50% → 70% | from E7 |
+| **Exoskeletons** | Barracks | Digital | 250 / 150 | 40 | Infantry speed +20% | from E7 |
+| **Nano Weave** | Barracks | Nano | 400 / 300 | 50 | Infantry regenerate HP | from E8 |
 | **Composite Armor** | Vehicle Factory | Modern | 250 / 100 | 45 | Vehicles +15% HP | yes |
-| **Reactive Armor** | Vehicle Factory | Digital | 400 / 250 | 55 | Vehicles take -20% missile damage | from M5 |
-| **Railguns** | Vehicle Factory | Digital | 450 / 300 | 55 | Tanks +range | from M5 |
-| **Hover Drives** | Vehicle Factory | Nano | 600 / 500 | 60 | Vehicles cross shallow water | from M5 |
-| **Sonar** | Shipyard | Modern | 150 / 100 | 35 | +Submarine detection range | from M5 |
-| **Cruise Missiles** | Shipyard | Digital | 500 / 400 | 55 | Submarines can strike land targets | from M5 |
-| **Nuclear Propulsion** | Shipyard | Digital | 400 / 300 | 50 | Ships +15% speed | from M5 |
-| **Supercavitation** | Shipyard | Nano | 500 / 500 | 55 | Faster torpedoes | from M5 |
+| **Reactive Armor** | Vehicle Factory | Digital | 400 / 250 | 55 | Vehicles take -20% missile damage | from E7 |
+| **Railguns** | Vehicle Factory | Digital | 450 / 300 | 55 | Tanks +range | from E7 |
+| **Hover Drives** | Vehicle Factory | Nano | 600 / 500 | 60 | Vehicles cross shallow water | from E8 |
+| **Sonar** | Shipyard | Modern | 150 / 100 | 35 | +Submarine detection range | from E7 |
+| **Cruise Missiles** | Shipyard | Digital | 500 / 400 | 55 | Submarines can strike land targets | from E7 |
+| **Nuclear Propulsion** | Shipyard | Digital | 400 / 300 | 50 | Ships +15% speed | from E7 |
+| **Supercavitation** | Shipyard | Nano | 500 / 500 | 55 | Faster torpedoes | from E8 |
 | **Afterburners** | Airfield | Modern | 200 / 150 | 40 | Aircraft +15% speed | yes |
-| **Stealth Coating** | Airfield | Digital | 500 / 400 | 55 | Aircraft harder to detect | from M5 |
-| **Precision Munitions** | Airfield | Digital | 400 / 300 | 50 | Aircraft +15% damage | from M5 |
-| **Drone Wingmen** | Airfield | Nano | 600 / 600 | 60 | Fighters launch escort drones | from M5 |
+| **Stealth Coating** | Airfield | Digital | 500 / 400 | 55 | Aircraft harder to detect | from E7 |
+| **Precision Munitions** | Airfield | Digital | 400 / 300 | 50 | Aircraft +15% damage | from E7 |
+| **Drone Wingmen** | Airfield | Nano | 600 / 600 | 60 | Fighters launch escort drones | from E8 |
 | **Targeting Radar** | Radar Station | Modern | 200 / 100 | 40 | Towers and turrets +15% range | yes |
-| **Electronic Warfare** | Radar Station | Digital | 400 / 400 | 50 | Scrambles enemy minimap blips near you | from M5 |
-| **Satellite Network** | Radar Station | Space | 800 / 800 | 70 | Permanent reveal of the enemy HQ | from M6 |
+| **Electronic Warfare** | Radar Station | Digital | 400 / 400 | 50 | Scrambles enemy minimap blips near you | from E7 |
+| **Satellite Network** | Radar Station | Space | 800 / 800 | 70 | Permanent reveal of the enemy HQ | from E9 |
 | **Advanced Ballistics** | Research Lab | Modern | 300 / 200 | 45 | All weapons +10% damage | yes |
-| **Automated Repair** | Research Lab | Digital | 400 / 300 | 50 | Defenses self-repair out of combat | from M5 |
-| **Shield Tech** | Research Lab | Nano | 600 / 600 | 60 | Unlocks Shield Generator | from M5 |
-| **Overcharged Lasers** | Research Lab | Nano | 600 / 500 | 55 | Laser Tower ramps up twice as fast | from M5 |
-| **Layered Shields** | Research Lab | Space | 800 / 800 | 70 | Shield Generator capacity +50% | from M6 |
-| **Fusion Engines** | Research Lab | Space | 800 / 800 | 70 | Orbital units +20% speed | from M6 |
-| **Reinforced Frames** | Mech Foundry | Digital | 500 / 300 | 50 | Mechs +15% HP | from M5 |
-| **Overclocked Reactors** | Mech Foundry | Nano | 600 / 500 | 55 | Mechs +20% speed | from M5 |
-| **Ablative Plating** | Mech Foundry | Nano | 700 / 600 | 60 | Mechs take -20% laser damage | from M5 |
-| **Jump Jets** | Mech Foundry | Space | 900 / 900 | 70 | Mechs leap cliffs and walls | from M6 |
-| **Orbital Mechanics** | Spaceport | Space | 800 / 800 | 60 | Orbital units +speed | from M6 |
-| **Kinetic Rods** | Spaceport | Space | 1200 / 1200 | 80 | Star Lance bombardment | from M6 |
+| **Automated Repair** | Research Lab | Digital | 400 / 300 | 50 | Defenses self-repair out of combat | from E7 |
+| **Shield Tech** | Research Lab | Nano | 600 / 600 | 60 | Unlocks Shield Generator | from E8 |
+| **Overcharged Lasers** | Research Lab | Nano | 600 / 500 | 55 | Laser Tower ramps up twice as fast | from E8 |
+| **Layered Shields** | Research Lab | Space | 800 / 800 | 70 | Shield Generator capacity +50% | from E9 |
+| **Fusion Engines** | Research Lab | Space | 800 / 800 | 70 | Orbital units +20% speed | from E9 |
+| **Reinforced Frames** | Mech Foundry | Digital | 500 / 300 | 50 | Mechs +15% HP | from E7 |
+| **Overclocked Reactors** | Mech Foundry | Nano | 600 / 500 | 55 | Mechs +20% speed | from E8 |
+| **Ablative Plating** | Mech Foundry | Nano | 700 / 600 | 60 | Mechs take -20% laser damage | from E8 |
+| **Jump Jets** | Mech Foundry | Space | 900 / 900 | 70 | Mechs leap cliffs and walls | from E9 |
+| **Orbital Mechanics** | Spaceport | Space | 800 / 800 | 60 | Orbital units +speed | from E9 |
+| **Kinetic Rods** | Spaceport | Space | 1200 / 1200 | 80 | Star Lance bombardment | from E9 |
 <!-- /gen:research -->
 
 ---

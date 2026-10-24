@@ -1,15 +1,20 @@
 # Ascension (working title)
 
-A browser real-time strategy game inspired by the late ages of Empire Earth: modern
-armies, nuclear submarines and aircraft carriers, giant mechs, then orbital warfare.
-Single player against an AI (Easy / Normal / Hard). Desktop and mobile.
+A browser city and nation builder with real-time war, from the Modern age to the Space
+age, in the spirit of Pharaoh, Anno and SimCity. Economics comes first (production chains,
+infrastructure, trade, population), and you grow by settling, trade, diplomacy or war.
+Single player against AI nations (Easy / Normal / Hard) and city-states. Desktop and mobile.
+
+The design moved to economy first in October 2026: see [docs/DESIGN.md](docs/DESIGN.md)
+and the milestones in [docs/PLAN.md](docs/PLAN.md). What is playable today is the RTS
+groundwork (M1–M3) described below; it stays as the Twin Shores skirmish mode.
 
 **Play:** https://mattb1989.github.io/ascension-rts/ (installable, works offline after the first visit)
 **Single-file version:** https://mattb1989.github.io/ascension-rts/ascension-single.html (save it, open from disk)
 
 TypeScript + three.js + Vite. Static site, no server. Every model, texture and sound is generated in code.
 
-## Status: M3, combat and defense
+## Playable today: M3, the RTS groundwork
 
 - **Economy:** Engineers mine **◆ Ore** and carry it to the Command Center or an Ore Refinery.
   Oil Derricks (on land oil) and Offshore Rigs (built by a Sea Engineer on sea oil) produce
@@ -48,7 +53,7 @@ TypeScript + three.js + Vite. Static site, no server. Every model, texture and s
 URL options: `?mode=sandbox` starts with a mixed army, a navy with a transport, and an airfield with jets and a cargo plane;
 `?fog=0` turns the fog of war off; `?seed=42` picks another map seed.
 
-Next: M4, the AI opponent (Easy / Normal / Hard) and the balance harness. See [docs/PLAN.md](docs/PLAN.md).
+Next: E1, the big world (map generator with rivers and regions, 512² maps, game speeds, save/load). See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

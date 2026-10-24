@@ -6,6 +6,7 @@ import type { AgeId, BuildingDef, ResourceId, UnitDef, UpgradeGroup } from '../d
 import type { WeaponDef } from '../data/weapons.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import type { NavLayerId } from './nav.ts';
+import type { CityBuildingState } from './city/state.ts';
 
 export type UnitState = 'idle' | 'moving';
 
@@ -133,6 +134,8 @@ export interface Building {
   cooldowns: number[];
   aim: number;
   firedAgo: number;
+  /** Economy game state (null in skirmish). */
+  city: CityBuildingState | null;
 }
 
 /** A shell, missile or torpedo in flight. Damage is applied on impact. */

@@ -3,7 +3,7 @@
 // camera; right-click to send the selection there.
 
 import type { GameRenderer } from '../render/renderer.ts';
-import { Terrain, type TerrainId } from '../sim/map.ts';
+import { Deposit, Terrain, type TerrainId } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import type { InputController } from './input.ts';
 import type { Selection } from './selection.ts';
@@ -16,7 +16,12 @@ const COLORS: Record<TerrainId, string> = {
   [Terrain.Forest]: '#3c6630',
   [Terrain.Rock]: '#7d776e',
   [Terrain.Bridge]: '#9a9a96',
+  [Terrain.Sand]: '#cfb37a',
+  [Terrain.Fertile]: '#7ea83c',
+  [Terrain.Snow]: '#eef2f4',
 };
+
+const DEPOSIT_COLORS: Record<number, [number, number, number]> = { 1: [196, 84, 52], 2: [24, 22, 20], 3: [222, 220, 214] };
 
 export class Minimap {
   readonly el: HTMLCanvasElement;
@@ -76,12 +81,27 @@ export class Minimap {
     c.width = m.width;
     c.height = m.height;
     const ctx = c.getContext('2d')!;
-    for (let y = 0; y < m.height; y++) {
-      for (let x = 0; x < m.width; x++) {
-        ctx.fillStyle = COLORS[m.terrain[y * m.width + x] as TerrainId];
-        ctx.fillRect(x, y, 1, 1);
+    const img = ctx.createImageData(m.width, m.height);
+    const rgb = (hex: string): [number, number, number] => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+    const pal = new Map<number, [number, number, number]>();
+    for (const [k, v] of Object.entries(COLORS)) pal.set(Number(k), rgb(v));
+    for (let i = 0; i < m.width * m.height; i++) {
+      const d = m.deposit[i]!;
+      let [r, g, b] = d !== Deposit.None ? DEPOSIT_COLORS[d]! : pal.get(m.terrain[i]!)!;
+      // Region borders: a light line where the region changes.
+      const x = i % m.width;
+      const reg = m.region[i]!;
+      if (reg && ((x + 1 < m.width && m.region[i + 1] && m.region[i + 1] !== reg) || (i + m.width < m.region.length && m.region[i + m.width] && m.region[i + m.width] !== reg))) {
+        r = r * 0.5 + 120;
+        g = g * 0.5 + 115;
+        b = b * 0.5 + 90;
       }
+      img.data[i * 4] = r;
+      img.data[i * 4 + 1] = g;
+      img.data[i * 4 + 2] = b;
+      img.data[i * 4 + 3] = 255;
     }
+    ctx.putImageData(img, 0, 0);
     return c;
   }
 

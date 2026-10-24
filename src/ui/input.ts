@@ -23,9 +23,11 @@ import { hitName, Picker, type Hit } from './pick.ts';
 import { placementCheck, snapFootprint } from './placementCheck.ts';
 import { buildLockReason, lineTiles, placementProblem } from '../sim/placement.ts';
 import type { Selection } from './selection.ts';
+import { confirmLine, isCityLine, previewBuilding, previewLine, roadPath, type PlaceType } from './cityTools.ts';
+import { footprintAt } from '../sim/placement.ts';
 
 export interface PlacingState {
-  type: BuildingTypeId;
+  type: PlaceType;
   tx: number;
   ty: number;
   valid: boolean;
@@ -37,8 +39,8 @@ export interface PlacingState {
   tiles: Array<[number, number]>;
 }
 
-/** Buildings placed by dragging a line. */
-const LINE_TYPES = new Set<BuildingTypeId>(['wall']);
+/** Buildings placed by dragging a line (skirmish). */
+const LINE_TYPES = new Set<PlaceType>(['wall']);
 
 type DragKind = 'none' | 'box' | 'pan' | 'rotate' | 'gesture' | 'line';
 
@@ -113,6 +115,20 @@ export class InputController {
     });
   }
 
+  private get city(): boolean {
+    return this.game.world.mode === 'city';
+  }
+
+  /** Is this placement drawn as a line (walls; roads, bulldozer and houses in the economy game)? */
+  private isLine(type: PlaceType): boolean {
+    return this.city ? isCityLine(type) : LINE_TYPES.has(type);
+  }
+
+  /** Path of tiles from the line's start to (tx, ty). */
+  private linePath(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+    return this.city ? roadPath(x0, y0, x1, y1) : lineTiles(x0, y0, x1, y1);
+  }
+
   setDragMode(mode: DragMode): void {
     this.dragMode = mode;
     this.onDragModeChange(mode);
@@ -182,7 +198,7 @@ export class InputController {
       startX: p.x, startY: p.y, x: p.x, y: p.y, moved: false, drag: 'none',
     });
     const pl = this.placing;
-    if (pl && LINE_TYPES.has(pl.type) && e.pointerType === 'mouse' && e.button === 0) {
+    if (pl && this.isLine(pl.type) && e.pointerType === 'mouse' && e.button === 0) {
       const g = this.renderer.pickGround(e.clientX, e.clientY);
       if (g) {
         pl.start = [Math.floor(g.x), Math.floor(g.y)];
@@ -313,7 +329,7 @@ export class InputController {
           this.moveGhost(pi.x + rect.left, pi.y + rect.top);
           this.confirmPlacement(e.shiftKey);
         }
-      } else if (this.placing && LINE_TYPES.has(this.placing.type)) {
+      } else if (this.placing && this.isLine(this.placing.type)) {
         // Touch walls: first tap starts the line, later taps move its end; the card's button confirms.
         const g = this.renderer.pickGround(pi.x + rect.left, pi.y + rect.top);
         if (g) {
@@ -322,7 +338,7 @@ export class InputController {
             pl.start = [Math.floor(g.x), Math.floor(g.y)];
             pl.tiles = [pl.start];
           } else {
-            pl.tiles = lineTiles(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
+            pl.tiles = this.linePath(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
           }
           pl.positioned = true;
           this.updateGhost();
@@ -362,6 +378,10 @@ export class InputController {
   private onKeyDown(e: KeyboardEvent): void {
     this.keys.add(e.code);
     const digit = /^Digit([0-9])$/.exec(e.code);
+    if (digit && this.city && !e.ctrlKey && !e.metaKey) {
+      this.onCityKey(e);
+      return;
+    }
     if (digit) {
       const n = Number(digit[1]);
       if (e.ctrlKey || e.altKey || e.metaKey) {
@@ -375,6 +395,7 @@ export class InputController {
       }
       return;
     }
+    if (this.city && this.onCityKey(e)) return;
     switch (e.code) {
       case 'Escape':
         if (this.targeting) this.cancelTargeting();
@@ -411,6 +432,21 @@ export class InputController {
     }
   }
 
+  /** Economy game keys: R road, B bulldozer, Space pause, 1-4 speed. Returns true if handled. */
+  cityKeys: (e: KeyboardEvent) => boolean = () => false;
+
+  private onCityKey(e: KeyboardEvent): boolean {
+    if (e.code === 'KeyR') {
+      this.startPlacement('road');
+      return true;
+    }
+    if (e.code === 'KeyB') {
+      this.startPlacement('bulldoze');
+      return true;
+    }
+    return this.cityKeys(e);
+  }
+
   // -------------------------------------------------------------------------
   // Actions (also used by HUD buttons)
 
@@ -430,6 +466,10 @@ export class InputController {
   stopSelected(): void {
     const ids = this.selection.list();
     if (ids.length) this.game.issue({ kind: 'stop', player: this.game.humanPlayer, units: ids });
+  }
+
+  lookAt(x: number, y: number): void {
+    this.renderer.rig.lookAt(x, y);
   }
 
   goHome(): void {
@@ -605,9 +645,10 @@ export class InputController {
   // -------------------------------------------------------------------------
   // Building placement
 
-  startPlacement(type: BuildingTypeId): void {
+  startPlacement(type: PlaceType): void {
+    this.cancelTargeting();
     const s = this.renderer.rig.target;
-    const [tx, ty] = snapFootprint(this.game.world, type, s.x, s.y);
+    const [tx, ty] = this.snap(type, s.x, s.y);
     this.placing = { type, tx, ty, valid: false, problem: null, positioned: false, start: null, tiles: [] };
     this.updateGhost();
   }
@@ -622,8 +663,13 @@ export class InputController {
     if (!pl?.start) return;
     const g = this.renderer.pickGround(clientX, clientY);
     if (!g) return;
-    pl.tiles = lineTiles(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
+    pl.tiles = this.linePath(pl.start[0], pl.start[1], Math.floor(g.x), Math.floor(g.y));
     this.updateGhost();
+  }
+
+  private snap(type: PlaceType, x: number, y: number): [number, number] {
+    if (type === 'road' || type === 'bulldoze') return [Math.floor(x), Math.floor(y)];
+    return this.city ? footprintAt(type, x, y) : snapFootprint(this.game.world, type, x, y);
   }
 
   private moveGhost(clientX: number, clientY: number): void {
@@ -631,7 +677,7 @@ export class InputController {
     if (this.placing.start) return; // a wall line is being drawn
     const g = this.renderer.pickGround(clientX, clientY);
     if (!g) return;
-    const [tx, ty] = snapFootprint(this.game.world, this.placing.type, g.x, g.y);
+    const [tx, ty] = this.snap(this.placing.type, g.x, g.y);
     this.placing.tx = tx;
     this.placing.ty = ty;
     this.placing.positioned = true;
@@ -642,23 +688,50 @@ export class InputController {
   updateGhost(): void {
     const pl = this.placing;
     if (!pl) return;
+    if (this.city) {
+      this.updateCityGhost(pl);
+      return;
+    }
+    const type = pl.type as BuildingTypeId;
     if (pl.start) {
       const world = this.game.world;
       const me = this.game.humanPlayer;
-      const lock = buildLockReason(world, me, pl.type);
-      const ok = (tx: number, ty: number) => !lock && placementProblem(world, me, pl.type, tx, ty) === null;
+      const lock = buildLockReason(world, me, type);
+      const ok = (tx: number, ty: number) => !lock && placementProblem(world, me, type, tx, ty) === null;
       const good = pl.tiles.filter(([tx, ty]) => ok(tx, ty)).length;
-      const cost = BUILDINGS[pl.type].cost.ore * good;
-      pl.problem = lock ?? (good === 0 ? 'Nothing can be built along this line' : world.players[me]!.res.ore < BUILDINGS[pl.type].cost.ore ? 'Not enough resources' : null);
+      const cost = BUILDINGS[type].cost.ore * good;
+      pl.problem = lock ?? (good === 0 ? 'Nothing can be built along this line' : world.players[me]!.res.ore < BUILDINGS[type].cost.ore ? 'Not enough resources' : null);
       pl.valid = pl.problem === null;
       this.lineInfo = `${good} segment${good === 1 ? '' : 's'} · ◆${cost}`;
       this.renderer.ghost.showLine(pl.tiles, ok);
       return;
     }
-    pl.problem = placementCheck(this.game.world, this.game.humanPlayer, pl.type, pl.tx, pl.ty);
+    pl.problem = placementCheck(this.game.world, this.game.humanPlayer, type, pl.tx, pl.ty);
     if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = 'Tap the map to choose a spot';
     pl.valid = pl.problem === null;
-    this.renderer.ghost.show(pl.type, pl.tx, pl.ty, pl.valid);
+    this.renderer.ghost.show(type, pl.tx, pl.ty, pl.valid);
+  }
+
+  private updateCityGhost(pl: PlacingState): void {
+    const world = this.game.world;
+    const me = this.game.humanPlayer;
+    if (pl.start || (pl.type === 'road' || pl.type === 'bulldoze')) {
+      const tiles = pl.start ? pl.tiles : [[pl.tx, pl.ty] as [number, number]];
+      const pv = previewLine(world, me, pl.type, tiles);
+      pl.problem = pv.problem;
+      if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = pl.type === 'road' ? 'Tap where the road starts, then where it ends' : 'Tap the map';
+      pl.valid = pl.problem === null;
+      this.lineInfo = pv.info;
+      this.renderer.ghost.showLine(pv.tiles, pv.ok);
+      return;
+    }
+    const type = pl.type as BuildingTypeId;
+    const pv = previewBuilding(world, me, type, pl.tx, pl.ty);
+    pl.problem = pv.problem;
+    if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = 'Tap the map to choose a spot';
+    pl.valid = pl.problem === null;
+    this.lineInfo = pv.info;
+    this.renderer.ghost.show(type, pl.tx, pl.ty, pl.valid);
   }
 
   /** Summary of the wall line being drawn (for the card). */
@@ -667,18 +740,48 @@ export class InputController {
   confirmPlacement(keepPlacing = false): void {
     const pl = this.placing;
     if (!pl) return;
+    if (this.city) {
+      this.updateGhost();
+      if (!pl.valid) {
+        if (pl.problem) this.toast(pl.problem);
+        if (pl.start && !this.touchDevice) {
+          pl.start = null;
+          pl.tiles = [];
+        }
+        return;
+      }
+      const tiles = pl.start ? pl.tiles : [[pl.tx, pl.ty] as [number, number]];
+      if (this.isLine(pl.type) && (pl.start || pl.type === 'road' || pl.type === 'bulldoze')) {
+        // A house "line" of one tile is a single house at the footprint under the pointer.
+        if (pl.type === 'house' && tiles.length === 1) this.game.issue({ kind: 'place', player: this.game.humanPlayer, building: 'house', tx: pl.tx, ty: pl.ty });
+        else confirmLine(this.game, pl.type, tiles);
+      } else {
+        this.game.issue({ kind: 'place', player: this.game.humanPlayer, building: pl.type as BuildingTypeId, tx: pl.tx, ty: pl.ty });
+      }
+      // Roads, bulldozer and houses stay active (they're used many times in a row); buildings too with Shift.
+      if (keepPlacing || isCityLine(pl.type)) {
+        pl.start = null;
+        pl.tiles = [];
+        pl.positioned = !this.touchDevice;
+        this.updateGhost();
+      } else {
+        this.cancelPlacement();
+      }
+      return;
+    }
+    const type = pl.type as BuildingTypeId;
     if (pl.start) {
       this.updateGhost();
       if (!pl.valid) {
         if (pl.problem) this.toast(pl.problem);
         return;
       }
-      const builders = this.ownSelected().units.filter((u) => u.def.builder === BUILDINGS[pl.type].builtBy);
+      const builders = this.ownSelected().units.filter((u) => u.def.builder === BUILDINGS[type].builtBy);
       if (!builders.length) {
         this.toast('Select an Engineer');
         return;
       }
-      this.game.issue({ kind: 'buildLine', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: pl.type, tiles: pl.tiles });
+      this.game.issue({ kind: 'buildLine', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: type, tiles: pl.tiles });
       if (keepPlacing) {
         pl.start = null;
         pl.tiles = [];
@@ -693,7 +796,7 @@ export class InputController {
       return;
     }
     const world = this.game.world;
-    const def = BUILDINGS[pl.type];
+    const def = BUILDINGS[type];
     const builders = this.selection
       .list()
       .map((id) => world.getUnit(id))
@@ -702,7 +805,7 @@ export class InputController {
       this.toast(def.builtBy === 'sea_engineer' ? 'Select a Sea Engineer' : 'Select an Engineer');
       return;
     }
-    this.game.issue({ kind: 'build', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: pl.type, tx: pl.tx, ty: pl.ty });
+    this.game.issue({ kind: 'build', player: this.game.humanPlayer, units: builders.map((u) => u.id), building: type, tx: pl.tx, ty: pl.ty });
     if (keepPlacing) {
       pl.positioned = false;
     } else {
@@ -830,7 +933,7 @@ export class InputController {
       if (e.def.gatherRate) gatherers++;
       if (e.def.builder) builderKinds.add(e.def.builder);
     }
-    if (units === 0) return buildings > 0 && hit.kind !== 'none' ? 'rally' : null;
+    if (units === 0) return buildings > 0 && hit.kind !== 'none' && !this.city ? 'rally' : null;
     const sel = this.ownSelected();
     if ((hit.kind === 'unit' || hit.kind === 'building') && !hit.own) {
       const target = hit.kind === 'unit' ? hit.unit : hit.building;

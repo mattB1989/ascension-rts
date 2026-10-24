@@ -142,8 +142,8 @@ Each milestone ends with a playable build on GitHub Pages.
 | **M1** ✅ | Engine skeleton | Vite + TS, CI, Pages, PWA, single file; terrain, water, bridges, camera, selection, pathfinding |
 | **M2** ✅ | RTS economy | Data catalog + generated docs, gathering, building, production, fog |
 | **M3** ✅ | Combat and defense | Weapons and counters, transports, walls, gates, garrisons, turrets, victory |
-| **E1** | Big world | Seeded map generator (rivers, biomes, resources, regions), 512² map with chunked terrain and LOD, pause and game speeds, save/load, Twin Shores kept as a skirmish mode |
-| **E2** | Roads and building | Drag roads (tiers), road graph and routing, construction with credits + materials delivered by trucks, Construction Office, budget and upkeep |
+| **E1** ✅ | Big world | Seeded map generator (rivers, biomes, resources, regions), 512² map with chunked terrain and LOD, pause and game speeds, save/load, Twin Shores kept as a skirmish mode |
+| **E2** ✅ | Roads and building | Drag roads (tiers), road graph and routing, construction with credits + materials delivered by trucks, Construction Office, budget and upkeep |
 | **E3** | A living city | Housing, Workers and Technicians, jobs and labour, Modern chains (food, lumber, concrete, steel, fuel, goods), warehouses and logistics, power grid, water, services coverage, happiness, overlays and info sheets. **Checkpoint: is the solo city fun?** |
 | **E4** | Networks and trade | Rail, ports, river barges, pipelines, network condition and maintenance, overseas market, trade routes, pirates raiding convoys (first use of combat) |
 | **E5** | Neighbours | City-states with their own economies and markets, relations, treaties, region claiming, economic union, region purchase |

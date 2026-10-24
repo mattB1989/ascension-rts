@@ -1,24 +1,28 @@
+import { CITY_BUILDINGS } from './city.ts';
 import type { BuildingDef } from './types.ts';
 
 // Starting values; the balance harness (M4) will tune them. See TECH_TREE.md §3 and §4.
-export const BUILDINGS = {
+const RTS_BUILDINGS = {
   // --- Core / housing -------------------------------------------------------
   command_center: {
     id: 'command_center', name: 'Command Center', category: 'core', age: 'modern', requires: [],
     cost: { ore: 1000, energy: 0 }, buildTime: 120, hp: 4000, size: [4, 4], placement: 'land', pop: 10, vision: 11,
     builtBy: 'engineer', dropOff: ['ore'], garrison: 10,
+    mode: 'skirmish',
     description: 'Trains Engineers, accepts Ore, advances the age. Can garrison 10 infantry.',
   },
   habitat_block: {
     id: 'habitat_block', name: 'Habitat Block', category: 'housing', age: 'modern', requires: ['command_center'],
     cost: { ore: 100, energy: 0 }, buildTime: 20, hp: 600, size: [2, 2], placement: 'land', pop: 10, vision: 4,
     builtBy: 'engineer',
+    mode: 'skirmish',
     description: 'Housing: +10 population.',
   },
   arcology: {
     id: 'arcology', name: 'Arcology', category: 'housing', age: 'nano', requires: ['habitat_block'],
     cost: { ore: 300, energy: 150 }, buildTime: 45, hp: 1500, size: [3, 3], placement: 'land', pop: 30, vision: 5,
     builtBy: 'engineer',
+    mode: 'skirmish',
     description: 'Large housing: +30 population. Slowly heals nearby infantry.',
   },
   // --- Resource -------------------------------------------------------------
@@ -26,24 +30,28 @@ export const BUILDINGS = {
     id: 'ore_refinery', name: 'Ore Refinery', category: 'resource', age: 'modern', requires: ['command_center'],
     cost: { ore: 150, energy: 0 }, buildTime: 30, hp: 1200, size: [3, 3], placement: 'land', pop: 0, vision: 5,
     builtBy: 'engineer', dropOff: ['ore'],
+    mode: 'skirmish',
     description: 'Ore drop-off. Build it next to ore fields to shorten trips. Mining research.',
   },
   oil_derrick: {
     id: 'oil_derrick', name: 'Oil Derrick', category: 'resource', age: 'modern', requires: ['command_center'],
     cost: { ore: 100, energy: 0 }, buildTime: 25, hp: 700, size: [2, 2], placement: 'landOil', pop: 0, vision: 4,
     builtBy: 'engineer', produces: { resource: 'energy', perSecond: 1.5 },
+    mode: 'skirmish',
     description: 'Built on land oil. Produces Energy on its own.',
   },
   offshore_rig: {
     id: 'offshore_rig', name: 'Offshore Rig', category: 'resource', age: 'modern', requires: ['shipyard'],
     cost: { ore: 200, energy: 0 }, buildTime: 40, hp: 1000, size: [3, 3], placement: 'seaOil', pop: 0, vision: 6,
     builtBy: 'sea_engineer', produces: { resource: 'energy', perSecond: 2.5 }, tank: { capacity: 150, pipeline: 1 },
+    mode: 'skirmish',
     description: 'Built on sea oil by a Sea Engineer. Pumps 2.5 oil/s into its tank; 1/s flows ashore by pipeline, Sea Engineers haul the rest to a Shipyard.',
   },
   fusion_plant: {
     id: 'fusion_plant', name: 'Fusion Plant', category: 'resource', age: 'nano', requires: ['research_lab'],
     cost: { ore: 600, energy: 0 }, buildTime: 60, hp: 1500, size: [3, 3], placement: 'land', pop: 0, vision: 4,
     builtBy: 'engineer', produces: { resource: 'energy', perSecond: 4 },
+    mode: 'skirmish',
     description: 'Produces Energy anywhere. Explodes when destroyed.',
   },
   // --- Military production --------------------------------------------------
@@ -194,6 +202,8 @@ export const BUILDINGS = {
     description: 'Shoots down missiles, shells, bombs and incoming nukes in its radius.',
   },
 } as const satisfies Record<string, BuildingDef>;
+
+export const BUILDINGS = { ...RTS_BUILDINGS, ...CITY_BUILDINGS } as const;
 
 export type BuildingTypeId = keyof typeof BUILDINGS;
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingTypeId[];

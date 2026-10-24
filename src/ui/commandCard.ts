@@ -96,7 +96,7 @@ export class CommandCard {
     // Placement in progress.
     const placing = this.input.placing;
     if (placing) {
-      const def = BUILDINGS[placing.type];
+      const def = BUILDINGS[placing.type as BuildingTypeId];
       const touch = this.input.touchDevice;
       const buttons: Btn[] = [];
       if (touch) {
@@ -142,7 +142,7 @@ export class CommandCard {
       }
       for (const type of [...BUILD_ORDER, ...BUILDING_TYPES.filter((t) => !BUILD_ORDER.includes(t))]) {
         const def: BuildingDef = BUILDINGS[type];
-        if (!kinds.has(def.builtBy)) continue;
+        if (!kinds.has(def.builtBy) || def.mode === 'city') continue;
         if ((def.category === 'defense') !== (tab === 'defense') || ageIndex(def.age) > ageIndex(p.age)) continue;
         const lock = buildLockReason(world, this.player, type);
         const afford = canAfford(p, def.cost);

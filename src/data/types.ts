@@ -1,5 +1,7 @@
 // Shared vocabulary for the game data. See docs/TECH_TREE.md (generated from these files).
 
+import type { GoodId, Tier } from './goods.ts';
+
 export type AgeId = 'modern' | 'digital' | 'nano' | 'space';
 
 export type ResourceId = 'ore' | 'energy';
@@ -38,7 +40,10 @@ export interface AgeDef {
   anyCount: number;
 }
 
-export type BuildingCategory = 'core' | 'housing' | 'resource' | 'military' | 'tech' | 'support' | 'defense' | 'special' | 'wonder';
+export type BuildingCategory =
+  | 'core' | 'housing' | 'resource' | 'military' | 'tech' | 'support' | 'defense' | 'special' | 'wonder'
+  // Economy game
+  | 'industry' | 'logistics' | 'utility' | 'service';
 
 /** What the footprint must stand on. */
 export type Placement =
@@ -46,7 +51,14 @@ export type Placement =
   | 'coast' // land, touching water (shipyards, coastal batteries)
   | 'landOil' // on a land oil spot
   | 'seaOil' // on an offshore oil spot
-  | 'water'; // open water (sonar nets)
+  | 'water' // open water (sonar nets)
+  // Economy game: raw producers sit on what they extract
+  | 'fertile' // farms: open land; fertile floodplain yields most
+  | 'forest' // logging camps: next to forest
+  | 'stone' // quarries: on a stone deposit
+  | 'ore' // mines: on an ore deposit
+  | 'oil' // oil wells: on an oil deposit
+  | 'freshWater'; // pumping stations: next to a river or lake
 
 export interface BuildingDef {
   id: string;
@@ -77,7 +89,45 @@ export interface BuildingDef {
   dock?: number;
   /** Max number per player (wonders, superweapons). */
   limit?: number;
+  /** Which game it belongs to (default: both). */
+  mode?: 'city' | 'skirmish';
+  /** Economy game: costs, jobs, production. */
+  econ?: EconDef;
   description: string;
+}
+
+export type ServiceKind = 'market' | 'water' | 'police' | 'health' | 'school';
+
+/** How a building takes part in the economy game (DESIGN.md §3-6). */
+export interface EconDef {
+  /** Price in credits, paid when placed. */
+  credits: number;
+  /** Materials trucks must deliver to the site before crews can build. */
+  materials: Readonly<Partial<Record<GoodId, number>>>;
+  /** Credits per game year. */
+  upkeep: number;
+  /** Staff needed for full output. */
+  jobs?: { tier: Tier; count: number };
+  /** One production cycle at full staff: inputs consumed, outputs made. */
+  recipe?: { in: Readonly<Partial<Record<GoodId, number>>>; out: Readonly<Partial<Record<GoodId, number>>>; seconds: number };
+  /** Raw producers: output scales with the land (see Placement). */
+  extract?: boolean;
+  /** Megawatts used (negative: produced). */
+  power?: number;
+  /** Goods it can store (warehouses, town hall). */
+  storage?: number;
+  /** Delivery trucks. */
+  trucks?: number;
+  /** Construction crews. */
+  crews?: number;
+  /** Housing: residents at each level. */
+  housing?: readonly number[];
+  /** Covers households within `radius` road tiles, up to `capacity` residents. */
+  service?: { kind: ServiceKind; radius: number; capacity: number };
+  /** Water supply (residents) for pumping stations. */
+  waterSupply?: number;
+  /** Ground made worse for housing nearby (0..1). */
+  pollution?: number;
 }
 
 export interface UnitDef {

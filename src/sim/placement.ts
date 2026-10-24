@@ -3,7 +3,7 @@
 import { AGE_ORDER } from '../data/ages.ts';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
 import type { BuildingDef, Cost } from '../data/types.ts';
-import { Terrain, type TerrainId } from './map.ts';
+import { isOpenLand, Terrain, type TerrainId } from './map.ts';
 import { NavLayer } from './nav.ts';
 import type { PlayerState } from './types.ts';
 import type { World } from './world.ts';
@@ -42,7 +42,7 @@ export function buildLockReason(world: World, player: number, type: BuildingType
   return null;
 }
 
-const isLand = (t: TerrainId) => t === Terrain.Grass || t === Terrain.Beach;
+const isLand = isOpenLand;
 const isOpenWater = (t: TerrainId) => t === Terrain.Shallow || t === Terrain.Deep;
 
 /**

@@ -6,6 +6,7 @@
 import type { BuildingTypeId } from '../data/buildings.ts';
 import type { TechId } from '../data/techs.ts';
 import type { UnitTypeId } from '../data/units.ts';
+import type { CityCommand } from './city/index.ts';
 
 export type Command =
   | { kind: 'move'; player: number; units: number[]; x: number; y: number }
@@ -44,7 +45,8 @@ export type Command =
   /** Everyone out of a building. */
   | { kind: 'eject'; player: number; building: number }
   /** Place a line of foundations (walls) and send the builders along it. */
-  | { kind: 'buildLine'; player: number; units: number[]; building: BuildingTypeId; tiles: Array<[number, number]> };
+  | { kind: 'buildLine'; player: number; units: number[]; building: BuildingTypeId; tiles: Array<[number, number]> }
+  | CityCommand;
 
 /** A command stamped with the tick it executes on (for replays). */
 export interface TimedCommand {

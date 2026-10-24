@@ -16,6 +16,12 @@ export const Terrain = {
   Forest: 4,
   Rock: 5,
   Bridge: 6,
+  /** Dry ground (arid maps): buildable, poor for farming. */
+  Sand: 7,
+  /** River floodplain: buildable, the best farmland. */
+  Fertile: 8,
+  /** High peaks: impassable, like rock. */
+  Snow: 9,
 } as const;
 export type TerrainId = (typeof Terrain)[keyof typeof Terrain];
 
@@ -27,9 +33,42 @@ export const TERRAIN_NAMES: Record<TerrainId, string> = {
   4: 'Forest',
   5: 'Rock',
   6: 'Bridge',
+  7: 'Sand',
+  8: 'Fertile land',
+  9: 'Snow',
 };
 
 export type ResourceKind = 'ore' | 'oil';
+
+/** Underground deposits on generated maps (one per tile). Mines, quarries and wells sit on them. */
+export const Deposit = { None: 0, Ore: 1, Oil: 2, Stone: 3 } as const;
+export type DepositId = (typeof Deposit)[keyof typeof Deposit];
+export const DEPOSIT_NAMES: Record<DepositId, string> = { 0: '', 1: 'Iron ore', 2: 'Oil', 3: 'Stone' };
+
+export type Biome = 'twin' | 'temperate' | 'arid' | 'alpine' | 'archipelago';
+
+/** A province: the unit of ownership on generated maps. */
+export interface RegionInfo {
+  /** 1-based (0 on the region grid means "no region": open water). */
+  id: number;
+  name: string;
+  tiles: number;
+  /** Centroid of its land. */
+  cx: number;
+  cy: number;
+  /** Top-left tile of a clear 6x6 spot near the centre (for a town hall), or -1. */
+  siteX: number;
+  siteY: number;
+  neighbors: number[];
+  /** What the land offers (tile counts). */
+  fertile: number;
+  forest: number;
+  ore: number;
+  stone: number;
+  oil: number;
+  coast: number;
+  river: number;
+}
 
 export interface ResourceSpot {
   kind: ResourceKind;
@@ -86,6 +125,23 @@ export interface GameMap {
   bridges: BridgeInfo[];
   starts: StartPos[];
   resources: ResourceSpot[];
+  biome: Biome;
+  /** Deposit per tile (generated maps). */
+  deposit: Uint8Array;
+  /** Region id per tile, 0 for none. */
+  region: Uint16Array;
+  regions: RegionInfo[];
+  /** Region each start position is in (generated maps). */
+  startRegions: number[];
+  /** 1 on river and lake tiles (fresh water), 0 elsewhere. */
+  fresh: Uint8Array;
+  /** Region of each tile, or for water the nearest region within 12 tiles (0: none). For visibility. */
+  nearRegion: Uint16Array;
+}
+
+/** Land you can build on and drive over. */
+export function isOpenLand(t: TerrainId): boolean {
+  return t === Terrain.Grass || t === Terrain.Beach || t === Terrain.Sand || t === Terrain.Fertile;
 }
 
 export function tileIndex(map: GameMap, tx: number, ty: number): number {
@@ -102,6 +158,28 @@ export function terrainAt(map: GameMap, tx: number, ty: number): TerrainId {
 
 export function isWater(t: TerrainId): boolean {
   return t === Terrain.Deep || t === Terrain.Shallow;
+}
+
+/** Corner elevations = average of the surrounding tiles. */
+export function cornerElevations(elev: Float32Array, w: number, h: number): Float32Array {
+  const velev = new Float32Array((w + 1) * (h + 1));
+  for (let vy = 0; vy <= h; vy++) {
+    for (let vx = 0; vx <= w; vx++) {
+      let sum = 0;
+      let n = 0;
+      for (let oy = -1; oy <= 0; oy++) {
+        for (let ox = -1; ox <= 0; ox++) {
+          const tx = vx + ox;
+          const ty = vy + oy;
+          if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+          sum += elev[ty * w + tx]!;
+          n++;
+        }
+      }
+      velev[vy * (w + 1) + vx] = sum / n;
+    }
+  }
+  return velev;
 }
 
 function bilinear(grid: Float32Array, map: GameMap, x: number, y: number): number {
@@ -290,24 +368,7 @@ export function generateTwinShores(seed = 1337, size = 160): GameMap {
     }
   }
 
-  // Corner elevations = average of the surrounding tiles.
-  const velev = new Float32Array((w + 1) * (h + 1));
-  for (let vy = 0; vy <= h; vy++) {
-    for (let vx = 0; vx <= w; vx++) {
-      let sum = 0;
-      let n = 0;
-      for (let oy = -1; oy <= 0; oy++) {
-        for (let ox = -1; ox <= 0; ox++) {
-          const tx = vx + ox;
-          const ty = vy + oy;
-          if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
-          sum += elev[ty * w + tx]!;
-          n++;
-        }
-      }
-      velev[vy * (w + 1) + vx] = sum / n;
-    }
-  }
+  const velev = cornerElevations(elev, w, h);
 
   // Bridges: one straight deck per bridge, rising from each shore to a peak so
   // ships fit underneath. Tiles get the deck height of the profile at their centre.
@@ -347,7 +408,10 @@ export function generateTwinShores(seed = 1337, size = 160): GameMap {
     { x: w - BASE_U * w, y: h - BASE_U * h },
   ];
 
-  const map: GameMap = { name: 'Twin Shores', seed, width: w, height: h, terrain, elev, velev, vsurf, deck, bridges, starts, resources: [] };
+  const map: GameMap = {
+    name: 'Twin Shores', seed, width: w, height: h, terrain, elev, velev, vsurf, deck, bridges, starts, resources: [],
+    biome: 'twin', deposit: new Uint8Array(w * h), region: new Uint16Array(w * h), regions: [], startRegions: [], fresh: new Uint8Array(w * h), nearRegion: new Uint16Array(w * h),
+  };
   placeResources(map);
   return map;
 }

@@ -1,8 +1,10 @@
 // Owns the three.js scene: lights, terrain, water, units, effects, camera.
 
 import * as THREE from 'three';
+import { surfaceHeight } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import { CameraRig } from './camera.ts';
+import { RegionBorders, RoadsView, TrucksView } from './cityView.ts';
 import { Effects } from './effects.ts';
 import { BuildingsView } from './buildingsView.ts';
 import { applyFowTree, initFog, updateFogTexture } from './fog.ts';
@@ -24,6 +26,10 @@ export class GameRenderer {
   readonly resources: ResourcesView;
   readonly ghost: PlacementGhost;
   readonly effects = new Effects();
+  /** Economy game only. */
+  readonly roads: RoadsView | null = null;
+  readonly trucks: TrucksView | null = null;
+  readonly borders: RegionBorders | null = null;
   /** Whose eyes we see the world through (fog of war). */
   viewer: number;
   private lastFogTick = -1;
@@ -81,7 +87,20 @@ export class GameRenderer {
     this.units = new UnitsView(world);
     this.ghost = new PlacementGhost(map);
     this.scene.add(this.buildings.group, this.units.group, this.effects.group, this.ghost.group);
+    if (world.city) {
+      this.roads = new RoadsView(world);
+      this.roads.onRoad = (x, y) => this.terrain.clearTrees(x, y, 1, 1);
+      this.trucks = new TrucksView(world);
+      this.scene.add(this.roads.group, this.trucks.group);
+    }
+    if (map.regions.length) {
+      this.borders = new RegionBorders(world);
+      this.scene.add(this.borders.group);
+    }
 
+    let maxE = 0;
+    for (const v of map.vsurf) if (v > maxE) maxE = v;
+    this.maxElevation = maxE;
     this.rig = new CameraRig(1, map.width, map.height);
     this.resize();
   }
@@ -125,6 +144,10 @@ export class GameRenderer {
       this.lastFogTick = this.world.tick;
       updateFogTexture(this.world, this.viewer);
     }
+    this.terrain.update(this.rig.camera);
+    this.roads?.update();
+    this.trucks?.update(alpha);
+    this.borders?.update(this.viewer);
     this.water.update(time);
     this.resources.update(inspect.resource, time);
     this.buildings.update(time, frameDt, selected, this.viewer, inspect.entity, this.rig.camera);
@@ -139,9 +162,8 @@ export class GameRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.rig.camera);
-    const hits = this.raycaster.intersectObjects(this.terrain.pickables, true);
     const ray = this.raycaster.ray;
-    let point: THREE.Vector3 | null = hits[0]?.point.clone() ?? null;
+    let point = this.marchHeightfield(ray);
     if (!point || point.y < 0) {
       // Under water (or off the terrain): use the water surface instead.
       if (Math.abs(ray.direction.y) < 1e-6) return null;
@@ -153,6 +175,42 @@ export class GameRenderer {
     if (point.x < 0 || point.z < 0 || point.x > m.width || point.z > m.height) return null;
     return { x: point.x, y: point.z, h: point.y };
   }
+
+  /** Where a ray first meets the ground (bridge decks included): march along it, then refine by bisection. */
+  private marchHeightfield(ray: THREE.Ray): THREE.Vector3 | null {
+    const m = this.world.map;
+    const o = ray.origin;
+    const d = ray.direction;
+    if (d.y >= -1e-4) return null;
+    // Start where the ray comes down to the highest possible ground, stop below sea level.
+    const top = this.maxElevation + 0.5;
+    let t = o.y > top ? (o.y - top) / -d.y : 0;
+    const tEnd = (o.y + 4) / -d.y;
+    const step = 0.4;
+    const h = (tt: number) => {
+      const x = o.x + d.x * tt;
+      const z = o.z + d.z * tt;
+      if (x < 0 || z < 0 || x > m.width || z > m.height) return -99;
+      return surfaceHeight(m, x, z);
+    };
+    let prev = t;
+    for (; t <= tEnd; t += step) {
+      if (o.y + d.y * t <= h(t)) {
+        let lo = prev;
+        let hi = t;
+        for (let k = 0; k < 10; k++) {
+          const mid = (lo + hi) / 2;
+          if (o.y + d.y * mid <= h(mid)) hi = mid;
+          else lo = mid;
+        }
+        return o.clone().addScaledVector(d, hi);
+      }
+      prev = t;
+    }
+    return null;
+  }
+
+  private readonly maxElevation: number;
 
   /** Screen position (CSS pixels relative to the canvas) of a world point. */
   toScreen(v: THREE.Vector3): { x: number; y: number; visible: boolean } {

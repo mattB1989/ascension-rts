@@ -11,12 +11,20 @@ import { TECH_IDS, TECHS, techImplemented } from '../src/data/techs.ts';
 import type { AgeId, BuildingDef, Cost } from '../src/data/types.ts';
 import { UNIT_TYPES, UNITS } from '../src/data/units.ts';
 import { DAMAGE, DAMAGE_TYPE_NAMES, weaponsOf, type DamageType } from '../src/data/weapons.ts';
+import { CONSUMPTION, HOUSE_LEVELS, TAX_PER_RESIDENT } from '../src/data/city.ts';
+import { GOOD_IDS, GOODS, TIERS, type GoodId } from '../src/data/goods.ts';
 
 const ARMOR: Record<string, string> = { inf: 'Inf', lt: 'Lt', hv: 'Hv', mech: 'Mech', ship: 'Ship', sub: 'Sub', air: 'Air', orb: 'Orb', str: 'Str' };
 const CATEGORY: Record<string, string> = {
   core: 'Core', housing: 'Housing', resource: 'Resource', military: 'Military', tech: 'Tech',
   support: 'Support', defense: 'Defense', special: 'Special', wonder: 'Wonder',
+  industry: 'Industry', logistics: 'Logistics', utility: 'Utility', service: 'Service',
 };
+
+/** Skirmish (RTS) catalog: everything not made for the economy game. */
+const RTS_TYPES = BUILDING_TYPES.filter((id) => (BUILDINGS[id] as BuildingDef).mode !== 'city');
+const CITY_TYPES = BUILDING_TYPES.filter((id) => (BUILDINGS[id] as BuildingDef).mode === 'city');
+const goodsText = (s: Readonly<Partial<Record<GoodId, number>>>) => Object.entries(s).map(([g, n]) => `${n} ${GOODS[g as GoodId].name.toLowerCase()}`).join(' + ');
 
 const cost = (c: Cost) => `${c.ore} / ${c.energy}`;
 const bname = (id: string) => (BUILDINGS as Record<string, BuildingDef>)[id]?.name ?? id;
@@ -53,14 +61,14 @@ export function renderTables(): Record<string, string> {
   const lines = ['```mermaid', 'flowchart LR'];
   for (const age of AGE_ORDER) {
     lines.push(`  subgraph ${ageName(age)}`);
-    for (const id of BUILDING_TYPES.filter((b) => BUILDINGS[b].age === age)) lines.push(`    ${id}[${BUILDINGS[id].name}]`);
+    for (const id of RTS_TYPES.filter((b) => BUILDINGS[b].age === age)) lines.push(`    ${id}[${BUILDINGS[id].name}]`);
     lines.push('  end');
   }
-  for (const id of BUILDING_TYPES) for (const r of BUILDINGS[id].requires) lines.push(`  ${r} --> ${id}`);
+  for (const id of RTS_TYPES) for (const r of BUILDINGS[id].requires) lines.push(`  ${r} --> ${id}`);
   lines.push('```');
   out.prereq_diagram = lines.join('\n');
 
-  const nonDefense = BUILDING_TYPES.filter((id) => BUILDINGS[id].category !== 'defense');
+  const nonDefense = RTS_TYPES.filter((id) => BUILDINGS[id].category !== 'defense');
   out.buildings = table(
     ['Building', 'Category', 'Age', 'Requires', 'Cost', 'Build time', 'Size', 'Pop', 'Function'],
     nonDefense.map((id) => {
@@ -75,7 +83,7 @@ export function renderTables(): Record<string, string> {
     }),
   );
 
-  const defense = BUILDING_TYPES.filter((id) => BUILDINGS[id].category === 'defense');
+  const defense = RTS_TYPES.filter((id) => BUILDINGS[id].category === 'defense');
   out.defense = table(
     ['Structure', 'Age', 'Requires', 'Cost', 'Build time', 'HP', 'Garrison', 'Weapons', 'Notes'],
     defense.map((id) => {
@@ -101,6 +109,40 @@ export function renderTables(): Record<string, string> {
       }),
     );
   }
+
+  out.city_buildings = table(
+    ['Building', 'Category', 'Size', 'Price', 'Materials', 'Upkeep /yr', 'Staff', 'Makes', 'Notes'],
+    CITY_TYPES.map((id) => {
+      const b: BuildingDef = BUILDINGS[id];
+      const e = b.econ!;
+      const makes: string[] = [];
+      if (e.recipe) makes.push(`${goodsText(e.recipe.in) ? `${goodsText(e.recipe.in)} → ` : ''}${goodsText(e.recipe.out) || 'power'} every ${e.recipe.seconds}s`);
+      if ((e.power ?? 0) < 0) makes.push(`${-e.power!} MW`);
+      if (e.service) makes.push(`${e.service.kind}: ${e.service.capacity} residents within ${e.service.radius} road tiles`);
+      if (e.waterSupply) makes.push(`water for ${e.waterSupply}`);
+      if (e.storage) makes.push(`stores ${e.storage}`);
+      if (e.housing) makes.push(`${e.housing.join(' / ')} residents by level`);
+      const extras = [(e.power ?? 0) > 0 ? `needs ${e.power} MW` : '', e.trucks ? `${e.trucks} truck${e.trucks > 1 ? 's' : ''}` : '', e.crews ? `${e.crews} crews` : '', b.limit ? `max ${b.limit}` : ''].filter(Boolean);
+      return [
+        `**${b.name}**`, CATEGORY[b.category]!, `${b.size[0]}×${b.size[1]}`, `₡${e.credits}`, goodsText(e.materials) || '—', String(e.upkeep),
+        e.jobs ? `${e.jobs.count} ${TIERS[e.jobs.tier]!.name.toLowerCase()}` : '—', makes.join('; ') || '—', [b.description, ...extras].join(' '),
+      ];
+    }),
+  );
+
+  out.goods = table(
+    ['Good', 'Reference price', 'Made by', 'Used by'],
+    GOOD_IDS.map((g) => {
+      const by = (side: 'in' | 'out') => CITY_TYPES.filter((id) => (BUILDINGS[id] as BuildingDef).econ?.recipe?.[side][g]).map((id) => BUILDINGS[id].name);
+      const used = [...by('in'), ...(g in CONSUMPTION ? ['households (markets)'] : []), ...CITY_TYPES.filter((id) => (BUILDINGS[id] as BuildingDef).econ?.materials[g]).map((id) => `${BUILDINGS[id].name} (construction)`)];
+      return [`${GOODS[g].icon} **${GOODS[g].name}**`, `₡${GOODS[g].price}`, by('out').join(', ') || '—', used.join(', ') || '—'];
+    }),
+  );
+
+  out.house_levels = table(
+    ['Level', 'Residents', 'Tier', 'Taxes per resident /yr', 'Needs'],
+    HOUSE_LEVELS.map((l, i) => [`**${l.name}**`, String((BUILDINGS.house as BuildingDef).econ!.housing![i]), TIERS[l.tier].name, `₡${TAX_PER_RESIDENT[l.tier]}`, l.needs.join(', ') || 'a road']),
+  );
 
   const atBuildings = [...new Set(TECH_IDS.map((id) => TECHS[id].at as string))];
   out.research_grid = table(

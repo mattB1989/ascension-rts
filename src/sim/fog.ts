@@ -40,6 +40,18 @@ export function updateFog(world: World): void {
         p.explored[k] = 1;
       }
     };
+    // Economy game: your own regions are always in view.
+    const city = world.city;
+    if (city) {
+      const region = world.map.nearRegion;
+      const owner = city.regionOwner;
+      for (let i = 0; i < vis.length; i++) {
+        if (region[i] !== 0 && owner[region[i]!] === p.id) {
+          vis[i] = 1;
+          p.explored[i] = 1;
+        }
+      }
+    }
     for (const u of world.units) if (u.owner === p.id && !u.carrier) stamp(u.x, u.y, u.chute > 0 ? 4 : u.def.vision);
     for (const b of world.buildings) if (b.owner === p.id) stamp(b.x, b.y, b.complete ? b.def.vision + Math.max(b.w, b.h) / 2 : 3);
   }

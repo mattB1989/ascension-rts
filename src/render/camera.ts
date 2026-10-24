@@ -10,13 +10,15 @@ export class CameraRig {
   pitch = 0.95;
   distance = 42;
   readonly minDistance = 10;
-  readonly maxDistance = 140;
+  readonly maxDistance: number;
   /** Pan velocity in world units per second (fling / inertia after a drag). */
   private readonly vel = new THREE.Vector2();
   private bounds: { w: number; h: number };
 
   constructor(aspect: number, mapW: number, mapH: number) {
-    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.5, 600);
+    // Bigger maps can zoom out further.
+    this.maxDistance = Math.max(140, Math.min(300, Math.max(mapW, mapH) * 0.55));
+    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.5, this.maxDistance * 5 + 200);
     this.bounds = { w: mapW, h: mapH };
   }
 

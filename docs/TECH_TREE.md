@@ -342,3 +342,75 @@ Full list, with what each does and from which milestone it works in game:
 - **Nukes** → spread out, **Point Defense Array** (Space age).
 - **Drop Ships behind walls** → interior towers, Point Defense, Orbital Fighters.
 - **Space Elevator** → everything; it forces the defender out of their walls.
+
+---
+
+## 9. Economy game (Modern age)
+
+The economy-first game described in [DESIGN.md](DESIGN.md). Buildings cost credits when placed;
+their materials are delivered by truck and a construction crew builds them. A game year is 120
+seconds at normal speed.
+
+### Buildings
+
+<!-- gen:city_buildings -->
+| Building | Category | Size | Price | Materials | Upkeep /yr | Staff | Makes | Notes |
+|---|---|---|---|---|---|---|---|---|
+| **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. 2 trucks 2 crews max 1 |
+| **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
+| **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |
+| **Warehouse** | Logistics | 4×3 | ₡600 | 30 lumber + 10 concrete | 80 | 6 workers | stores 400 | Takes in what producers make and sends it on to whoever needs it. Three trucks. 3 trucks |
+| **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment as its needs are met. |
+| **Farm** | Resource | 4×4 | ₡400 | 10 lumber | 30 | 6 workers | 4 crops every 20s | Grows crops. Fertile floodplain yields full output, grassland 60%, sand 20%. 1 truck |
+| **Fishing Harbour** | Resource | 3×3 | ₡500 | 15 lumber | 40 | 4 workers | 3 food every 12s | Lands fish straight as food. Output depends on open water nearby. 1 truck |
+| **Logging Camp** | Resource | 2×2 | ₡250 | — | 20 | 4 workers | 4 timber every 18s | Fells timber. Output depends on forest within 5 tiles. 1 truck |
+| **Quarry** | Resource | 3×3 | ₡400 | 10 lumber | 40 | 6 workers | 4 stone every 18s | Cuts stone. Must stand on a stone deposit; more deposit under it, more output. 1 truck |
+| **Iron Mine** | Resource | 3×3 | ₡600 | 15 lumber + 5 concrete | 60 | 8 workers | 4 iron ore every 18s | Digs iron ore. Must stand on an ore deposit. 1 truck |
+| **Oil Well** | Resource | 2×2 | ₡700 | 5 steel + 5 concrete | 60 | 4 workers | 4 crude oil every 16s | Pumps crude oil. Must stand on an oil deposit. 1 truck |
+| **Food Plant** | Industry | 3×3 | ₡700 | 20 lumber + 10 concrete | 60 | 8 workers | 2 crops → 3 food every 10s | Turns crops into food. 1 truck |
+| **Sawmill** | Industry | 3×3 | ₡500 | 10 lumber | 40 | 6 workers | 2 timber → 2 lumber every 8s | Saws timber into lumber. 1 truck |
+| **Cement Works** | Industry | 3×3 | ₡800 | 20 lumber + 5 steel | 70 | 8 workers | 2 stone → 2 concrete every 8s | Grinds and fires stone into concrete. Needs power. needs 4 MW 1 truck |
+| **Steel Mill** | Industry | 4×4 | ₡1500 | 20 lumber + 30 concrete | 120 | 12 workers | 2 iron ore → 1 steel every 8s | Smelts iron ore into steel. Needs a lot of power. needs 10 MW 1 truck |
+| **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 1 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
+| **Goods Factory** | Industry | 3×3 | ₡1400 | 15 steel + 15 concrete | 100 | 10 technicians | 1 steel + 1 plastics → 2 consumer goods every 10s | Makes consumer goods from steel and plastics. Needs technicians. needs 6 MW 1 truck |
+| **Oil Power Plant** | Utility | 4×3 | ₡1200 | 10 lumber + 20 concrete + 10 steel | 100 | 6 workers | 1 crude oil → power every 6s; 30 MW | Burns crude oil: 30 MW for every building connected to it by road. |
+| **Pumping Station** | Utility | 2×2 | ₡500 | 10 concrete + 5 steel | 50 | 2 workers | water for 600 | Pumps river or lake water for 600 residents. Water Towers spread it to houses. |
+| **Water Tower** | Utility | 2×2 | ₡250 | 5 concrete + 2 steel | 20 | — | water: 400 residents within 24 road tiles | Gives running water to houses within 24 road tiles, fed by a Pumping Station on the same roads. |
+| **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food and consumer goods to households within 26 road tiles. Trucks keep it stocked. |
+| **Police Station** | Service | 2×2 | ₡500 | 10 lumber + 10 concrete | 90 | 4 workers | police: 600 residents within 28 road tiles | Keeps the peace within 28 road tiles. Terraces and apartments need it. |
+| **Clinic** | Service | 3×2 | ₡700 | 15 concrete + 5 steel | 120 | 4 technicians | health: 500 residents within 26 road tiles | Healthcare within 26 road tiles. Apartments need it. needs 2 MW |
+| **School** | Service | 3×3 | ₡700 | 15 lumber + 15 concrete | 120 | 4 technicians | school: 500 residents within 26 road tiles | Education within 26 road tiles. Apartments need it. |
+<!-- /gen:city_buildings -->
+
+### Goods
+
+<!-- gen:goods -->
+| Good | Reference price | Made by | Used by |
+|---|---|---|---|
+| 🌾 **Crops** | ₡4 | Farm | Food Plant |
+| 🍞 **Food** | ₡9 | Fishing Harbour, Food Plant | households (markets) |
+| 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
+| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Construction Office (construction), Warehouse (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
+| 🪨 **Stone** | ₡3 | Quarry | Cement Works |
+| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
+| ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
+| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction) |
+| 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |
+| ⛽ **Fuel** | ₡14 | Oil Refinery | — |
+| 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory |
+| 📦 **Consumer goods** | ₡30 | Goods Factory | households (markets) |
+<!-- /gen:goods -->
+
+### Houses
+
+Houses level up when every need of the next level has been met for 15 seconds, and shrink back
+when a need of their current level has been missing for 30 seconds.
+
+<!-- gen:house_levels -->
+| Level | Residents | Tier | Taxes per resident /yr | Needs |
+|---|---|---|---|---|
+| **Cottage** | 8 | Workers | ₡10 | a road |
+| **House** | 16 | Workers | ₡10 | food, water |
+| **Terrace** | 24 | Technicians | ₡22 | food, water, power, police |
+| **Apartment** | 40 | Technicians | ₡22 | food, water, goods, power, police, health, school |
+<!-- /gen:house_levels -->

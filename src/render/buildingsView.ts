@@ -19,9 +19,21 @@ interface BuildingObject {
   flares: THREE.Object3D[];
   turret: THREE.Object3D | null;
   gateBar: THREE.Object3D | null;
+  smokes: Smoke[];
   hb: HealthBar;
   top: number;
+  /** House level the model was built for. */
+  level: number;
 }
+
+/** A few puffs rising from a chimney top while the building works. */
+interface Smoke {
+  anchor: THREE.Object3D;
+  puffs: THREE.Mesh[];
+}
+
+const smokeGeo = new THREE.SphereGeometry(0.16, 6, 4);
+const smokeMat = new THREE.MeshBasicMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.45, depthWrite: false });
 
 const isWallish = (t: string) => t === 'wall' || t === 'gate';
 
@@ -148,8 +160,9 @@ export class BuildingsView {
     const onWater = b.def.placement === 'seaOil' || b.def.placement === 'water';
     const base = onWater ? 0 : footprintBase(map, b.tx, b.ty, b.w, b.h);
     root.position.set(b.x, base, b.y);
-    const model = buildBuildingModel(b.type, color);
-    if (b.type === 'shipyard') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
+    const level = b.city?.level ?? 0;
+    const model = buildBuildingModel(b.type, color, level);
+    if (b.type === 'shipyard' || b.type === 'fishing_harbour') model.rotation.y = waterFacing(map, b.tx, b.ty, b.w, b.h);
     if (b.type === 'gate') {
       // Turn the gate to run along its wall: N/S neighbours mean the wall runs along y.
       const at = (dx: number, dy: number) => this.world.getBuilding(this.world.occupancy[(b.ty + dy) * map.width + b.tx + dx] ?? 0);
@@ -180,12 +193,24 @@ export class BuildingsView {
     };
     const hb = new HealthBar(Math.max(0.8, Math.min(3, b.w * 0.8)));
     this.group.add(hb.group);
+    const smokes: Smoke[] = named('smoke').map((anchor) => {
+      const puffs: THREE.Mesh[] = [];
+      for (let i = 0; i < 4; i++) {
+        const p = new THREE.Mesh(smokeGeo, smokeMat);
+        p.visible = false;
+        anchor.add(p);
+        puffs.push(p);
+      }
+      return { anchor, puffs };
+    });
     return {
       root, model, scaffold, outline, spins: named('spin'), beams: named('beam'), cranks: named('crank'), flares: named('flare'),
       turret: model.getObjectByName('turret') ?? null,
       gateBar: model.getObjectByName('gateBar') ?? null,
+      smokes,
       hb,
       top: base + height + 0.4,
+      level,
     };
   }
 
@@ -201,6 +226,12 @@ export class BuildingsView {
     for (const b of this.world.buildings) {
       seen.add(b.id);
       let o = this.objects.get(b.id);
+      if (o && b.city && b.complete && o.level !== b.city.level) {
+        // A house grew (or shrank): new model.
+        this.group.remove(o.root, o.hb.group);
+        this.objects.delete(b.id);
+        o = undefined;
+      }
       if (!o) {
         o = this.create(b);
         this.objects.set(b.id, o);
@@ -217,13 +248,23 @@ export class BuildingsView {
         o.model.scale.y = 1;
       }
 
-      const active = b.complete && (!b.def.produces || (b.resource >= 0 ? (this.world.resources[b.resource]?.amount ?? 0) > 0 : true));
+      const active = b.city
+        ? b.complete && (b.city.efficiency > 0 || b.city.powerOut > 0 || (!b.def.econ?.recipe && b.city.status === ''))
+        : b.complete && (!b.def.produces || (b.resource >= 0 ? (this.world.resources[b.resource]?.amount ?? 0) > 0 : true));
+      for (const sm of o.smokes) {
+        sm.puffs.forEach((p, i) => {
+          const k = (time * 0.35 + i / sm.puffs.length + b.id * 0.13) % 1;
+          p.visible = active && o!.root.visible;
+          p.position.set(k * 0.5, k * 1.6, k * 0.2);
+          p.scale.setScalar(0.6 + k * 2.2);
+        });
+      }
       for (const s of o.spins) s.rotation.y += dt * (b.complete ? 1.4 : 0);
       for (const beam of o.beams) beam.rotation.z = active ? Math.sin(time * 2.2 + b.id) * 0.28 : 0;
       for (const c of o.cranks) c.rotation.z = active ? time * 2.2 + b.id : 0;
       for (const f of o.flares) {
         const k = 0.8 + 0.25 * Math.sin(time * 17 + b.id) + 0.15 * Math.sin(time * 7.3);
-        f.scale.set(k, active || b.type === 'airfield' ? k * 1.2 : 0.01, k);
+        f.scale.set(k, active || b.type === 'airfield' || b.type === 'police_station' ? k * 1.2 : 0.01, k);
       }
 
       if (o.turret) {

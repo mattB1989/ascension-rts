@@ -5,7 +5,7 @@
 //   Air   aircraft: anywhere.
 
 import type { UnitDef } from '../data/types.ts';
-import { Terrain, type GameMap, type TerrainId } from './map.ts';
+import { isOpenLand, Terrain, type GameMap, type TerrainId } from './map.ts';
 
 export const NavLayer = {
   Land: 0,
@@ -32,10 +32,10 @@ export function layerFor(def: Pick<UnitDef, 'domain' | 'move'>): NavLayerId {
 export function terrainCost(layer: NavLayerId, t: TerrainId): number {
   switch (layer) {
     case NavLayer.Land:
-      return t === Terrain.Grass || t === Terrain.Beach || t === Terrain.Bridge ? 1 : 0;
+      return isOpenLand(t) || t === Terrain.Bridge ? 1 : 0;
     case NavLayer.Foot:
       if (t === Terrain.Forest) return 2;
-      return t === Terrain.Grass || t === Terrain.Beach || t === Terrain.Bridge ? 1 : 0;
+      return isOpenLand(t) || t === Terrain.Bridge ? 1 : 0;
     case NavLayer.Water:
       // Ships pass under bridges.
       return t === Terrain.Shallow || t === Terrain.Deep || t === Terrain.Bridge ? 1 : 0;

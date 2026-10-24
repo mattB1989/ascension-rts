@@ -1,0 +1,211 @@
+// State of the economy game, kept on the World (world.city). Plain data only:
+// typed arrays, arrays and records, so a save is a structured clone.
+
+import type { HouseNeed } from '../../data/city.ts';
+import type { GoodId } from '../../data/goods.ts';
+import type { ServiceKind } from '../../data/types.ts';
+
+export type Stock = Partial<Record<GoodId, number>>;
+
+/** What a building does in the economy (on Building.city). */
+export interface CityBuildingState {
+  /** Goods held: inputs waiting to be used, outputs waiting for a truck, or storage. */
+  stock: Stock;
+  /** Units on their way here in trucks (already promised). */
+  incoming: Stock;
+  /** Construction: materials delivered so far. */
+  delivered: Stock;
+  /** Road tile index trucks use to reach it, or -1 when it has no road. */
+  access: number;
+  /** Road network it is connected to (0: none). */
+  comp: number;
+  /** Staff at work, and staff wanted. */
+  workers: number;
+  /** Production cycle progress, 0..1. */
+  cycle: number;
+  /** Raw producers: how good the land is, 0..1. */
+  yield: number;
+  /** Output rate last second, 0..1 (UI). */
+  efficiency: number;
+  /** Why it isn't working, or '' (UI). */
+  status: string;
+  powered: boolean;
+  /** Power plants: megawatts actually produced last second. */
+  powerOut: number;
+  /** Trucks and crews away from home. */
+  trucksOut: number;
+  crewsOut: number;
+  /** Construction crews working on this site now. */
+  crewsHere: number;
+  /** Housing. */
+  level: number;
+  residents: number;
+  /** Fractional residents (growth accumulates here). */
+  growth: number;
+  needs: Record<HouseNeed, boolean>;
+  /** Seconds the next level's needs have all been met / the current level's have not. */
+  upFor: number;
+  downFor: number;
+  happiness: number;
+  /** Services: residents covered last time coverage was computed. */
+  served: number;
+  /** Houses: the market that sells to it (0: none) and which services reach it. */
+  market: number;
+  covered: Record<ServiceKind, boolean>;
+  /** Houses: pollution from industry nearby, 0..1. */
+  pollution: number;
+}
+
+export interface Truck {
+  id: number;
+  owner: number;
+  /** Building the truck belongs to (it returns there). */
+  home: number;
+  kind: 'truck' | 'crew';
+  /** Road tiles to drive through (tile indices). */
+  path: number[];
+  /** Position along the path in tiles, and at the start of the tick (render interpolation). */
+  pos: number;
+  prevPos: number;
+  phase: 'out' | 'working' | 'back';
+  good: GoodId | null;
+  amount: number;
+  /** Destination building. */
+  to: number;
+}
+
+export interface Budget {
+  taxes: number;
+  trade: number;
+  upkeep: number;
+  roads: number;
+  construction: number;
+}
+
+export interface PlayerCity {
+  credits: number;
+  /** 1 = normal taxes; 0.5..1.5. */
+  taxRate: number;
+  /** This year so far, and the whole of last year. */
+  year: Budget;
+  lastYear: Budget;
+  /** Population and jobs by tier (computed each second). */
+  population: [number, number];
+  workforce: [number, number];
+  jobs: [number, number];
+  employed: [number, number];
+  happiness: number;
+  /** Power across all networks (MW). */
+  powerSupply: number;
+  powerDemand: number;
+  /** Goods made and used in the last 60 game seconds, per good (UI table). */
+  made: Stock;
+  used: Stock;
+  /** Rolling per-second history for the last minute (ring buffers). */
+  madeLog: Stock[];
+  usedLog: Stock[];
+  /** Value of goods made this year and last year (credits at reference prices). */
+  gdp: number;
+  lastGdp: number;
+  /** Yearly history for graphs. */
+  history: Array<{ year: number; population: number; credits: number; gdp: number }>;
+}
+
+export interface CityState {
+  /** Road per tile: 0 none, 1 road, 2 bridge. */
+  road: Uint8Array;
+  roadCount: number;
+  /** Road network id per road tile (0: none). Recomputed when roads change. */
+  comp: Int32Array;
+  /** Bumped on every road change; buildings refresh their road access when it moves. */
+  roadVersion: number;
+  compVersion: number;
+  /** Owner of each region (index: region id), -1 for nobody. */
+  regionOwner: Int8Array;
+  trucks: Truck[];
+  nextTruckId: number;
+  players: PlayerCity[];
+  /** Service coverage per tile of road access: residents allowed by the nearest service, recomputed every few seconds. */
+  coverage: Partial<Record<ServiceKind, Int32Array>>;
+}
+
+export function emptyBudget(): Budget {
+  return { taxes: 0, trade: 0, upkeep: 0, roads: 0, construction: 0 };
+}
+
+export function newPlayerCity(credits: number): PlayerCity {
+  return {
+    credits,
+    taxRate: 1,
+    year: emptyBudget(),
+    lastYear: emptyBudget(),
+    population: [0, 0],
+    workforce: [0, 0],
+    jobs: [0, 0],
+    employed: [0, 0],
+    happiness: 0.6,
+    powerSupply: 0,
+    powerDemand: 0,
+    made: {},
+    used: {},
+    madeLog: [],
+    usedLog: [],
+    gdp: 0,
+    lastGdp: 0,
+    history: [],
+  };
+}
+
+export function newCityBuilding(): CityBuildingState {
+  return {
+    stock: {},
+    incoming: {},
+    delivered: {},
+    access: -1,
+    comp: 0,
+    workers: 0,
+    cycle: 0,
+    yield: 1,
+    efficiency: 0,
+    status: '',
+    powered: false,
+    powerOut: 0,
+    trucksOut: 0,
+    crewsOut: 0,
+    crewsHere: 0,
+    level: 0,
+    residents: 0,
+    growth: 0,
+    needs: { food: false, water: false, goods: false, power: false, police: false, health: false, school: false },
+    upFor: 0,
+    downFor: 0,
+    happiness: 0.6,
+    served: 0,
+    market: 0,
+    covered: { market: false, water: false, police: false, health: false, school: false },
+    pollution: 0,
+  };
+}
+
+export function createCityState(width: number, height: number, regions: number, players: number, credits: number): CityState {
+  return {
+    road: new Uint8Array(width * height),
+    roadCount: 0,
+    comp: new Int32Array(width * height),
+    roadVersion: 1,
+    compVersion: 0,
+    regionOwner: new Int8Array(regions + 1).fill(-1),
+    trucks: [],
+    nextTruckId: 1,
+    players: Array.from({ length: players }, () => newPlayerCity(credits)),
+    coverage: {},
+  };
+}
+
+export function add(s: Stock, g: GoodId, n: number): void {
+  s[g] = (s[g] ?? 0) + n;
+}
+
+export function get(s: Stock, g: GoodId): number {
+  return s[g] ?? 0;
+}

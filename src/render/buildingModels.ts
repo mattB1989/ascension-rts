@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings.ts';
+import { buildCityModel } from './cityModels.ts';
 import { box, C, cached, cyl, cylX, mat, mesh, sphere, teamMats } from './models.ts';
 
 const concrete = () => mat(C.concrete, { rough: 0.95 });
@@ -473,7 +474,9 @@ function genericBuilding(type: BuildingTypeId, team: number): THREE.Group {
   return g;
 }
 
-export function buildBuildingModel(type: BuildingTypeId, team: number): THREE.Group {
+export function buildBuildingModel(type: BuildingTypeId, team: number, level = 0): THREE.Group {
+  const city = buildCityModel(type, team, level);
+  if (city) return city;
   switch (type) {
     case 'command_center': return commandCenter(team);
     case 'habitat_block': return habitat(team);

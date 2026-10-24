@@ -3,7 +3,8 @@
 
 import * as THREE from 'three';
 import type { GameRenderer } from '../render/renderer.ts';
-import { TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
+import { DEPOSIT_NAMES, TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
+import { HOUSE_LEVELS } from '../data/city.ts';
 import type { Building, ResourceState, Unit, World } from '../sim/world.ts';
 
 export type Hit =
@@ -117,6 +118,11 @@ export function hitName(world: World, hit: Hit, viewer: number): { title: string
     case 'building': {
       const b = hit.building;
       const who = hit.own ? '' : `${world.players[b.owner]?.name ?? 'Enemy'} `;
+      if (b.city) {
+        const c = b.city;
+        if (b.type === 'house' && b.complete) return { title: HOUSE_LEVELS[c.level]!.name, sub: `${Math.floor(c.residents)} residents · ${Math.round(c.happiness * 100)}% happy` };
+        return { title: `${who}${b.def.name}`, sub: c.status || (b.complete ? 'Working' : `Under construction · ${Math.floor(b.progress * 100)}%`) };
+      }
       return { title: `${who}${b.def.name}`, sub: b.complete ? `${Math.ceil(b.hp)}/${b.maxHp} HP` : `Under construction · ${Math.floor(b.progress * 100)}%` };
     }
     case 'resource': {
@@ -126,6 +132,13 @@ export function hitName(world: World, hit: Hit, viewer: number): { title: string
     }
     case 'ground': {
       if (!hit.explored) return { title: 'Unexplored', sub: '' };
+      if (world.map.regions.length) {
+        const i = Math.floor(hit.y) * world.map.width + Math.floor(hit.x);
+        const reg = world.map.regions[world.map.region[i]! - 1];
+        const dep = world.map.deposit[i]!;
+        const what = dep ? `${DEPOSIT_NAMES[dep as 1]} deposit` : TERRAIN_NAMES[hit.terrain];
+        return { title: what, sub: reg ? reg.name : '' };
+      }
       const sub: Record<number, string> = {
         0: 'Ships only', 1: 'Ships only', 2: '', 3: '', 4: 'Infantry only, slow going', 5: 'Impassable', 6: 'Land units cross, ships pass under',
       };

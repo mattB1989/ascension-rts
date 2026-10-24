@@ -23,6 +23,9 @@ import {
 import { layerFor, NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
 import { Rng } from './rng.ts';
+import { applyCityCommand } from './city/index.ts';
+import { updateCity } from './city/economy.ts';
+import type { CityState } from './city/state.ts';
 import { DT } from './time.ts';
 import { POP_LIMIT, type Building, type Entity, type GameEvent, type PlayerState, type Projectile, type ResourceState, type Unit } from './types.ts';
 
@@ -38,8 +41,13 @@ export interface PlayerInfo {
   isHuman: boolean;
 }
 
+export type GameMode = 'skirmish' | 'city';
+
 export class World {
   tick = 0;
+  readonly mode: GameMode;
+  /** Economy game state (null in skirmish). */
+  city: CityState | null = null;
   readonly map: GameMap;
   readonly nav: NavGrid;
   readonly pathfinder: Pathfinder;
@@ -62,7 +70,8 @@ export class World {
   private readonly byId = new Map<number, Entity>();
   private nextId = 1;
 
-  constructor(map: GameMap, players: PlayerInfo[], seed: number) {
+  constructor(map: GameMap, players: PlayerInfo[], seed: number, mode: GameMode = 'skirmish') {
+    this.mode = mode;
     this.map = map;
     this.nav = new NavGrid(map);
     this.pathfinder = new Pathfinder(this.nav);
@@ -237,6 +246,7 @@ export class World {
       aim: 0,
       firedAgo: 999,
       waitingForPop: false,
+      city: null,
     };
     this.buildings.push(b);
     this.byId.set(b.id, b);
@@ -341,7 +351,8 @@ export class World {
     }
     updateProjectiles(this);
     updateBuildings(this);
-    checkVictory(this);
+    if (this.city) updateCity(this);
+    else checkVictory(this);
     if (this.tick % FOG_INTERVAL === 0) updateFog(this);
     this.tick++;
   }
@@ -375,6 +386,14 @@ export class World {
 
   private apply(c: Command): void {
     switch (c.kind) {
+      case 'road':
+      case 'unroad':
+      case 'place':
+      case 'placeMany':
+      case 'demolish':
+      case 'taxRate':
+        applyCityCommand(this, c);
+        break;
       case 'move': {
         const units = this.ownedUnits(c.player, c.units).filter((u) => !u.carrier && u.chute <= 0);
         for (const u of units) {

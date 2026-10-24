@@ -414,6 +414,8 @@ export class World {
       case 'proposeTreaty':
       case 'cancelTreaty':
       case 'embargo':
+      case 'spyReport':
+      case 'sabotage':
         applyCityCommand(this, c);
         break;
       case 'move': {

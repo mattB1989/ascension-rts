@@ -20,6 +20,10 @@
 //   tax <rate>                  tax rate, e.g. 1.2 for 120%
 //   advance-age                 reach the next age when ready
 //   diplomacy                   neighbours: city-states and nations
+//   advice                      the advisor's top priorities right now
+//   spy <nation id | me>        buy a spy report on a nation (its weak points), or on yourself (half price)
+//   intel                       read your latest spy reports
+//   sabotage <building id>      covert sabotage of a building in a nation you have a recent report on
 //   do '<json>'                 any game command, e.g. '{"kind":"deal","state":5,"good":"steel","import":50,"export":-1}'
 //                               overseas trade (needs a Trade Port): '{"kind":"tradeRule","good":"food","import":100,"export":-1}'
 //                               (import up to N, 0 = off; export above N, -1 = off); recruit: '{"kind":"recruit","building":ID,"unit":"rifleman"}'
@@ -49,6 +53,7 @@ import type { Command } from '../src/sim/commands.ts';
 import type { World } from '../src/sim/world.ts';
 import type { Building } from '../src/sim/types.ts';
 import type { BuildingDef } from '../src/data/types.ts';
+import { advise } from '../src/ui/advisor.ts';
 
 const ME = 0;
 const args = process.argv.slice(2);
@@ -397,6 +402,26 @@ function main(): void {
     }
     case 'do':
       return act(JSON.parse(rest.join(' ')) as Record<string, unknown>);
+    case 'advice': {
+      const { world } = load();
+      for (const a of advise(world, ME).slice(0, 6)) console.log(`${'!'.repeat(a.severity)} ${a.text}\n    ${a.why}${a.action?.kind === 'build' ? ` [build ${a.action.type}]` : ''}`);
+      return;
+    }
+    case 'spy':
+      return act({ kind: 'spyReport', target: rest[0] === 'me' ? ME : Number(rest[0]) });
+    case 'sabotage':
+      return act({ kind: 'sabotage', building: Number(rest[0]) });
+    case 'intel': {
+      const { world } = load();
+      const reports = (world.city!.reports ?? []).filter((r) => r.by === ME);
+      if (!reports.length) return console.log('No reports yet: "spy <nation id>" or "spy me".');
+      for (const r of reports) {
+        const s = r.summary;
+        console.log(`\n${r.self ? 'YOUR OWN WEAK POINTS' : `REPORT ON #${r.target} ${world.players[r.target]?.name}`} (${((world.time - r.time) / 120).toFixed(1)} years old): people ${s.population}, GDP ₡${s.gdp}, ₡${s.credits} (${s.net >= 0 ? '+' : ''}${s.net}/yr), army ${s.army}, happiness ${Math.round(s.happiness * 100)}%`);
+        for (const i of r.items) console.log(`  ${'!'.repeat(i.severity)} ${i.text}${i.building ? ` [building #${i.building}]` : ''}\n      ${r.self ? 'Fix' : 'Plan'}: ${i.plan}`);
+      }
+      return;
+    }
     case 'advance': {
       const secs = Math.max(1, Math.min(1200, Number(rest[0] ?? 30)));
       const { world, news } = load();

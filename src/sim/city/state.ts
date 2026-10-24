@@ -11,6 +11,7 @@ import type { CityOptions } from './index.ts';
 import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
 import type { Embargo, Treaty } from './treaties.ts';
+import type { IntelReport } from './intel.ts';
 import type { Train } from './rail.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
@@ -37,6 +38,8 @@ export interface CityBuildingState {
   efficiency: number;
   /** Why it isn't working, or '' (UI). */
   status: string;
+  /** Knocked out by enemy saboteurs until this game time. */
+  sabotagedUntil?: number;
   powered: boolean;
   /** Power plants: megawatts actually produced last second. */
   powerOut: number;
@@ -228,6 +231,9 @@ export interface CityState {
   prices: Record<GoodId, number>;
   /** Ways to win: progress and the winner. */
   victory: VictoryState;
+  /** Spy reports bought (latest per buyer and target), and the id counter. */
+  reports?: IntelReport[];
+  nextReportId?: number;
   /** Replays: the options the game was created with, and every player order since (absent in games from older saves). */
   setup?: CityOptions;
   log?: TimedCommand[];

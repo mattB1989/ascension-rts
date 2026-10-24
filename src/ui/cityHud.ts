@@ -11,6 +11,8 @@ import { PIPE } from '../sim/city/pipes.ts';
 import { canTrade, EMBARGO, hasEmbargo, honouredEmbargo, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import { scenarioById } from '../sim/city/scenarios.ts';
+import { advise, type Advice } from './advisor.ts';
+import { INTEL, latestReport, reportPrice, reportProblem, sabotageProblem, type IntelReport } from '../sim/city/intel.ts';
 import type { Sound } from './sound.ts';
 import { PERSONALITIES } from '../ai/cityBot.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
@@ -58,7 +60,7 @@ const TOOL_INFO: Record<string, { name: string; text: string }> = {
   bulldoze: { name: 'Bulldozer', text: 'Drag over roads and railways to remove them, or click a building to demolish it. No refunds.' },
 };
 
-type PanelKind = 'goods' | 'budget' | 'trade' | 'diplomacy' | 'ages' | 'menu' | 'help';
+type PanelKind = 'goods' | 'budget' | 'trade' | 'diplomacy' | 'intel' | 'ages' | 'menu' | 'help';
 
 const fmt = (n: number) => (Math.abs(n) >= 10000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`);
 const sign = (n: number) => (n >= 0 ? `+${fmt(n)}` : `−${fmt(-n)}`);
@@ -102,6 +104,15 @@ export class CityHud {
   dayNight = true;
   onDayNight: (on: boolean) => void = () => {};
   quality: 'high' | 'low' = 'high';
+  /** Advisor mode: the top priorities instead of (or after) the starter checklist. */
+  advisorOn = (() => {
+    try {
+      return localStorage.getItem('ascension.advisor') !== '0';
+    } catch {
+      return true;
+    }
+  })();
+  private advice: { second: number; list: Advice[] } = { second: -1, list: [] };
   onQuality: (q: 'high' | 'low') => void = () => {};
   onReplay: () => void = () => {};
   /** Tint buildings for the current overlay (set by main: renderer.marks.set). */
@@ -130,6 +141,7 @@ export class CityHud {
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
       this.btn('🔬', 'Ages, research and ways to win', () => this.togglePanel('ages')),
       this.btn('🤝', 'Diplomacy: city-states, deals, unions', () => this.togglePanel('diplomacy')),
+      this.btn('🕵', 'Intelligence: spy reports and sabotage', () => this.togglePanel('intel')),
       this.btn('🚢', 'Trade with the overseas market', () => this.togglePanel('trade')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
       this.btn('☰', 'Save, load, new game', () => this.togglePanel('menu')),
@@ -363,6 +375,27 @@ export class CityHud {
         this.quality = this.quality === 'high' ? 'low' : 'high';
         this.onQuality(this.quality);
         this.lastPanel = '';
+        break;
+      case 'panel':
+        this.togglePanel(arg as PanelKind);
+        break;
+      case 'spy':
+        this.game.issue({ kind: 'spyReport', player: this.game.humanPlayer, target: Number(arg) });
+        this.lastPanel = '';
+        break;
+      case 'sabotage':
+        this.game.issue({ kind: 'sabotage', player: this.game.humanPlayer, building: Number(arg) });
+        this.lastPanel = '';
+        break;
+      case 'advisor':
+        this.advisorOn = !this.advisorOn;
+        try {
+          localStorage.setItem('ascension.advisor', this.advisorOn ? '1' : '0');
+        } catch {
+          // Settings are a convenience only.
+        }
+        this.lastPanel = '';
+        this.lastInfo = '';
         break;
       case 'daynight':
         this.dayNight = !this.dayNight;
@@ -629,9 +662,61 @@ export class CityHud {
     const v = w.city!.victory;
     const sc = scenarioById(v.scenario);
     const goal = sc && !v.scenarioDone ? `<div class="scenario-goal">🎯 <b>${esc(sc.name)}</b>: ${esc(sc.progress(w).text)} · by the end of ${sc.by}</div>` : '';
+    if (this.advisorOn) {
+      const second = Math.floor(w.time);
+      if (second !== this.advice.second) this.advice = { second, list: advise(w, me) };
+      const urgent = this.advice.list.filter((a) => a.severity >= 3);
+      // Early on, the starter checklist, unless something is urgent.
+      if (todo.length && pop < 300 && !urgent.length) {
+        return `${goal}<div class="card-head"><div class="card-title">Next steps</div><div class="card-status">${done}/${steps.length}</div></div>
+          <ul class="next-steps">${todo.map(([, t]) => `<li>${t}</li>`).join('')}</ul><div class="muted">${hint}</div>`;
+      }
+      return `${goal}<div class="card-head"><div class="card-title">🧭 Advisor</div><div class="card-status">top priorities</div></div>${this.advice.list.slice(0, 3).map((a) => this.adviceHtml(a)).join('')}`;
+    }
     if (!todo.length || pop > 1500) return `${goal}<div class="muted">${hint} Your nation is on its way: see 🔬 for the next age and the ways to win.</div>`;
     return `${goal}<div class="card-head"><div class="card-title">Next steps</div><div class="card-status">${done}/${steps.length}</div></div>
       <ul class="next-steps">${todo.map(([, t]) => `<li>${t}</li>`).join('')}</ul><div class="muted">${hint}</div>`;
+  }
+
+  private adviceHtml(a: Advice): string {
+    const act = a.action;
+    const btn = !act ? '' : act.kind === 'build' ? `<button class="mini" data-action="build" data-arg="${act.type}">${esc(a.label ?? 'Build')}</button>`
+      : act.kind === 'panel' ? `<button class="mini" data-action="panel" data-arg="${act.panel}">${esc(a.label ?? 'Open')}</button>`
+      : `<button class="mini" data-action="goto" data-arg="${act.x},${act.y}">${esc(a.label ?? 'Show')}</button>`;
+    return `<div class="advice sev${a.severity}"><div class="advice-head"><span>${a.icon}</span><b>${esc(a.text)}</b>${btn}</div><div class="muted">${esc(a.why)}</div></div>`;
+  }
+
+  /** Intelligence: buy reports, read them, act on them. */
+  private intelHtml(): string {
+    const w = this.world;
+    const me = this.game.humanPlayer;
+    const nations = w.players.filter((p) => p.id !== me && !p.defeated && (p.role === 'nation' || p.role === 'human'));
+    const block = (target: number, label: string) => {
+      const r = latestReport(w, me, target);
+      const why = reportProblem(w, me, target);
+      const price = reportPrice(w, me, target);
+      const buy = `<button class="mini wide ${why ? 'disabled' : 'primary'}" data-action="spy" data-arg="${target}" title="${esc(why ?? '')}">${r ? 'New report' : 'Buy report'} ₡${fmt(price)}</button>`;
+      return `<div class="state"><div class="state-head"><b>${esc(label)}</b>${buy}</div>${r ? this.intelReportHtml(r) : `<p class="muted">No report yet.</p>`}</div>`;
+    };
+    return `<h3>🕵 Intelligence</h3><p class="muted">Spies find a nation's weak points: the plant that makes most of its power, its only steel mill, undefended seats. With a recent report you can sabotage a building (₡${fmt(INTEL.sabotageCost)}): it stops for half a year, but agents are caught ${Math.round(INTEL.caughtChance * 100)}% of the time, and the victim won't forget.</p>
+      ${block(me, 'Your own weak points (half price)')}
+      ${nations.map((n) => block(n.id, n.name)).join('') || '<p class="muted">No rival nations to spy on.</p>'}`;
+  }
+
+  private intelReportHtml(r: IntelReport): string {
+    const w = this.world;
+    const age = (w.time - r.time) / 120;
+    const s = r.summary;
+    const rows = r.items.map((i) => {
+      const b = i.building ? w.getBuilding(i.building) : undefined;
+      const show = i.x !== undefined ? `<button class="mini" data-action="goto" data-arg="${i.x},${i.y}">Show</button>` : '';
+      const sab = !r.self && b ? (() => {
+        const why = sabotageProblem(w, this.game.humanPlayer, b);
+        return `<button class="mini ${why ? 'disabled' : 'danger'}" data-action="sabotage" data-arg="${b.id}" title="${esc(why ?? `Knock it out for half a year (₡${INTEL.sabotageCost})`)}">Sabotage</button>`;
+      })() : '';
+      return `<div class="advice sev${i.severity}"><div class="advice-head"><b>${esc(i.text)}</b>${show}${sab}</div><div class="muted">${r.self ? 'Fix' : 'Plan'}: ${esc(i.plan)}</div></div>`;
+    }).join('');
+    return `<div class="muted">${age < 0.1 ? 'Just now' : `${age.toFixed(1)} years ago`} · 👥 ${fmt(s.population)} · GDP ₡${fmt(s.gdp)} · ₡${fmt(s.credits)} (${s.net >= 0 ? '+' : ''}${fmt(s.net)}/yr) · ⚔ ${s.army} · ${Math.round(s.happiness * 100)}% happy</div>${rows || '<p class="muted">No weak points found.</p>'}`;
   }
 
   private placingHtml(type: PlaceType, problem: string | null, info: string): string {
@@ -963,6 +1048,8 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         return `${close}<h3>City-states</h3>${this.diplomacyHtml()}<p class="muted">War: troops that hold an enemy town hall or regional office for ${CAPTURE.seconds} seconds, with no defenders near, take its region. Garrisoned infantry defend a seat.</p>`;
       case 'ages':
         return close + this.agesHtml();
+      case 'intel':
+        return close + this.intelHtml();
       case 'budget': {
         const y = pc.year;
         const l = pc.lastYear;
@@ -986,7 +1073,8 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
           <button class="btn ${this.sound?.settings.sfx ? 'active' : ''}" data-action="sound" data-arg="sfx">🔊 Sound effects: ${this.sound?.settings.sfx ? 'on' : 'off'}</button>
           <button class="btn ${this.sound?.settings.music ? 'active' : ''}" data-action="sound" data-arg="music">🎵 Music: ${this.sound?.settings.music ? 'on' : 'off'}</button>
           <div class="vol-row">Volume <input type="range" min="0" max="100" value="${Math.round((this.sound?.settings.volume ?? 0.7) * 100)}" data-volume="1"></div></div>
-          <h3>Graphics</h3><div class="menu-col"><button class="btn ${this.dayNight ? 'active' : ''}" data-action="daynight">🌗 Day and night: ${this.dayNight ? 'on' : 'off'}</button>
+          <h3>Graphics</h3><div class="menu-col"><button class="btn ${this.advisorOn ? 'active' : ''}" data-action="advisor" title="Shows your top priorities and what to build next">🧭 Advisor: ${this.advisorOn ? 'on' : 'off'}</button>
+          <button class="btn ${this.dayNight ? 'active' : ''}" data-action="daynight">🌗 Day and night: ${this.dayNight ? 'on' : 'off'}</button>
           <button class="btn ${this.quality === 'high' ? 'active' : ''}" data-action="quality" title="Low: no textures or shadows, for slower devices">🎨 Quality: ${this.quality === 'high' ? 'high (textures, shadows)' : 'low (faster)'}</button></div>
           <p class="muted">The game also saves itself every game year. Saves stay in this browser.</p>`;
       case 'help':

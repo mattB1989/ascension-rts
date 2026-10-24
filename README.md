@@ -53,6 +53,14 @@ original **Twin Shores** skirmish.
   or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no
   defenders nearby and its region is yours; garrisoned infantry defend it. Lose every seat and
   the game is over.
+- **Advisor**: a card with your top three priorities right now (power shortage, food, water,
+  jobs, services, money, stalled construction, the next age, threats), each with the reason and a
+  button that picks the building to place; the starter checklist comes first. ☰ turns it off.
+- **Spies (🕵)**: buy a report on a rival nation (price grows with its size) to see its weak
+  points and how to hit them: the plant that makes most of its power, its only steel mill or
+  refinery, food or water from one or two buildings, undefended seats, its army and the
+  counter. With a recent report, sabotage a building (it stops for half a year; agents are
+  caught 35% of the time). A report on yourself costs half and lists what to fix.
 - **Treaties (E5)**: rival nations keep an opinion of you. Propose a non-aggression pact (no
   war while it lasts), a research pact (both research 25% faster) or a trade agreement (trade
   with their town hall by truck, as with a city-state). Breaking a pact costs trust, and peace

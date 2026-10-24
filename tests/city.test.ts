@@ -1057,3 +1057,43 @@ test('scenarios: set up as described, won when the goal is met, lost at the dead
   run(i, 1);
   assert.equal(i.city!.victory.scenarioDone, 'lost');
 });
+
+test('spies: reports find weak points, cost credits, and sabotage stops a building (and may be traced)', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { latestReport, reportPrice, INTEL } = await import('../src/sim/city/intel.ts');
+  const { opinionOf } = await import('../src/sim/city/treaties.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, difficulty: 'easy' });
+  const nation = world.players.find((p) => p.role === 'nation')!.id;
+  const me = world.city!.players[0]!;
+  me.credits = 50000;
+  // The rival's single power plant is its weak point.
+  const theirHall = world.buildings.find((b) => b.owner === nation && b.type === 'town_hall')!;
+  const plant = addCityBuilding(world, 'power_plant', nation, theirHall.tx + 7, theirHall.ty, true);
+  stockUp(plant, { oil: 40 });
+  run(world, 5);
+  const price = reportPrice(world, 0, nation);
+  world.step([{ kind: 'spyReport', player: 0, target: nation }]);
+  assert.ok(me.credits <= 50000 - price + 1, 'the report cost credits');
+  const r = latestReport(world, 0, nation)!;
+  assert.ok(r && r.items.length > 0, 'a report with findings');
+  assert.ok(r.items.some((i) => i.kind === 'defence' || i.kind === 'army'), 'it covers their defences');
+  // A report on yourself is cheaper.
+  assert.ok(reportPrice(world, 0, 0) < reportPrice(world, 0, nation) || reportPrice(world, 0, 0) <= INTEL.reportBase);
+  world.step([{ kind: 'spyReport', player: 0, target: 0 }]);
+  assert.ok(latestReport(world, 0, 0)!.self);
+  // Sabotage: needs the report, costs credits, stops the building for half a year.
+  const before = opinionOf(world, nation, 0);
+  world.step([{ kind: 'sabotage', player: 0, building: plant.id }]);
+  assert.ok((plant.city!.sabotagedUntil ?? 0) > world.time, 'knocked out');
+  run(world, 3);
+  assert.equal(plant.city!.powerOut, 0, 'makes no power while wrecked');
+  assert.match(plant.city!.status, /Sabotaged/);
+  assert.ok(opinionOf(world, nation, 0) <= before, 'never improves relations');
+  // Without a report on a nation, no sabotage.
+  const w2 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1, difficulty: 'easy' });
+  const n2 = w2.players.find((p) => p.role === 'nation')!.id;
+  w2.city!.players[0]!.credits = 50000;
+  const hall2 = w2.buildings.find((b) => b.owner === n2 && b.type === 'town_hall')!;
+  w2.step([{ kind: 'sabotage', player: 0, building: hall2.id }]);
+  assert.equal(hall2.city!.sabotagedUntil ?? 0, 0, 'no report, no sabotage');
+});

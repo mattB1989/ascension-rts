@@ -302,7 +302,7 @@ function coverage(world: World): void {
     const c = b.city;
     const sup = b.def.econ?.waterSupply;
     if (!c || !sup || !b.complete || !c.comp) continue;
-    const ok = c.workers > 0 && (!(b.def.econ!.power ?? 0) || c.powered);
+    const ok = c.workers > 0 && (!(b.def.econ!.power ?? 0) || c.powered) && (c.sabotagedUntil ?? 0) <= world.time;
     if (ok) waterLeft.set(c.comp * 64 + b.owner, (waterLeft.get(c.comp * 64 + b.owner) ?? 0) + sup * Math.min(1, c.workers / (b.def.econ!.jobs?.count ?? 1)));
   }
   const services = world.buildings.filter((b) => b.city && b.complete && b.def.econ?.service);
@@ -313,6 +313,10 @@ function coverage(world: World): void {
     c.status = '';
     if (c.access < 0) {
       c.status = 'No road';
+      continue;
+    }
+    if ((c.sabotagedUntil ?? 0) > world.time) {
+      c.status = 'Sabotaged: repairs under way';
       continue;
     }
     const staffed = !s.def.econ!.jobs || c.workers > 0;
@@ -389,6 +393,12 @@ function production(world: World): void {
     if (!b.complete) {
       c.efficiency = 0;
       c.status = constructionStatus(b, world);
+      continue;
+    }
+    if (b.type !== 'house' && (c.sabotagedUntil ?? 0) > world.time) {
+      c.efficiency = 0;
+      c.powerOut = 0;
+      c.status = `Sabotaged: repairs under way (${Math.ceil(((c.sabotagedUntil ?? 0) - world.time) / 12) / 10} years)`;
       continue;
     }
     if (e.research) {

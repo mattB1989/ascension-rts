@@ -20,6 +20,7 @@ import { canTrade, cancelTreaty, changeOpinion, hasEmbargo, hasTreaty, offerPeac
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 import { applyScenario, scenarioById } from './scenarios.ts';
+import { commissionReport, sabotage } from './intel.ts';
 
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
@@ -51,6 +52,9 @@ export type CityCommand =
   /** Propose a treaty to a nation (they accept or refuse at once), or end one. */
   | { kind: 'proposeTreaty'; player: number; target: number; treaty: TreatyKind }
   | { kind: 'cancelTreaty'; player: number; target: number; treaty: TreatyKind }
+  /** Buy a spy report on a nation (or on yourself), or sabotage one of its buildings. */
+  | { kind: 'spyReport'; player: number; target: number }
+  | { kind: 'sabotage'; player: number; building: number }
   /** Place (or lift) an embargo on a nation. */
   | { kind: 'embargo'; player: number; target: number; on: boolean }
   /** Reach the next age (all requirements met). */
@@ -202,6 +206,12 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       break;
     case 'embargo':
       say(setEmbargo(world, c.player, c.target, c.on));
+      break;
+    case 'spyReport':
+      say(commissionReport(world, c.player, c.target));
+      break;
+    case 'sabotage':
+      say(sabotage(world, c.player, c.building));
       break;
     case 'advanceAge':
       say(advanceAge(world, c.player));

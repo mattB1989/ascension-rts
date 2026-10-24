@@ -53,6 +53,11 @@ original **Twin Shores** skirmish.
   or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no
   defenders nearby and its region is yours; garrisoned infantry defend it. Lose every seat and
   the game is over.
+- **Gradual unlocks** (on by default; "Everything" in the start menu turns them off): a new
+  town starts with roads, cottages, farms, fishing, logging and wells; each step opens the next
+  (a logging camp → the sawmill, people → the market, a market → police and warehouses, oil →
+  power, and power → iron mines, steel and refineries: better mines need the grid). The build bar
+  shows what is open plus the next two to come, and each unlock is announced.
 - **Advisor**: a card with your top three priorities right now (power shortage, food, water,
   jobs, services, money, stalled construction, the next age, threats), each with the reason and a
   button that picks the building to place; the starter checklist comes first. ☰ turns it off.

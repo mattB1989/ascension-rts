@@ -106,7 +106,18 @@ export function showMenu(root: HTMLElement): void {
     });
     vic.appendChild(b);
   }
-  card.append(el('div', 'menu-label', 'Game'), vic);
+  let gradual = true;
+  const grad = el('div', 'seg');
+  for (const [label, v, hint] of [['Gradual', true, 'buildings unlock as you grow'], ['Everything', false, 'all Modern buildings at once']] as const) {
+    const b = el('button', `btn ${v === gradual ? 'active' : ''}`, `${label} <small>${hint}</small>`);
+    b.addEventListener('click', () => {
+      gradual = v;
+      for (const c of grad.children) c.classList.remove('active');
+      b.classList.add('active');
+    });
+    grad.appendChild(b);
+  }
+  card.append(el('div', 'menu-label', 'Game'), vic, grad);
 
   const seedRow = el('div', 'menu-row');
   const seed = el('input', 'seed') as HTMLInputElement;
@@ -114,7 +125,7 @@ export function showMenu(root: HTMLElement): void {
   seed.value = String(1 + Math.floor(Math.random() * 99999));
   seed.title = 'Map seed: the same seed gives the same map';
   const start = el('button', 'btn primary', 'Found the nation →');
-  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}), ...(victory ? {} : { victory: 0 }) }));
+  start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}), ...(victory ? {} : { victory: 0 }), ...(gradual ? {} : { gradual: 0 }) }));
   seedRow.append(el('span', 'menu-label', 'Seed'), seed, start);
   card.appendChild(seedRow);
 

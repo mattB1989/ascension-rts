@@ -300,8 +300,8 @@ function main(): void {
       const [seed, size, biome, difficulty, rivals, scenario] = rest;
       const sc = scenarioById(scenario);
       const world = sc
-        ? createCity({ ...sc.setup, scenario: sc.id })
-        : createCity({ seed: Number(seed ?? 7), size: Number(size ?? 256), biome: (biome ?? 'temperate') as GenBiome, difficulty: (difficulty ?? 'normal') as 'normal', nations: rivals !== undefined ? Number(rivals) : undefined });
+        ? createCity({ ...sc.setup, scenario: sc.id, gradual: true })
+        : createCity({ seed: Number(seed ?? 7), size: Number(size ?? 256), biome: (biome ?? 'temperate') as GenBiome, difficulty: (difficulty ?? 'normal') as 'normal', nations: rivals !== undefined ? Number(rivals) : undefined, gradual: true });
       const news = step(world);
       store(world, news);
       console.log(`New game on ${world.map.name} (${world.map.width}x${world.map.height}). You are ${world.players[ME]!.name}.\n`);

@@ -11,6 +11,7 @@ import { findAccess } from './roads.ts';
 import { railAccess } from './rail.ts';
 import { dockTile } from './trade.ts';
 import { add, newCityBuilding } from './state.ts';
+import { unlockProblem } from './unlocks.ts';
 
 const FERTILITY: Partial<Record<TerrainId, number>> = {
   [Terrain.Fertile]: 1,
@@ -153,6 +154,8 @@ export function cityBuildProblem(world: World, player: number, type: BuildingTyp
   if (def.mode === 'skirmish' || !def.econ) return 'Not available';
   const age = AGES[def.age].index;
   if (age > world.city!.players[player]!.age) return `Needs the ${AGES[def.age].name}`;
+  const locked = unlockProblem(world, player, type);
+  if (locked) return locked;
   if (def.limit !== undefined && world.buildings.filter((b) => b.owner === player && b.type === type).length >= def.limit) return `Limit ${def.limit}`;
   if (world.city!.players[player]!.credits < def.econ.credits) return 'Not enough credits';
   return null;

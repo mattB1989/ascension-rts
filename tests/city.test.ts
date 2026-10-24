@@ -1097,3 +1097,28 @@ test('spies: reports find weak points, cost credits, and sabotage stops a buildi
   w2.step([{ kind: 'sabotage', player: 0, building: hall2.id }]);
   assert.equal(hall2.city!.sabotagedUntil ?? 0, 0, 'no report, no sabotage');
 });
+
+test('gradual unlocks: buildings open up as the town grows, and each is announced once', async () => {
+  const { cityBuildProblem } = await import('../src/sim/city/place.ts');
+  const { addCityBuilding } = await import('../src/sim/city/place.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0, gradual: true });
+  const pc = world.city!.players[0]!;
+  assert.ok(pc.gradual);
+  assert.equal(cityBuildProblem(world, 0, 'farm'), null, 'farms from the start');
+  assert.equal(cityBuildProblem(world, 0, 'logging_camp'), null);
+  assert.match(cityBuildProblem(world, 0, 'sawmill') ?? '', /logging camp/);
+  assert.match(cityBuildProblem(world, 0, 'iron_mine') ?? '', /power plant/, 'better mines need the grid');
+  // A logging camp opens the sawmill.
+  const hall = world.buildings[0]!;
+  addCityBuilding(world, 'logging_camp', 0, hall.tx + 8, hall.ty, true);
+  const events: string[] = [];
+  for (let i = 0; i < 30; i++) {
+    world.step();
+    for (const e of world.events) if (e.kind === 'notify' && e.text.startsWith('🔓')) events.push(e.text);
+  }
+  assert.equal(cityBuildProblem(world, 0, 'sawmill'), null);
+  assert.equal(events.filter((t) => t.includes('Sawmill')).length, 1, 'announced once');
+  // Without the option, everything Modern is open (AI nations and older games).
+  const open = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  assert.equal(cityBuildProblem(open, 0, 'iron_mine'), null);
+});

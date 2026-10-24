@@ -81,8 +81,8 @@ async function boot(): Promise<void> {
     const rivals = params.has('rivals') ? Math.max(0, Math.min(3, Number(params.get('rivals')))) : undefined;
     const scenario = scenarioById(params.get('scenario') ?? undefined);
     world = scenario
-      ? createCity({ ...scenario.setup, scenario: scenario.id, spectate: params.get('spectate') === '1' })
-      : createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0', spectate: params.get('spectate') === '1' });
+      ? createCity({ ...scenario.setup, scenario: scenario.id, spectate: params.get('spectate') === '1', gradual: params.get('gradual') !== '0' })
+      : createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0', spectate: params.get('spectate') === '1', gradual: params.get('gradual') !== '0' });
     l.remove();
   } else if (mode === 'models') {
     const { showGallery } = await import('./render/gallery.ts');

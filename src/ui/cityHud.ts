@@ -12,6 +12,7 @@ import { canTrade, EMBARGO, hasEmbargo, honouredEmbargo, opinionOf, peaceProblem
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import { scenarioById } from '../sim/city/scenarios.ts';
 import { advise, type Advice } from './advisor.ts';
+import { unlockProblem } from '../sim/city/unlocks.ts';
 import { INTEL, latestReport, reportPrice, reportProblem, sabotageProblem, type IntelReport } from '../sim/city/intel.ts';
 import type { Sound } from './sound.ts';
 import { PERSONALITIES } from '../ai/cityBot.ts';
@@ -252,7 +253,7 @@ export class CityHud {
       case 'build': {
         const lock = this.ageLock(arg);
         if (lock) {
-          this.toast(`${lock}: see 🔬 Ages`);
+          this.toast(lock.startsWith('Needs the') ? `${lock}: see 🔬 Ages` : `🔒 ${lock}`);
           break;
         }
         this.selection.clear();
@@ -561,7 +562,17 @@ export class CityHud {
   private renderPalette(): void {
     const tabs = CITY_PALETTE.map((t, i) => `<button class="pal-tab ${i === this.tab ? 'on' : ''}" data-action="tab" data-arg="${i}" title="${t.tab}">${t.icon}<span>${t.tab}</span></button>`).join('');
     const tab = CITY_PALETTE[this.tab]!;
-    const items = tab.items.map((id) => {
+    // Gradual unlocks: show what is open plus the next two to come, not the whole catalogue.
+    const gradual = !!this.world.city!.players[this.game.humanPlayer]!.gradual;
+    let lockedShown = 0;
+    const visible = tab.items.filter((id) => {
+      if (!gradual || id === 'road' || id === 'maglev') return true;
+      const lock = this.ageLock(id);
+      if (!lock) return true;
+      if (lock.startsWith('Needs the')) return false;
+      return lockedShown++ < 2;
+    });
+    const items = visible.map((id) => {
       if (id === 'road') {
         return `<button class="cmd pal-item" data-action="build" data-arg="road" data-id="road"><span class="cmd-name">🛣 Road</span><span class="cmd-cost">₡${ROAD.cost}/tile · R</span></button>`
           + `<button class="cmd pal-item" data-action="build" data-arg="bulldoze" data-id="bulldoze"><span class="cmd-name">🚜 Bulldozer</span><span class="cmd-cost">B</span></button>`;
@@ -571,18 +582,22 @@ export class CityHud {
         return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="maglev" data-id="maglev" title="Nano age: lay over track (or new) for trains ${RAIL.maglevSpeed}× as fast"><span class="cmd-name">🚄 Maglev</span><span class="cmd-cost">${lock ? '🔒 Nano Age' : `₡${RAIL.maglevCost}/tile`}</span></button>`;
       }
       if (id === 'pipe') {
-        return `<button class="cmd pal-item" data-action="build" data-arg="pipe" data-id="pipe" title="Oil and fuel flow along pipelines from wells and refineries to the buildings that use them, no trucks needed"><span class="cmd-name">🛢 Pipeline</span><span class="cmd-cost">₡${PIPE.cost}/tile</span></button>`;
+        const lock = this.ageLock('pipe');
+        return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="pipe" data-id="pipe" title="${esc(lock ?? 'Oil and fuel flow along pipelines from wells and refineries to the buildings that use them, no trucks needed')}"><span class="cmd-name">🛢 Pipeline</span><span class="cmd-cost">${lock ? '🔒 locked' : `₡${PIPE.cost}/tile`}</span></button>`;
       }
       if (id === 'rail') {
-        return `<button class="cmd pal-item" data-action="build" data-arg="rail" data-id="rail" title="Trains carry 60 units fast between Rail Stations (Logistics) on the same line"><span class="cmd-name">🚆 Railway</span><span class="cmd-cost">₡${RAIL.cost}/tile</span></button>`;
+        const lock = this.ageLock('rail');
+        return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="rail" data-id="rail" title="${esc(lock ?? 'Trains carry 60 units fast between Rail Stations (Logistics) on the same line')}"><span class="cmd-name">🚆 Railway</span><span class="cmd-cost">${lock ? '🔒 locked' : `₡${RAIL.cost}/tile`}</span></button>`;
       }
       const def = buildingDef(id as BuildingTypeId);
       const mats = materialsText(id as BuildingTypeId);
       const lock = this.ageLock(id);
-      return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="${id}" data-id="${id}" title="${esc(def.description)}"><span class="cmd-name">${esc(def.name)}</span><span class="cmd-cost">${lock ? `🔒 ${esc(AGES[def.age].name)}` : `₡${def.econ?.credits ?? 0}${mats ? ` ${mats}` : ''}`}</span></button>`;
+      const lockLabel = lock?.startsWith('Needs the') ? `🔒 ${esc(AGES[def.age].name)}` : lock ? `🔒 ${esc(lock.replace('Unlocks with ', ''))}` : '';
+      return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="${id}" data-id="${id}" title="${esc(lock ? `${lock}. ${def.description}` : def.description)}"><span class="cmd-name">${esc(def.name)}</span><span class="cmd-cost">${lock ? lockLabel : `₡${def.econ?.credits ?? 0}${mats ? ` ${mats}` : ''}`}</span></button>`;
     }).join('');
     const html = `<div class="pal-tabs">${tabs}</div><div class="cmd-grid pal-items">${items}</div>`;
     this.paletteAge = this.world.city!.players[this.game.humanPlayer]!.age;
+    this.paletteUnlocks = this.world.city!.players[this.game.humanPlayer]!.unlocked?.length ?? 0;
     if (html !== this.lastPalette) {
       this.lastPalette = html;
       this.palette.innerHTML = html;
@@ -591,17 +606,21 @@ export class CityHud {
   }
 
   /** Why a building is locked for now (a later age), or null. */
+  private paletteUnlocks = 0;
+
   private ageLock(id: string): string | null {
     if (id === 'maglev') return this.world.city!.players[this.game.humanPlayer]!.age < 2 ? 'Needs the Nano Age' : null;
-    if (id === 'road' || id === 'rail' || id === 'pipe' || id === 'bulldoze') return null;
+    if (id === 'road' || id === 'bulldoze') return null;
+    if (id === 'rail' || id === 'pipe') return unlockProblem(this.world, this.game.humanPlayer, id);
     const def = buildingDef(id as BuildingTypeId);
-    return AGES[def.age].index > this.world.city!.players[this.game.humanPlayer]!.age ? `Needs the ${AGES[def.age].name}` : null;
+    if (AGES[def.age].index > this.world.city!.players[this.game.humanPlayer]!.age) return `Needs the ${AGES[def.age].name}`;
+    return unlockProblem(this.world, this.game.humanPlayer, id);
   }
 
   /** Grey out what can't be afforded; highlight the active tool. */
   private renderPaletteState(): void {
     const pcNow = this.world.city!.players[this.game.humanPlayer]!;
-    if (pcNow.age !== this.paletteAge) this.renderPalette();
+    if (pcNow.age !== this.paletteAge || (pcNow.unlocked?.length ?? 0) !== this.paletteUnlocks) this.renderPalette();
     const credits = pcNow.credits;
     const active = this.input.placing?.type;
     for (const b of this.palette.querySelectorAll<HTMLElement>('.pal-item')) {
@@ -680,7 +699,8 @@ export class CityHud {
 
   private adviceHtml(a: Advice): string {
     const act = a.action;
-    const btn = !act ? '' : act.kind === 'build' ? `<button class="mini" data-action="build" data-arg="${act.type}">${esc(a.label ?? 'Build')}</button>`
+    const locked = act?.kind === 'build' ? this.ageLock(act.type) : null;
+    const btn = !act ? '' : act.kind === 'build' ? `<button class="mini ${locked ? 'disabled' : ''}" data-action="build" data-arg="${act.type}" title="${esc(locked ?? '')}">${esc(locked ? '🔒 ' + (a.label ?? 'Build') : a.label ?? 'Build')}</button>`
       : act.kind === 'panel' ? `<button class="mini" data-action="panel" data-arg="${act.panel}">${esc(a.label ?? 'Open')}</button>`
       : `<button class="mini" data-action="goto" data-arg="${act.x},${act.y}">${esc(a.label ?? 'Show')}</button>`;
     return `<div class="advice sev${a.severity}"><div class="advice-head"><span>${a.icon}</span><b>${esc(a.text)}</b>${btn}</div><div class="muted">${esc(a.why)}</div></div>`;

@@ -156,6 +156,9 @@ export interface PlayerCity {
   /** Power across all networks (MW). */
   powerSupply: number;
   powerDemand: number;
+  /** Gradual unlocks on (see unlocks.ts), and what has opened up so far. */
+  gradual?: boolean;
+  unlocked?: string[];
   /** Demand above supply at the last check (for the warning). */
   powerShort?: boolean;
   /** Goods made and used in the last 60 game seconds, per good (UI table). */

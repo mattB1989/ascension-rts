@@ -21,6 +21,7 @@ import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 import { applyScenario, scenarioById } from './scenarios.ts';
 import { commissionReport, sabotage } from './intel.ts';
+import { unlockProblem } from './unlocks.ts';
 
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
@@ -77,11 +78,19 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       removePipes(world, c.player, c.tiles.slice(0, 2000));
       break;
     case 'pipe': {
+      if (unlockProblem(world, c.player, 'pipe')) {
+        say(`Pipelines: ${unlockProblem(world, c.player, 'pipe')!.toLowerCase()}`);
+        break;
+      }
       const r = placePipes(world, c.player, c.tiles.slice(0, 2000));
       if (r.problem && r.built < c.tiles.length) say(r.built ? `Pipeline stopped: ${r.problem.toLowerCase()}` : `Can't lay a pipeline: ${r.problem.toLowerCase()}`);
       break;
     }
     case 'rail': {
+      if (unlockProblem(world, c.player, 'rail')) {
+        say(`Railways: ${unlockProblem(world, c.player, 'rail')!.toLowerCase()}`);
+        break;
+      }
       const r = placeRails(world, c.player, c.tiles.slice(0, 2000), !!c.maglev);
       if (r.problem && r.built < c.tiles.length) say(r.built ? `Railway stopped: ${r.problem.toLowerCase()}` : `Can't lay a railway: ${r.problem.toLowerCase()}`);
       break;
@@ -242,6 +251,8 @@ export interface CityOptions {
   victory?: boolean;
   /** Spectator: an AI nation plays your seat too. */
   spectate?: boolean;
+  /** Gradual unlocks for your seat: buildings open up as the town grows (see unlocks.ts). */
+  gradual?: boolean;
   /** A scenario (see scenarios.ts): its starting situation and goal. */
   scenario?: string;
 }
@@ -256,6 +267,7 @@ export function createCity(opts: CityOptions): World {
   const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + nations + states });
   const world = startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
   world.city!.victory.on = opts.victory ?? true;
+  if (opts.gradual && !opts.spectate) world.city!.players[0]!.gradual = true;
   const scenario = scenarioById(opts.scenario);
   if (scenario) applyScenario(world, scenario);
   if (opts.spectate) {

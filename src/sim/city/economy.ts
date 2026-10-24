@@ -14,6 +14,7 @@ import { RAIL, railsByOwner, updateRail } from './rail.ts';
 import { PIPE, pipesByOwner, updatePipes } from './pipes.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock } from './state.ts';
+import { updateUnlocks } from './unlocks.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
 import { updateMilitary } from './military.ts';
@@ -178,6 +179,7 @@ function everySecond(world: World): void {
     }
   }
   updateVictory(world, sec);
+  updateUnlocks(world);
 }
 
 function sumLog(log: Stock[]): Stock {

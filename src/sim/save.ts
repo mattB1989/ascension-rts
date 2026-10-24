@@ -76,6 +76,15 @@ function migrate(w: World): void {
   city.victory ??= newVictoryState(w.players.length);
   city.warStart ??= w.players.map(() => w.players.map(() => 0));
   city.treaties ??= [];
+  if (!city.rail) {
+    city.rail = new Uint8Array(n);
+    city.railComp = new Int32Array(n);
+    city.railCount = 0;
+    city.railVersion = 1;
+    city.railCompVersion = 0;
+    city.trains = [];
+    city.nextTrainId = 1;
+  }
   w.players.forEach((p, i) => {
     if (p.role === 'nation') city.players[i]!.relations ??= newRelations(w.players.length);
   });

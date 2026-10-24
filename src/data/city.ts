@@ -41,6 +41,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 600, materials: { lumber: 30, concrete: 10 }, upkeep: 80, jobs: { tier: 0, count: 6 }, storage: 400, trucks: 3 },
     description: 'Takes in what producers make and sends it on to whoever needs it. Three trucks.',
   },
+  rail_station: {
+    ...common, id: 'rail_station', name: 'Rail Station', category: 'logistics', requires: [], buildTime: 35, hp: 1500, size: [4, 2],
+    placement: 'land', vision: 6,
+    econ: { credits: 2000, materials: { lumber: 20, concrete: 20, steel: 20 }, upkeep: 160, jobs: { tier: 0, count: 6 }, storage: 300, trucks: 3, trains: 1 },
+    description: 'A warehouse on the railway: its train carries 60 units at a time, fast, to other stations on the same line whose surroundings need them. Trucks bring it what the other stations want. Must touch a railway and a road.',
+  },
   trade_port: {
     ...common, id: 'trade_port', name: 'Trade Port', category: 'logistics', requires: [], buildTime: 40, hp: 2000, size: [4, 3],
     placement: 'coast', vision: 8,
@@ -285,11 +291,11 @@ export type HouseNeed = (typeof HOUSE_LEVELS)[number]['needs'][number];
 
 /** Order of the build palette in the economy game. */
 export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }> = [
-  { tab: 'Roads', icon: '🛣', items: ['road'] },
+  { tab: 'Roads', icon: '🛣', items: ['road', 'rail'] },
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well', 'rare_earth_mine', 'uranium_mine'] },
   { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant', 'launch_site'] },
-  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
+  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
   { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret'] },

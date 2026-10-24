@@ -668,7 +668,7 @@ export class InputController {
   }
 
   private snap(type: PlaceType, x: number, y: number): [number, number] {
-    if (type === 'road' || type === 'bulldoze') return [Math.floor(x), Math.floor(y)];
+    if (type === 'road' || type === 'rail' || type === 'bulldoze') return [Math.floor(x), Math.floor(y)];
     return this.city ? footprintAt(type, x, y) : snapFootprint(this.game.world, type, x, y);
   }
 
@@ -715,11 +715,11 @@ export class InputController {
   private updateCityGhost(pl: PlacingState): void {
     const world = this.game.world;
     const me = this.game.humanPlayer;
-    if (pl.start || (pl.type === 'road' || pl.type === 'bulldoze')) {
+    if (pl.start || (pl.type === 'road' || pl.type === 'rail' || pl.type === 'bulldoze')) {
       const tiles = pl.start ? pl.tiles : [[pl.tx, pl.ty] as [number, number]];
       const pv = previewLine(world, me, pl.type, tiles);
       pl.problem = pv.problem;
-      if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = pl.type === 'road' ? 'Tap where the road starts, then where it ends' : 'Tap the map';
+      if (!pl.problem && this.touchDevice && !pl.positioned) pl.problem = pl.type === 'road' || pl.type === 'rail' ? `Tap where the ${pl.type === 'rail' ? 'railway' : 'road'} starts, then where it ends` : 'Tap the map';
       pl.valid = pl.problem === null;
       this.lineInfo = pv.info;
       this.renderer.ghost.showLine(pv.tiles, pv.ok);
@@ -751,7 +751,7 @@ export class InputController {
         return;
       }
       const tiles = pl.start ? pl.tiles : [[pl.tx, pl.ty] as [number, number]];
-      if (this.isLine(pl.type) && (pl.start || pl.type === 'road' || pl.type === 'bulldoze')) {
+      if (this.isLine(pl.type) && (pl.start || pl.type === 'road' || pl.type === 'rail' || pl.type === 'bulldoze')) {
         // A house "line" of one tile is a single house at the footprint under the pointer.
         if (pl.type === 'house' && tiles.length === 1) this.game.issue({ kind: 'place', player: this.game.humanPlayer, building: 'house', tx: pl.tx, ty: pl.ty });
         else confirmLine(this.game, pl.type, tiles);

@@ -171,12 +171,20 @@ export function removeRoads(world: World, player: number, tiles: ReadonlyArray<r
   return n;
 }
 
-/** Label connected road networks (if roads changed since the last time). */
+/** Label connected road networks (if roads changed since the last time), and rail networks. */
 export function updateComponents(city: CityState, map: GameMap): void {
+  if (city.rail && city.railCompVersion !== city.railVersion) {
+    city.railCompVersion = city.railVersion;
+    label(city.rail, city.railComp, map);
+  }
   if (city.compVersion === city.roadVersion) return;
   city.compVersion = city.roadVersion;
+  label(city.road, city.comp, map);
+}
+
+function label(grid: Uint8Array, comp: Int32Array, map: GameMap): void {
+  const city = { road: grid };
   const { width: w, height: h } = map;
-  const comp = city.comp;
   comp.fill(0);
   let next = 1;
   const queue = scratch(map).queue;
@@ -257,9 +265,9 @@ function scratch(map: GameMap): Scratch {
  * Visit road tiles outward from `start` (nearest first, up to `maxDist`). `visit`
  * returns true to stop. Returns the tile it stopped on, or -1.
  */
-export function searchRoads(world: World, start: number, maxDist: number, visit: (tile: number, dist: number) => boolean): number {
+export function searchRoads(world: World, start: number, maxDist: number, visit: (tile: number, dist: number) => boolean, grid?: Uint8Array): number {
   const map = world.map;
-  const road = world.city!.road;
+  const road = grid ?? world.city!.road;
   const s = scratch(map);
   s.run++;
   const { queue, parent, dist, stamp } = s;

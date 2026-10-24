@@ -16,6 +16,7 @@ import { add, automatable, get, type Stock, type Truck } from './state.ts';
 import { exportDemand } from './trade.ts';
 import { dealFor, marketOf, settle, stateOffers, stateWants, theyCharge, theyPay } from './diplomacy.ts';
 import { canTrade } from './treaties.ts';
+import { RAIL, stationDemand } from './rail.ts';
 
 /** Inputs a factory keeps on hand: this many production cycles. */
 const INPUT_CYCLES = 4;
@@ -40,6 +41,7 @@ export function demandFor(b: Building, g: GoodId, world?: World): number {
   const e = b.def.econ;
   if (!c || !e) return 0;
   if (b.type === 'trade_port' && b.complete) return world ? exportDemand(world, b, g) : 0;
+  if (b.type === 'rail_station' && b.complete) return world ? stationDemand(world, b, g) : 0;
   const incoming = get(c.incoming, g);
   if (!b.complete) {
     if (b.type === 'house') return 0;
@@ -113,7 +115,9 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
   let fallback: Building | null = null;
   let fallbackGood: GoodId | null = null;
   let fallbackTile = -1;
-  const end = searchRoads(world, c.access, TRADE_TRIP, (tile) => {
+  // Stations hand out locally; trains do the long haul.
+  const reach = src.type === 'rail_station' ? RAIL.reach : TRADE_TRIP;
+  const end = searchRoads(world, c.access, reach, (tile) => {
     const list = idx.get(tile);
     if (!list) return false;
     for (const b of list) {

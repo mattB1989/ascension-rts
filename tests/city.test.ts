@@ -579,3 +579,48 @@ test('treaties: nations sign when they like you, pacts bind, and peace must be a
   world.step([{ kind: 'makePeace', player: 0, target: nation }]);
   assert.equal(atWar(world, 0, nation), false, 'peace after a long war');
 });
+
+test('railways: stations on a line, and trains carry goods to where they are wanted', async () => {
+  const { addCityBuilding, stockUp, cityPlacementProblem: problem } = await import('../src/sim/city/place.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const city = world.city!;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 6;
+  const street: Array<[number, number]> = [];
+  const track: Array<[number, number]> = [];
+  for (let x = hall.tx - 34; x <= hall.tx + 34; x++) {
+    street.push([x, row]);
+    track.push([x, row + 3]);
+  }
+  world.step([{ kind: 'road', player: 0, tiles: street }, { kind: 'rail', player: 0, tiles: track }]);
+  assert.ok(city.railCount > 40, `rails laid (${city.railCount})`);
+  // A station must touch the line.
+  const spot = (x0: number): [number, number] => {
+    for (let d = 0; d < 20; d++) for (const x of [x0 + d, x0 - d]) if (problem(world, 0, 'rail_station', x, row + 1) === null) return [x, row + 1];
+    throw new Error('no station spot');
+  };
+  assert.match(problem(world, 0, 'rail_station', hall.tx - 14, row - 2) ?? '', /railway/);
+  const [ax, ay] = spot(hall.tx - 28);
+  const [bx, by] = spot(hall.tx + 26);
+  const a = addCityBuilding(world, 'rail_station', 0, ax, ay, true);
+  const b = addCityBuilding(world, 'rail_station', 0, bx, by, true);
+  // Workers for both stations, and a sawmill by station B that needs timber.
+  for (const x of [hall.tx - 20, hall.tx + 18]) {
+    const [hx, hy] = spotOnStreet(world, 'house', x, row);
+    addCityBuilding(world, 'house', 0, hx, hy, true).city!.residents = 16;
+  }
+  let mx = bx;
+  while (problem(world, 0, 'sawmill', mx, row - 3) !== null && mx < bx + 10) mx++;
+  const mill = addCityBuilding(world, 'sawmill', 0, mx, row - 3, true);
+  stockUp(a, { timber: 100 });
+  let trains = 0;
+  for (let i = 0; i < 40 * 15; i++) {
+    world.step();
+    trains = Math.max(trains, city.trains.length);
+  }
+  assert.ok(trains > 0, 'a train ran');
+  assert.ok((b.city!.stock.timber ?? 0) + (mill.city!.stock.timber ?? 0) + (world.city!.players[0]!.made.lumber ?? 0) > 0, 'timber reached the far end');
+  // Taking up the track stops trains.
+  world.step([{ kind: 'unroad', player: 0, tiles: track }]);
+  assert.equal(city.railCount, 0);
+});

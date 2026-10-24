@@ -162,6 +162,20 @@ function warehouse(team: number): THREE.Group {
   return g;
 }
 
+function railStation(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 2, paving());
+  // Brick station house with a clock, and a canopy over the platform side.
+  g.add(box(1.6, 0.8, 0.9, brick(), -0.8, 0.52, -0.3));
+  g.add(gable(1.7, 1.0, 0.92, 0.35, roofGrey(), -0.8, -0.3));
+  windowRow(g, 3, 1.1, 0.55, 'x', 0.16);
+  g.add(cyl(0.12, 0.12, 0.04, 12, white(), -0.8, 1.05, 0.17).rotateX(Math.PI / 2));
+  g.add(box(2.0, 0.05, 0.7, t.main, 0.9, 0.9, 0.45));
+  for (const x of [0.1, 0.9, 1.7]) g.add(cyl(0.03, 0.03, 0.8, 6, darkMetal(), x, 0.5, 0.65));
+  crates(g, 0.4, -0.5, 4, 0x8a7a6a);
+  return g;
+}
+
 function tradePort(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(4, 3, mat(0x8c8a84, { rough: 1 }));
@@ -970,6 +984,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'warehouse': return warehouse(team);
     case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
+    case 'rail_station': return railStation(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team);
     case 'rare_earth_mine': return rareEarthMine(team);
     case 'uranium_mine': return uraniumMine(team);

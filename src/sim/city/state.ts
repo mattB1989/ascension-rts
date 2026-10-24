@@ -10,6 +10,7 @@ import type { Command } from '../commands.ts';
 import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
 import type { Treaty } from './treaties.ts';
+import type { Train } from './rail.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
 
@@ -63,6 +64,10 @@ export interface CityBuildingState {
   /** Seats (town hall, regional office): capture progress 0..1 and by whom (-1: nobody). */
   capture: number;
   captureBy: number;
+  /** Rail stations: rail tile they are reached from (-1: none), what the area around them is short of, trains away. */
+  rail?: number;
+  wants?: Stock;
+  trainsOut?: number;
 }
 
 export interface Truck {
@@ -168,6 +173,14 @@ export interface CityState {
   /** Road condition per tile, 1 new to 0 ruined. */
   condition: Float32Array;
   roadCount: number;
+  /** Railway per tile (0 none, 1 track), network ids, and trains running. */
+  rail: Uint8Array;
+  railComp: Int32Array;
+  railCount: number;
+  railVersion: number;
+  railCompVersion: number;
+  trains: Train[];
+  nextTrainId: number;
   /** Road network id per road tile (0: none). Recomputed when roads change. */
   comp: Int32Array;
   /** Bumped on every road change; buildings refresh their road access when it moves. */
@@ -268,6 +281,13 @@ export function createCityState(width: number, height: number, regions: number, 
     condition: new Float32Array(width * height),
     roadCount: 0,
     comp: new Int32Array(width * height),
+    rail: new Uint8Array(width * height),
+    railComp: new Int32Array(width * height),
+    railCount: 0,
+    railVersion: 1,
+    railCompVersion: 0,
+    trains: [],
+    nextTrainId: 1,
     roadVersion: 1,
     compVersion: 0,
     regionOwner: new Int8Array(regions + 1).fill(-1),

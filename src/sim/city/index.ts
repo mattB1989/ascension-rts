@@ -14,6 +14,7 @@ import { createCityState } from './state.ts';
 import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } from './diplomacy.ts';
 import { atWar, recruit, setWar } from './military.ts';
 import { advanceAge } from './ages.ts';
+import { placeRails, removeRails } from './rail.ts';
 import { canTrade, cancelTreaty, changeOpinion, hasTreaty, offerPeace, proposeTreaty, type TreatyKind } from './treaties.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
@@ -21,7 +22,9 @@ import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
   | { kind: 'road'; player: number; tiles: Array<[number, number]> }
-  /** Remove roads from these tiles. */
+  /** Lay railway along these tiles. */
+  | { kind: 'rail'; player: number; tiles: Array<[number, number]> }
+  /** Remove roads (and railways) from these tiles. */
   | { kind: 'unroad'; player: number; tiles: Array<[number, number]> }
   /** Place a building (economy game). */
   | { kind: 'place'; player: number; building: BuildingTypeId; tx: number; ty: number }
@@ -60,7 +63,13 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     }
     case 'unroad':
       removeRoads(world, c.player, c.tiles.slice(0, 2000));
+      removeRails(world, c.player, c.tiles.slice(0, 2000));
       break;
+    case 'rail': {
+      const r = placeRails(world, c.player, c.tiles.slice(0, 2000));
+      if (r.problem && r.built < c.tiles.length) say(r.built ? `Railway stopped: ${r.problem.toLowerCase()}` : `Can't lay a railway: ${r.problem.toLowerCase()}`);
+      break;
+    }
     case 'place': {
       const r = placeCityBuilding(world, c.player, c.building, c.tx, c.ty);
       if (typeof r === 'string') say(`Can't build: ${r.toLowerCase()}`);

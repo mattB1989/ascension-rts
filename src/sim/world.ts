@@ -395,6 +395,7 @@ export class World {
   private apply(c: Command): void {
     switch (c.kind) {
       case 'road':
+      case 'rail':
       case 'unroad':
       case 'place':
       case 'placeMany':

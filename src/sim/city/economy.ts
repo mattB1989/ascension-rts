@@ -9,7 +9,8 @@ import type { ServiceKind } from '../../data/types.ts';
 import { DT } from '../time.ts';
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
-import { accessIndex, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
+import { accessIndex, demandFor, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
+import { RAIL, railsByOwner, updateRail } from './rail.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock } from './state.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
@@ -53,6 +54,7 @@ export function updateCity(world: World): void {
   construction(world);
   if (world.tick % SECOND === 0) everySecond(world);
   dispatch(world, cachedIndex(world));
+  updateRail(world, cachedIndex(world), (b, g) => demandFor(b, g, world));
   for (const bot of city.bots) {
     if (!world.players[bot.player]) continue;
     city.aiQueue.push(...botStep(world, bot));
@@ -582,6 +584,13 @@ function budget(world: World): void {
     const pc = city.players[p];
     if (!pc || !n) return;
     const cost = (n * ROAD.upkeepPerYear) / YEAR_SECONDS;
+    pc.credits -= cost;
+    pc.year.roads += cost;
+  });
+  railsByOwner(world).forEach((n, p) => {
+    const pc = city.players[p];
+    if (!pc || !n) return;
+    const cost = (n * RAIL.upkeepPerYear) / YEAR_SECONDS;
     pc.credits -= cost;
     pc.year.roads += cost;
   });

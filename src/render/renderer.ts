@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { surfaceHeight } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import { CameraRig } from './camera.ts';
-import { OverlayMarks, RegionBorders, RoadsView, ShipsView, TrucksView } from './cityView.ts';
+import { OverlayMarks, RailsView, RegionBorders, RoadsView, ShipsView, TrainsView, TrucksView } from './cityView.ts';
 import { Effects } from './effects.ts';
 import { BuildingsView } from './buildingsView.ts';
 import { applyFowTree, initFog, initOverlay, updateFogTexture } from './fog.ts';
@@ -29,6 +29,8 @@ export class GameRenderer {
   /** Economy game only. */
   readonly roads: RoadsView | null = null;
   readonly trucks: TrucksView | null = null;
+  readonly rails: RailsView | null = null;
+  readonly trains: TrainsView | null = null;
   readonly ships: ShipsView | null = null;
   readonly borders: RegionBorders | null = null;
   readonly marks: OverlayMarks;
@@ -94,6 +96,10 @@ export class GameRenderer {
       this.roads = new RoadsView(world);
       this.roads.onRoad = (x, y) => this.terrain.clearTrees(x, y, 1, 1);
       this.trucks = new TrucksView(world);
+      this.rails = new RailsView(world);
+      this.rails.onRail = (x, y) => this.terrain.clearTrees(x, y, 1, 1);
+      this.trains = new TrainsView(world);
+      this.scene.add(this.rails.group, this.trains.group);
       this.ships = new ShipsView(world);
       this.scene.add(this.roads.group, this.trucks.group, this.ships.group);
     }
@@ -152,7 +158,9 @@ export class GameRenderer {
     }
     this.terrain.update(this.rig.camera);
     this.roads?.update();
+    this.rails?.update();
     this.trucks?.update(alpha);
+    this.trains?.update(alpha);
     this.ships?.update(alpha, time);
     this.borders?.update(this.viewer);
     this.water.update(time);

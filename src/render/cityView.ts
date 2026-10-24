@@ -484,3 +484,231 @@ export class ShipsView {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Railways and trains
+
+const railMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.3, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+applyOverlay(railMat);
+applyFow(railMat);
+const BALLAST = new THREE.Color(0x7d766c);
+const SLEEPER = new THREE.Color(0x5a4232);
+const STEEL = new THREE.Color(0xb8bcc0);
+const RAIL_LIFT = 0.07;
+
+export class RailsView {
+  readonly group = new THREE.Group();
+  onRail: (tx: number, ty: number) => void = () => {};
+  private readonly world: World;
+  private readonly chunks = new Map<number, THREE.Mesh>();
+  private last: Uint8Array;
+  private version = -1;
+  private roadVersion = -1;
+
+  constructor(world: World) {
+    this.world = world;
+    this.last = new Uint8Array(world.map.width * world.map.height);
+  }
+
+  update(): void {
+    const city = this.world.city;
+    if (!city?.rail || (city.railVersion === this.version && city.roadVersion === this.roadVersion)) return;
+    const map = this.world.map;
+    const w = map.width;
+    const cw = Math.ceil(w / RCHUNK);
+    const dirty = new Set<number>();
+    // Bridges change the surface under the track: rebuild every chunk with rails when roads change.
+    const all = city.roadVersion !== this.roadVersion && city.railVersion === this.version;
+    this.version = city.railVersion;
+    this.roadVersion = city.roadVersion;
+    for (let i = 0; i < city.rail.length; i++) {
+      if (city.rail[i] === this.last[i] && !(all && city.rail[i])) continue;
+      const tx = i % w;
+      const ty = (i - tx) / w;
+      if (city.rail[i]) this.onRail(tx, ty);
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const x = tx + dx;
+        const y = ty + dy;
+        if (x < 0 || y < 0 || x >= w || y >= map.height) continue;
+        dirty.add(Math.floor(y / RCHUNK) * cw + Math.floor(x / RCHUNK));
+      }
+    }
+    this.last = new Uint8Array(city.rail);
+    for (const c of dirty) this.rebuild(c, cw);
+  }
+
+  private rebuild(c: number, cw: number): void {
+    const old = this.chunks.get(c);
+    if (old) {
+      this.group.remove(old);
+      old.geometry.dispose();
+      this.chunks.delete(c);
+    }
+    const map = this.world.map;
+    const rail = this.world.city!.rail;
+    const w = map.width;
+    const x0 = (c % cw) * RCHUNK;
+    const y0 = Math.floor(c / cw) * RCHUNK;
+    const b = new Builder();
+    const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < map.height && rail[y * w + x]! > 0;
+    const h = (x: number, z: number) => surfaceHeight(map, x, z) + RAIL_LIFT;
+    const hs = (x: number, z: number) => h(x, z) + 0.02;
+    const hr = (x: number, z: number) => h(x, z) + 0.05;
+    for (let ty = y0; ty < Math.min(y0 + RCHUNK, map.height); ty++) {
+      for (let tx = x0; tx < Math.min(x0 + RCHUNK, w); tx++) {
+        if (!rail[ty * w + tx]) continue;
+        const cx = tx + 0.5;
+        const cz = ty + 0.5;
+        const n = at(tx, ty - 1);
+        const s = at(tx, ty + 1);
+        const e = at(tx + 1, ty);
+        const wv = at(tx - 1, ty);
+        const vertical = (n || s) && !(e || wv);
+        const arms: Array<'n' | 's' | 'e' | 'w'> = [];
+        if (n) arms.push('n');
+        if (s) arms.push('s');
+        if (e) arms.push('e');
+        if (wv) arms.push('w');
+        if (!arms.length) arms.push(...(vertical ? (['n', 's'] as const) : (['e', 'w'] as const)));
+        // Ballast bed in the centre, then each arm: ballast, sleepers, two rails.
+        const BW = 0.3;
+        b.flat([[cx - BW, cz - BW], [cx - BW, cz + BW], [cx + BW, cz + BW], [cx + BW, cz - BW]], h, BALLAST);
+        for (const a of arms) {
+          const along = a === 'n' || a === 's' ? 'z' : 'x';
+          const sign = a === 's' || a === 'e' ? 1 : -1;
+          const lo = (u: number, v: number): [number, number] => (along === 'x' ? [cx + sign * u, cz + v] : [cx + v, cz + sign * u]);
+          const quad = (u0: number, u1: number, v0: number, v1: number, hh: (x: number, z: number) => number, col: THREE.Color) => {
+            const p = [lo(u0, v0), lo(u0, v1), lo(u1, v1), lo(u1, v0)];
+            // Keep counter-clockwise winding seen from above.
+            const cross = (p[1]![0] - p[0]![0]) * (p[2]![1] - p[0]![1]) - (p[1]![1] - p[0]![1]) * (p[2]![0] - p[0]![0]);
+            b.flat(cross > 0 ? p : p.reverse(), hh, col);
+          };
+          quad(0, 0.5, -BW, BW, h, BALLAST);
+          for (const u of [0.12, 0.37]) quad(u - 0.05, u + 0.05, -0.26, 0.26, hs, SLEEPER);
+          for (const v of [-0.15, 0.15]) quad(0, 0.5, v - 0.025, v + 0.025, hr, STEEL);
+        }
+      }
+    }
+    if (!b.pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, railMat);
+    m.receiveShadow = true;
+    this.chunks.set(c, m);
+    this.group.add(m);
+  }
+}
+
+const locoGeo = new THREE.BoxGeometry(0.9, 0.42, 0.42).translate(0, 0.3, 0);
+const locoCabGeo = new THREE.BoxGeometry(0.3, 0.18, 0.4).translate(-0.25, 0.6, 0);
+const wagonGeo = new THREE.BoxGeometry(0.85, 0.32, 0.4).translate(0, 0.27, 0);
+const loadGeo = new THREE.BoxGeometry(0.75, 0.14, 0.34).translate(0, 0.5, 0);
+const CARS = 3;
+
+export class TrainsView {
+  readonly group = new THREE.Group();
+  private readonly world: World;
+  private cap = 0;
+  private loco!: THREE.InstancedMesh;
+  private cab!: THREE.InstancedMesh;
+  private wagon!: THREE.InstancedMesh;
+  private load!: THREE.InstancedMesh;
+
+  constructor(world: World) {
+    this.world = world;
+    this.grow(8);
+  }
+
+  private grow(n: number): void {
+    for (const m of [this.loco, this.cab, this.wagon, this.load]) if (m) {
+      this.group.remove(m);
+      m.dispose();
+    }
+    this.cap = n;
+    const mk = (geo: THREE.BufferGeometry, color: number, count: number) => {
+      const material = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.3 });
+      applyFow(material);
+      const m = new THREE.InstancedMesh(geo, material, count);
+      m.castShadow = true;
+      m.frustumCulled = false;
+      m.count = 0;
+      this.group.add(m);
+      return m;
+    };
+    this.loco = mk(locoGeo, 0xffffff, n);
+    this.cab = mk(locoCabGeo, 0x2a2e33, n);
+    this.wagon = mk(wagonGeo, 0x6a5a4a, n * CARS);
+    this.load = mk(loadGeo, 0xffffff, n * CARS);
+  }
+
+  update(alpha: number): void {
+    const city = this.world.city;
+    if (!city?.trains) return;
+    const trains = city.trains;
+    if (trains.length > this.cap) this.grow(Math.max(trains.length + 8, this.cap * 2));
+    const map = this.world.map;
+    const w = map.width;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const v = new THREE.Vector3();
+    const one = new THREE.Vector3(1, 1, 1);
+    const c = new THREE.Color();
+    // Position and heading at distance f along a path of tiles.
+    const place = (path: number[], f: number) => {
+      const last = path.length - 1;
+      const g = Math.max(0, Math.min(last, f));
+      const k = Math.min(last, Math.floor(g));
+      const a = path[k]!;
+      const bIdx = path[Math.min(last, k + 1)]!;
+      const ax = (a % w) + 0.5;
+      const ay = Math.floor(a / w) + 0.5;
+      const bx = (bIdx % w) + 0.5;
+      const by = Math.floor(bIdx / w) + 0.5;
+      let dx = bx - ax;
+      let dy = by - ay;
+      if (dx === 0 && dy === 0) {
+        const p = path[Math.max(0, k - 1)]!;
+        dx = ax - ((p % w) + 0.5);
+        dy = ay - (Math.floor(p / w) + 0.5);
+      }
+      const fr = g - k;
+      const x = ax + (bx - ax) * fr;
+      const y = ay + (by - ay) * fr;
+      q.setFromAxisAngle(up, Math.atan2(-dy, dx));
+      v.set(x, surfaceHeight(map, x, y) + RAIL_LIFT + 0.04, y);
+      m.compose(v, q, one);
+    };
+    let n = 0;
+    let nw = 0;
+    let nl = 0;
+    for (const t of trains) {
+      const f = t.prevPos + (t.pos - t.prevPos) * alpha;
+      place(t.path, f);
+      this.loco.setMatrixAt(n, m);
+      this.cab.setMatrixAt(n, m);
+      const color = this.world.players[t.owner]?.color ?? 0xc04030;
+      this.loco.setColorAt(n, c.setHex(color));
+      n++;
+      for (let k = 1; k <= CARS; k++) {
+        place(t.path, f - k * 0.95);
+        this.wagon.setMatrixAt(nw++, m);
+        if (t.good && t.amount > 0) {
+          this.load.setMatrixAt(nl, m);
+          this.load.setColorAt(nl, c.set(GOODS[t.good].color));
+          nl++;
+        }
+      }
+    }
+    this.loco.count = this.cab.count = n;
+    this.wagon.count = nw;
+    this.load.count = nl;
+    for (const im of [this.loco, this.cab, this.wagon, this.load]) {
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
+  }
+}

@@ -8,6 +8,7 @@ import { Deposit, isOpenLand, Terrain, type GameMap, type TerrainId } from '../m
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { findAccess } from './roads.ts';
+import { railAccess } from './rail.ts';
 import { dockTile } from './trade.ts';
 import { add, newCityBuilding } from './state.ts';
 
@@ -98,10 +99,12 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
       if (regional ? owner !== -1 || map.region[i] === 0 : owner !== player) return regional ? 'Must be in unclaimed land' : 'Not your territory';
       if (world.occupancy[i]) return 'Blocked';
       if (city.road[i]) return 'On a road';
+      if (city.rail?.[i]) return 'On a railway';
       const t = map.terrain[i] as TerrainId;
       if (!isOpenLand(t) && !(t === Terrain.Forest && def.placement !== 'forest')) return 'Must be on open ground';
     }
   }
+  if (type === 'rail_station' && railAccess(world, { tx, ty, w, h }) < 0) return 'Must touch a railway';
   if (regional) {
     const reg = map.region[ty * map.width + tx]!;
     const near = map.regions[reg - 1]?.neighbors.some((n) => city.regionOwner[n] === player);

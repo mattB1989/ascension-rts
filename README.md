@@ -32,6 +32,9 @@ original **Twin Shores** skirmish.
   to an amount and export everything above another; cargo ships sail in from the map edge; world
   prices drift. A Hydro Plant gives power on rivers without oil. Roads wear with traffic;
   Maintenance Depots repair them.
+- **Railways (E4)**: drag track like roads (it crosses roads, and water on road bridges). Rail
+  Stations on a line are warehouses with a train: it carries 60 units at a time to stations
+  whose surroundings need them, while trucks bring each station what the others want.
 - **City-states (E5)**: 3–5 neighbours run by the same rules as you (an AI plays them with the
   same commands): they build their own towns in their region. Connect a road to one and set deals
   per good: your trucks sell to them and buy from them at their local prices. Trade raises their
@@ -77,7 +80,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: rail, and more polish (graphics, post-game report). See [docs/PLAN.md](docs/PLAN.md).
+Next: more polish (graphics, post-game report), barges and pipelines. See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

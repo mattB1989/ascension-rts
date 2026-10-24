@@ -120,6 +120,8 @@ export interface EconDef {
   storage?: number;
   /** Delivery trucks. */
   trucks?: number;
+  /** Trains (rail stations). */
+  trains?: number;
   /** Construction crews. */
   crews?: number;
   /** Housing: residents at each level. */

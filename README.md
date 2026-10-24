@@ -79,7 +79,8 @@ original **Twin Shores** skirmish.
 **Skirmish (M1–M3):** the RTS groundwork: Twin Shores, engineers and ore, the full Modern
 army on land, sea and air, transports, walls, gates, garrisoned towers, victory.
 
-URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation directly;
+URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation directly (add
+`&spectate=1&fog=0` to watch AI nations play every seat, `&victory=0` for a sandbox);
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 

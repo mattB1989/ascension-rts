@@ -111,13 +111,15 @@ export function showMenu(root: HTMLElement): void {
   seedRow.append(el('span', 'menu-label', 'Seed'), seed, start);
   card.appendChild(seedRow);
 
-  card.appendChild(el('h2', '', 'Skirmish'));
+  card.appendChild(el('h2', '', 'Other games'));
   const sk = el('div', 'menu-row');
   const twin = el('button', 'btn', 'Twin Shores <small>the original RTS map</small>');
   twin.addEventListener('click', () => go({ mode: 'skirmish' }));
   const sand = el('button', 'btn', 'Battle sandbox <small>two armies, navies and air forces</small>');
   sand.addEventListener('click', () => go({ mode: 'sandbox' }));
-  sk.append(twin, sand);
+  const watch = el('button', 'btn', 'Watch the AI <small>AI nations play every seat</small>');
+  watch.addEventListener('click', () => go({ mode: 'city', size: 256, biome, seed: Number(seed.value) || 1, difficulty, spectate: 1, fog: 0 }));
+  sk.append(twin, sand, watch);
   card.appendChild(sk);
   card.appendChild(el('p', 'muted menu-foot', 'Works offline. Desktop and touch. City-states are neutral neighbours you can trade with, buy, or unite with; rival nations grow, expand and, above Easy, go to war.'));
 

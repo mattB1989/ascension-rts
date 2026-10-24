@@ -9,6 +9,7 @@ import { Game } from './game.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { gameYear } from './sim/city/economy.ts';
 import { createCity } from './sim/city/index.ts';
+import { newBot } from './ai/cityBot.ts';
 import { MAP_SIZES, type GenBiome } from './sim/mapgen.ts';
 import { createMatch } from './sim/scenario.ts';
 import type { World } from './sim/world.ts';
@@ -59,6 +60,11 @@ async function boot(): Promise<void> {
     const difficulty = d === 'easy' || d === 'hard' ? d : 'normal';
     const rivals = params.has('rivals') ? Math.max(0, Math.min(3, Number(params.get('rivals')))) : undefined;
     world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0' });
+    // Spectator: an AI nation plays your seat too.
+    if (params.get('spectate') === '1') {
+      world.city!.bots.push(newBot(0, Infinity, true, difficulty));
+      world.players[0]!.name = 'Blue League';
+    }
     l.remove();
   } else if (mode === 'skirmish' || mode === 'sandbox') {
     world = createMatch({ seed: Number(params.get('seed')) || 1337, mode: mode === 'sandbox' ? 'sandbox' : 'standard' });

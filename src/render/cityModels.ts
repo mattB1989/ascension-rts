@@ -4,25 +4,32 @@
 // (chimney tops that puff while the building works).
 
 import * as THREE from 'three';
-import { box, cached, cyl, cylX, mat, mesh, sphere, teamMats } from './models.ts';
+import { box, cached, cyl, cylX, mat as baseMat, mesh, sphere, teamMats } from './models.ts';
+import type { DetailKind } from './textures.ts';
 
-const concrete = () => mat(0x9a9890, { rough: 0.95 });
-const paving = () => mat(0x8c8a84, { rough: 0.95 });
+/** Building materials get a surface texture: the one asked for, else plaster grain (or metal panels for metals). */
+function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number; tex?: DetailKind | 'none' } = {}): THREE.MeshStandardMaterial {
+  const tex = opts.tex === 'none' || opts.emissive ? undefined : opts.tex ?? ((opts.metal ?? 0.2) >= 0.4 ? ((opts.rough ?? 0.7) <= 0.25 ? undefined : 'panels') : 'plaster');
+  return baseMat(color, { ...opts, tex });
+}
+
+const concrete = () => mat(0x9a9890, { rough: 0.95, tex: 'concrete' });
+const paving = () => mat(0x8c8a84, { rough: 0.95, tex: 'concrete' });
 const plaster = () => mat(0xe6dfcf, { rough: 0.85 });
-const brick = () => mat(0xa65a3e, { rough: 0.9 });
-const darkBrick = () => mat(0x7d4433, { rough: 0.9 });
-const timber = () => mat(0x8a5a32, { rough: 0.9 });
-const roofRed = () => mat(0xa8442f, { rough: 0.8 });
-const roofGrey = () => mat(0x5b6168, { rough: 0.8 });
-const roofGreen = () => mat(0x4f6b4a, { rough: 0.8 });
+const brick = () => mat(0xa65a3e, { rough: 0.9, tex: 'brick' });
+const darkBrick = () => mat(0x7d4433, { rough: 0.9, tex: 'brick' });
+const timber = () => mat(0x8a5a32, { rough: 0.9, tex: 'planks' });
+const roofRed = () => mat(0xa8442f, { rough: 0.8, tex: 'tiles' });
+const roofGrey = () => mat(0x5b6168, { rough: 0.8, tex: 'tiles' });
+const roofGreen = () => mat(0x4f6b4a, { rough: 0.8, tex: 'tiles' });
 const metal = () => mat(0x8c939a, { metal: 0.6, rough: 0.45 });
 const darkMetal = () => mat(0x3c4146, { metal: 0.5, rough: 0.5 });
-const glass = () => mat(0x8fd0f0, { metal: 0.6, rough: 0.15 });
+const glass = () => mat(0x8fd0f0, { metal: 0.6, rough: 0.15, tex: 'glass' });
 const windowGlow = () => mat(0xffd98a, { emissive: 0xffb84a, rough: 0.4 });
 /** The lit-window material (the renderer brightens it at night). */
 export const windowMaterial = windowGlow;
 const white = () => mat(0xf2f2ee, { rough: 0.7 });
-const grassMat = () => mat(0x6f9a45, { rough: 1 });
+const grassMat = () => mat(0x6f9a45, { rough: 1, tex: 'lawn' });
 
 function pad(w: number, h: number, m = concrete()): THREE.Group {
   const g = new THREE.Group();
@@ -267,9 +274,9 @@ const ROOFS = [0xa8442f, 0x7d4433, 0x5b6168, 0x4f6b4a, 0x8a6a4a, 0x6a4a5a, 0x9a5
 const WALLS = [0xe6dfcf, 0xd8c8a8, 0xc9d0d6, 0xe8d8c4, 0xcdbfa6, 0xdcd4e0];
 const BRICKS = [0xa65a3e, 0x8a5040, 0xb87850, 0x7d4433, 0x9a6a50];
 const pick = (list: number[], v: number, salt: number) => list[Math.abs((v * 2654435761 + salt * 40503) >>> 0) % list.length]!;
-const roofOf = (v: number) => mat(pick(ROOFS, v, 1), { rough: 0.8 });
+const roofOf = (v: number) => mat(pick(ROOFS, v, 1), { rough: 0.8, tex: 'tiles' });
 const wallOf = (v: number) => mat(pick(WALLS, v, 2), { rough: 0.85 });
-const brickOf = (v: number, k = 0) => mat(pick(BRICKS, v, 3 + k), { rough: 0.9 });
+const brickOf = (v: number, k = 0) => mat(pick(BRICKS, v, 3 + k), { rough: 0.9, tex: 'brick' });
 
 function cottage(team: number, v = 0): THREE.Group {
   const g = pad(2, 2, grassMat());

@@ -8,6 +8,7 @@ import { fbm, hash2 } from '../sim/rng.ts';
 import { Deposit, groundHeight, Terrain, type GameMap, type TerrainId } from '../sim/map.ts';
 import { buildBridges } from './bridges.ts';
 import { applyOverlay } from './fog.ts';
+import { applyGroundDetail } from './textures.ts';
 
 /** Two colours per terrain; large-scale noise blends between them. */
 const TERRAIN_COLORS: Record<TerrainId, [number, number]> = {
@@ -50,7 +51,7 @@ interface Chunk {
 }
 
 const sharedMaterials = {
-  ground: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, metalness: 0 }),
+  ground: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }),
   canopy: new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.9 }),
   trunk: new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 1, flatShading: true }),
   rock: new THREE.MeshStandardMaterial({ color: 0x8a8378, flatShading: true, roughness: 0.95 }),
@@ -80,6 +81,7 @@ export class TerrainView {
   constructor(map: GameMap) {
     this.map = map;
     this.colors = this.tileColors(map);
+    this.texturize(map);
     for (let y0 = 0; y0 < map.height; y0 += CHUNK) {
       for (let x0 = 0; x0 < map.width; x0 += CHUNK) this.chunks.push(this.buildChunk(x0, y0));
     }
@@ -98,6 +100,42 @@ export class TerrainView {
       const d = Math.sqrt(dx * dx + dz * dz + p.y * p.y * 0.3);
       c.props.visible = d < PROP_DISTANCE + c.size * 0.7;
     }
+  }
+
+  /** Ground textures: per-tile colour and surface kind as textures the ground shader blends smoothly. */
+  private texturize(map: GameMap): void {
+    const n = map.width * map.height;
+    const rgb = new Uint8Array(n * 4);
+    const kind = new Uint8Array(n * 4);
+    const c = new THREE.Color();
+    for (let i = 0; i < n; i++) {
+      c.setRGB(this.colors[i * 3]!, this.colors[i * 3 + 1]!, this.colors[i * 3 + 2]!);
+      const hex = c.getHex();
+      rgb[i * 4] = (hex >> 16) & 255;
+      rgb[i * 4 + 1] = (hex >> 8) & 255;
+      rgb[i * 4 + 2] = hex & 255;
+      rgb[i * 4 + 3] = 255;
+      // Weights: grass, rock, sand (and snow, and the seabed), soil.
+      const t = map.terrain[i] as TerrainId;
+      const wts =
+        t === Terrain.Grass ? [255, 0, 0, 40]
+        : t === Terrain.Fertile ? [120, 0, 0, 200]
+        : t === Terrain.Forest ? [90, 0, 0, 255]
+        : t === Terrain.Rock ? [0, 255, 0, 30]
+        : t === Terrain.Snow ? [0, 60, 255, 0]
+        : [0, 0, 255, 20];
+      kind.set(wts, i * 4);
+    }
+    const tex = (data: Uint8Array, srgb: boolean) => {
+      const tx = new THREE.DataTexture(data, map.width, map.height, THREE.RGBAFormat);
+      tx.magFilter = THREE.LinearFilter;
+      tx.minFilter = THREE.LinearFilter;
+      tx.wrapS = tx.wrapT = THREE.ClampToEdgeWrapping;
+      if (srgb) tx.colorSpace = THREE.SRGBColorSpace;
+      tx.needsUpdate = true;
+      return tx;
+    };
+    applyGroundDetail(sharedMaterials.ground, tex(rgb, true), tex(kind, false), map.width, map.height);
   }
 
   private tileColors(map: GameMap): Float32Array {
@@ -239,7 +277,19 @@ export class TerrainView {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos.subarray(0, p), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col.subarray(0, p), 3));
-    geo.computeVertexNormals();
+    // Smooth normals from the height field (the ground reads as rolling land, not facets).
+    const nrm = new Float32Array(p);
+    for (let k = 0; k < p; k += 3) {
+      const vx = Math.round(pos[k]!);
+      const vz = Math.round(pos[k + 2]!);
+      const gx = (hAt(Math.min(w, vx + 1), vz) - hAt(Math.max(0, vx - 1), vz)) / 2;
+      const gz = (hAt(vx, Math.min(map.height, vz + 1)) - hAt(vx, Math.max(0, vz - 1))) / 2;
+      const len = Math.sqrt(gx * gx + 1 + gz * gz);
+      nrm[k] = -gx / len;
+      nrm[k + 1] = 1 / len;
+      nrm[k + 2] = -gz / len;
+    }
+    geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
     geo.computeBoundingSphere();
     return geo;
   }

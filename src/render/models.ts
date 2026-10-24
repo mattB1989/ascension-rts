@@ -4,14 +4,15 @@
 import * as THREE from 'three';
 import type { UnitTypeId } from '../data/units.ts';
 import { applyFow } from './fog.ts';
+import { applyDetail, type DetailKind } from './textures.ts';
 
 // ---------------------------------------------------------------------------
 // Materials (cached per colour so units share them)
 
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
 
-export function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number } = {}): THREE.MeshStandardMaterial {
-  const key = `${color}|${opts.metal ?? 0.2}|${opts.rough ?? 0.7}|${opts.emissive ?? 0}`;
+export function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number; tex?: DetailKind } = {}): THREE.MeshStandardMaterial {
+  const key = `${color}|${opts.metal ?? 0.2}|${opts.rough ?? 0.7}|${opts.emissive ?? 0}|${opts.tex ?? ''}`;
   let m = matCache.get(key);
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -22,6 +23,7 @@ export function mat(color: number, opts: { metal?: number; rough?: number; emiss
       emissive: opts.emissive ?? 0x000000,
       emissiveIntensity: opts.emissive ? 0.6 : 0,
     });
+    if (opts.tex) applyDetail(m, opts.tex);
     applyFow(m);
     matCache.set(key, m);
   }

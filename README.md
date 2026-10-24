@@ -84,6 +84,9 @@ original **Twin Shores** skirmish.
 - **Sound and graphs (E10)**: procedural sound effects (building, roads, battles, alerts) and
   a slow generative music pad, all made in the browser; on/off and volume in ☰. ₡ Budget shows
   population and GDP over the years against the rival nations.
+- **Textures (E10)**: procedural surface textures drawn at start-up (no image files): grass,
+  rock strata on slopes, sand ripples and soil on smoothly blended ground; brick, roof tiles,
+  concrete, timber, plaster, metal panels and glass curtain walls on buildings.
 - **Day and night (E10)**: the light turns golden at dusk; at night windows and street lights
   glow (☰ → Graphics turns it off). Private cars fill the streets as towns grow.
 - **Scenarios (E10)**: four hand-picked starts with one goal and a deadline, from the start menu:

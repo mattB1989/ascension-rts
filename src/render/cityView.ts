@@ -8,35 +8,126 @@ import { surfaceHeight, groundHeight, type GameMap } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import { routePoint } from '../sim/city/trade.ts';
 import { applyFow, applyOverlay } from './fog.ts';
+import { infraTextures } from './textures.ts';
 
 const RCHUNK = 32;
 const ROAD_W = 0.36; // half width
 const LIFT = 0.05;
 
-const roadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+/**
+ * What each triangle of a road, rail or pipe mesh is made of (a per-vertex
+ * attribute): the shader picks its texture detail, roughness and metalness from it.
+ */
+const SURF = { asphalt: 0, paint: 1, pavement: 2, kerb: 3, deck: 4, ballast: 5, sleeper: 6, steel: 7, concrete: 8, pipe: 9, glow: 10 } as const;
+type Surf = (typeof SURF)[keyof typeof SURF];
 
 /** Road condition per tile (red channel, 255 = new), sampled by the road shader to show wear. */
 const condUniforms = { uRoadCond: { value: null as THREE.DataTexture | null }, uRoadSize: { value: new THREE.Vector2(1, 1) } };
-roadMat.onBeforeCompile = (shader) => {
-  shader.uniforms.uRoadCond = condUniforms.uRoadCond;
-  shader.uniforms.uRoadSize = condUniforms.uRoadSize;
-  shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nvarying vec2 vRoadXZ;')
-    .replace('#include <project_vertex>', '#include <project_vertex>\nvRoadXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
-  shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying vec2 vRoadXZ;\nuniform sampler2D uRoadCond;\nuniform vec2 uRoadSize;')
-    .replace(
-      '#include <color_fragment>',
-      `#include <color_fragment>
+
+const INFRA_FRAG = /* glsl */ `
+  float infraRough = -1.0;
+  float infraMetal = -1.0;
+  float infraGlow = 0.0;
+  {
+    int surf = int(vInfSurf + 0.5);
+    vec3 P = vInfPos;
+    vec3 fn = normalize(cross(dFdx(P), dFdy(P)));
+    bool top = abs(fn.y) > 0.55;
+    // Top faces map by xz; sides by their own vertical plane.
+    vec2 uv = top ? P.xz : (abs(fn.x) > abs(fn.z) ? vec2(P.z, -P.y) : vec2(P.x, -P.y));
+    float grime = texture2D(uInfra, P.xz * 0.09 + 0.17).a;
+    vec3 c = diffuseColor.rgb;
+    if (surf == ${SURF.asphalt} || surf == ${SURF.paint} || surf == ${SURF.deck}) {
+      float grain = texture2D(uInfra, P.xz * 0.5).r;
+      float coarse = texture2D(uInfra, P.xz * 0.13 + 0.31).r;
+      c *= mix(1.0, grain * 2.0, surf == ${SURF.paint} ? 0.3 : 0.75) * mix(1.0, coarse * 2.0, 0.3);
+      c *= 0.86 + 0.28 * grime;
       if (uRoadSize.x > 1.0) {
-        float cond = texture2D(uRoadCond, vRoadXZ / uRoadSize).r;
-        float speck = fract(sin(dot(floor(vRoadXZ * 6.0), vec2(12.9898, 78.233))) * 43758.5453);
-        float worn = clamp((1.0 - cond) * 1.3 - speck * 0.35, 0.0, 1.0);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.56, 0.5, 0.41), worn * 0.8);
-      }`,
-    );
-};
-roadMat.customProgramCacheKey = () => 'road';
+        float wear = 1.0 - texture2D(uRoadCond, P.xz / uRoadSize).r;
+        vec4 W = texture2D(uWear, P.xz * 0.42 + 0.07);
+        // Lane paint fades first.
+        if (surf == ${SURF.paint}) c = mix(c, vec3(0.3, 0.3, 0.29) * grain * 2.0, smoothstep(0.15, 0.85, wear) * 0.75);
+        // Repair patches: darker, fresher tar.
+        float patchV = smoothstep(W.r, W.r + 0.04, wear);
+        c = mix(c, vec3(0.17, 0.17, 0.165) * mix(1.0, grain * 2.0, 0.5), patchV * 0.9);
+        // Badly worn: the surface breaks up to gravel and dirt.
+        float dirtN = texture2D(uInfra, P.xz * 0.35 + 0.53).a;
+        float worn = clamp((wear - 0.45) * 2.0 - (dirtN - 0.5) * 0.9, 0.0, 1.0);
+        float grav = texture2D(uInfra, P.xz * 0.8).g;
+        c = mix(c, vec3(0.56, 0.5, 0.41) * mix(1.0, grav * 2.0, 0.6), worn * 0.8);
+        // Cracks, then potholes, as wear grows.
+        float crack = smoothstep(W.g, W.g + 0.05, wear);
+        c *= 1.0 - crack * 0.72 * (1.0 - worn * 0.45);
+      }
+      infraRough = 0.88;
+      infraMetal = 0.0;
+    } else if (surf == ${SURF.pavement}) {
+      float slab = texture2D(uInfra, P.xz * 1.25).b;
+      c *= mix(1.0, slab * 2.0, 0.65) * (0.88 + 0.24 * grime);
+      infraRough = 0.85;
+      infraMetal = 0.0;
+    } else if (surf == ${SURF.kerb} || surf == ${SURF.concrete}) {
+      float grain = texture2D(uInfra, uv * 0.6).r;
+      c *= mix(1.0, grain * 2.0, 0.22) * (0.84 + 0.32 * grime);
+      infraRough = 0.9;
+      infraMetal = 0.0;
+    } else if (surf == ${SURF.ballast}) {
+      float g = texture2D(uInfra, P.xz * 0.7).g;
+      float g2 = texture2D(uInfra, P.xz * 0.23 + 0.4).g;
+      c *= mix(1.0, g * 2.0, 0.85) * mix(1.0, g2 * 2.0, 0.25) * (0.86 + 0.28 * grime);
+      infraRough = 0.95;
+      infraMetal = 0.0;
+    } else if (surf == ${SURF.sleeper}) {
+      float wood = texture2D(uWear, uv * 1.3).a;
+      c *= mix(1.0, wood * 2.0, 0.6);
+      infraRough = 0.9;
+      infraMetal = 0.0;
+    } else if (surf == ${SURF.steel}) {
+      // Polished running surface on top, rusty web on the sides.
+      if (top) {
+        c *= 1.2;
+        infraRough = 0.28;
+        infraMetal = 0.7;
+      } else {
+        c = mix(c, vec3(0.34, 0.22, 0.15), 0.75) * (0.8 + 0.4 * grime);
+        infraRough = 0.85;
+        infraMetal = 0.1;
+      }
+    } else if (surf == ${SURF.pipe}) {
+      float m = texture2D(uWear, uv * 0.8).b;
+      c *= mix(1.0, m * 2.0, 0.55) * (0.82 + 0.36 * grime);
+      infraRough = 0.38;
+      infraMetal = 0.45;
+    } else if (surf == ${SURF.glow}) {
+      infraGlow = 0.7;
+    }
+    diffuseColor.rgb = c;
+  }
+`;
+
+/** Detail textures, wear, and per-surface roughness/metalness for road, rail and pipe meshes. */
+function applyInfra(material: THREE.MeshStandardMaterial, key: string): void {
+  material.onBeforeCompile = (shader) => {
+    const [infra, wear] = infraTextures();
+    shader.uniforms.uRoadCond = condUniforms.uRoadCond;
+    shader.uniforms.uRoadSize = condUniforms.uRoadSize;
+    shader.uniforms.uInfra = { value: infra };
+    shader.uniforms.uWear = { value: wear };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aSurf;\nvarying float vInfSurf;\nvarying vec3 vInfPos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvInfPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvInfSurf = aSurf;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vInfSurf;\nvarying vec3 vInfPos;\nuniform sampler2D uRoadCond;\nuniform vec2 uRoadSize;\nuniform sampler2D uInfra;\nuniform sampler2D uWear;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${INFRA_FRAG}`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nif (infraRough >= 0.0) roughnessFactor = infraRough;')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nif (infraMetal >= 0.0) metalnessFactor = infraMetal;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * infraGlow;');
+  };
+  material.customProgramCacheKey = () => key;
+}
+
+const roadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+applyInfra(roadMat, 'infra-road');
 applyOverlay(roadMat);
 applyFow(roadMat);
 
@@ -44,47 +135,110 @@ const ASPHALT = new THREE.Color(0x4a4a47);
 const DECK = new THREE.Color(0x8a8780);
 const LINE = new THREE.Color(0xe8e2c8);
 const PILLAR = new THREE.Color(0x7a776f);
+const PAVEMENT = new THREE.Color(0xa9a69c);
+const KERB = new THREE.Color(0xc4c1b8);
+/** Pavement each side of the carriageway: width, and the kerb's height above the road. */
+const WALK_W = 0.1;
+const KERB_H = 0.03;
+
+type XZ = [number, number];
+type HFn = (x: number, z: number) => number;
 
 class Builder {
   pos: number[] = [];
   col: number[] = [];
+  surfs: number[] = [];
+  /** Surface of the triangles added next. */
+  surf: Surf = SURF.asphalt;
   tri(ax: number, ay: number, az: number, bx: number, by: number, bz: number, cx: number, cy: number, cz: number, c: THREE.Color): void {
     this.pos.push(ax, ay, az, bx, by, bz, cx, cy, cz);
-    for (let i = 0; i < 3; i++) this.col.push(c.r, c.g, c.b);
+    for (let i = 0; i < 3; i++) {
+      this.col.push(c.r, c.g, c.b);
+      this.surfs.push(this.surf);
+    }
   }
-  /** Quad on the ground through 4 xz points (counter-clockwise seen from above), heights from h(). */
-  flat(pts: Array<[number, number]>, h: (x: number, z: number) => number, c: THREE.Color): void {
-    const [a, b, cc, d] = pts.map(([x, z]) => [x, h(x, z), z] as const);
-    this.tri(a![0], a![1], a![2], b![0], b![1], b![2], cc![0], cc![1], cc![2], c);
-    this.tri(a![0], a![1], a![2], cc![0], cc![1], cc![2], d![0], d![1], d![2], c);
+  /** Quad through four 3D points, wound so it faces along (nx, ny, nz). */
+  quad(p: Array<[number, number, number]>, nx: number, ny: number, nz: number, c: THREE.Color): void {
+    const [a, b, cc, d] = p as [[number, number, number], [number, number, number], [number, number, number], [number, number, number]];
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+    const vx = cc[0] - a[0], vy = cc[1] - a[1], vz = cc[2] - a[2];
+    const dot = (uy * vz - uz * vy) * nx + (uz * vx - ux * vz) * ny + (ux * vy - uy * vx) * nz;
+    if (dot >= 0) {
+      this.tri(a[0], a[1], a[2], b[0], b[1], b[2], cc[0], cc[1], cc[2], c);
+      this.tri(a[0], a[1], a[2], cc[0], cc[1], cc[2], d[0], d[1], d[2], c);
+    } else {
+      this.tri(a[0], a[1], a[2], cc[0], cc[1], cc[2], b[0], b[1], b[2], c);
+      this.tri(a[0], a[1], a[2], d[0], d[1], d[2], cc[0], cc[1], cc[2], c);
+    }
+  }
+  /** Quad on the ground through 4 xz points (in order round the edge), facing up, heights from h(). */
+  flat(pts: XZ[], h: HFn, c: THREE.Color): void {
+    this.quad(pts.map(([x, z]) => [x, h(x, z), z] as [number, number, number]), 0, 1, 0, c);
+  }
+  /** Vertical face along a-b between heights lo() and hi(), facing (nx, nz). */
+  wall(a: XZ, b: XZ, lo: HFn, hi: HFn, nx: number, nz: number, c: THREE.Color): void {
+    this.quad([[a[0], lo(a[0], a[1]), a[1]], [b[0], lo(b[0], b[1]), b[1]], [b[0], hi(b[0], b[1]), b[1]], [a[0], hi(a[0], a[1]), a[1]]], nx, 0, nz, c);
+  }
+  /** A block on 4 xz corners (in order round the edge) from lo() up to hi(): top and sides. */
+  prism(pts: XZ[], lo: HFn, hi: HFn, c: THREE.Color): void {
+    this.flat(pts, hi, c);
+    const mx = (pts[0]![0] + pts[1]![0] + pts[2]![0] + pts[3]![0]) / 4;
+    const mz = (pts[0]![1] + pts[1]![1] + pts[2]![1] + pts[3]![1]) / 4;
+    for (let i = 0; i < 4; i++) {
+      const a = pts[i]!;
+      const b = pts[(i + 1) % 4]!;
+      this.wall(a, b, lo, hi, (a[0] + b[0]) / 2 - mx, (a[1] + b[1]) / 2 - mz, c);
+    }
   }
   box(x: number, y0: number, z: number, sx: number, h: number, sz: number, c: THREE.Color): void {
-    const x0 = x - sx / 2;
-    const x1 = x + sx / 2;
-    const z0 = z - sz / 2;
-    const z1 = z + sz / 2;
-    const y1 = y0 + h;
-    const q = (p: number[][]) => {
-      const [a, b, cc, d] = p as [number[], number[], number[], number[]];
-      this.tri(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, cc[0]!, cc[1]!, cc[2]!, c);
-      this.tri(a[0]!, a[1]!, a[2]!, cc[0]!, cc[1]!, cc[2]!, d[0]!, d[1]!, d[2]!, c);
-    };
-    q([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]);
-    q([[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]]);
-    q([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]]);
-    q([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]]);
+    const lo = () => y0;
+    const hi = () => y0 + h;
+    this.prism([[x - sx / 2, z - sz / 2], [x - sx / 2, z + sz / 2], [x + sx / 2, z + sz / 2], [x + sx / 2, z - sz / 2]], lo, hi, c);
   }
-  mesh(): THREE.Mesh | null {
+  /** A horizontal octagonal tube along x or z from a to b, centred at height y. */
+  tube(a: XZ, b: XZ, y: number, r: number, c: THREE.Color, caps = false): void {
+    const alongX = Math.abs(b[0] - a[0]) > Math.abs(b[1] - a[1]);
+    const N = 8;
+    const ring = (p: XZ, k: number): [number, number, number] => {
+      const t = ((k + 0.5) / N) * Math.PI * 2;
+      const s = Math.cos(t) * r;
+      return alongX ? [p[0], y + Math.sin(t) * r, p[1] + s] : [p[0] + s, y + Math.sin(t) * r, p[1]];
+    };
+    for (let k = 0; k < N; k++) {
+      const t = ((k + 1) / N) * Math.PI * 2;
+      const nx = alongX ? 0 : Math.cos(t);
+      const nz = alongX ? Math.cos(t) : 0;
+      this.quad([ring(a, k), ring(b, k), ring(b, k + 1), ring(a, k + 1)], nx, Math.sin(t), nz, c);
+    }
+    if (!caps) return;
+    for (const [p, sgn] of [[a, -1], [b, 1]] as const) {
+      const dir = alongX ? Math.sign(b[0] - a[0]) * sgn : Math.sign(b[1] - a[1]) * sgn;
+      for (let k = 1; k < N - 1; k += 2) {
+        // Fan of quads (pairs of triangles) across the octagon.
+        this.quad([ring(p, 0), ring(p, k), ring(p, k + 1), ring(p, Math.min(N - 1, k + 2))], alongX ? dir : 0, 0, alongX ? 0 : dir, c);
+      }
+    }
+  }
+  mesh(material: THREE.Material): THREE.Mesh | null {
     if (!this.pos.length) return null;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    geo.setAttribute('aSurf', new THREE.Float32BufferAttribute(this.surfs, 1));
     geo.computeVertexNormals();
     geo.computeBoundingSphere();
-    const m = new THREE.Mesh(geo, roadMat);
+    const m = new THREE.Mesh(geo, material);
     m.receiveShadow = true;
     return m;
   }
+}
+
+/** A small stable hash of a tile and a salt, 0..1 (for per-piece colour variation). */
+function hash01(x: number, y: number, s: number): number {
+  let h = Math.imul(x * 374761393 + y * 668265263 + s * 2147483647, 1274126177);
+  h ^= h >>> 13;
+  h = Math.imul(h, 1103515245);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 export class RoadsView {
@@ -164,6 +318,10 @@ export class RoadsView {
     const b = new Builder();
     const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < map.height && road[y * w + x]! > 0;
     const h = (x: number, z: number) => surfaceHeight(map, x, z) + LIFT;
+    const hk = (x: number, z: number) => h(x, z) + KERB_H;
+    const ground = (x: number, z: number) => h(x, z) - LIFT - 0.02;
+    const R = ROAD_W;
+    const SW = WALK_W;
     for (let ty = y0; ty < Math.min(y0 + RCHUNK, map.height); ty++) {
       for (let tx = x0; tx < Math.min(x0 + RCHUNK, w); tx++) {
         const r = road[ty * w + tx]!;
@@ -175,6 +333,7 @@ export class RoadsView {
         const s = at(tx, ty + 1);
         const e = at(tx + 1, ty);
         const wv = at(tx - 1, ty);
+        b.surf = r === 2 ? SURF.deck : SURF.asphalt;
         // Centre square.
         b.flat([[cx - ROAD_W, cz - ROAD_W], [cx - ROAD_W, cz + ROAD_W], [cx + ROAD_W, cz + ROAD_W], [cx + ROAD_W, cz - ROAD_W]], h, col);
         // Arms towards connected neighbours (they meet the neighbour's arm at the tile edge).
@@ -184,8 +343,64 @@ export class RoadsView {
         if (e) b.flat([[cx + ROAD_W, cz - ROAD_W], [cx + ROAD_W, cz + ROAD_W], [tx + 1, cz + ROAD_W], [tx + 1, cz - ROAD_W]], h, col);
         // Centre line on straight stretches.
         const hl = (x: number, z: number) => h(x, z) + 0.006;
+        b.surf = SURF.paint;
         if ((n || s) && !(e || wv)) b.flat([[cx - 0.03, ty + 0.15], [cx - 0.03, ty + 0.55], [cx + 0.03, ty + 0.55], [cx + 0.03, ty + 0.15]], hl, LINE);
         if ((e || wv) && !(n || s)) b.flat([[tx + 0.15, cz - 0.03], [tx + 0.15, cz + 0.03], [tx + 0.55, cz + 0.03], [tx + 0.55, cz - 0.03]], hl, LINE);
+        if (r === 1) {
+          // Pavements with a kerb, wrapping the carriageway's outline. Directions are
+          // unit xz vectors; P(d1, a, d2, b) is the point a along d1 and b along d2.
+          const arm = { n, s, e, w: wv };
+          const D: Record<'n' | 's' | 'e' | 'w', XZ> = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+          const P = (d1: XZ, a: number, d2: XZ, bb: number): XZ => [cx + d1[0] * a + d2[0] * bb, cz + d1[1] * a + d2[1] * bb];
+          const pave = (d1: XZ, a0: number, a1: number, d2: XZ, b0: number, b1: number) => {
+            b.surf = SURF.pavement;
+            b.flat([P(d1, a0, d2, b0), P(d1, a0, d2, b1), P(d1, a1, d2, b1), P(d1, a1, d2, b0)], hk, PAVEMENT);
+          };
+          // A kerb face (towards the road, sign -1) or the pavement's outer edge (sign +1).
+          const face = (d1: XZ, a: number, d2: XZ, b0: number, b1: number, sign: 1 | -1) => {
+            b.surf = SURF.kerb;
+            b.wall(P(d1, a, d2, b0), P(d1, a, d2, b1), sign < 0 ? h : ground, hk, d1[0] * sign, d1[1] * sign, KERB);
+          };
+          const bridgeAt = (d: XZ) => {
+            const x = tx + d[0];
+            const y = ty + d[1];
+            return x >= 0 && y >= 0 && x < w && y < map.height && road[y * w + x] === 2;
+          };
+          for (const k of ['n', 's', 'e', 'w'] as const) {
+            if (arm[k]) continue;
+            const d = D[k];
+            const p: XZ = [-d[1], d[0]];
+            pave(d, R, R + SW, p, -R, R);
+            face(d, R, p, -R, R, -1);
+            face(d, R + SW, p, -R, R, 1);
+          }
+          for (const k1 of ['n', 's'] as const) {
+            for (const k2 of ['e', 'w'] as const) {
+              const d1 = D[k1];
+              const d2 = D[k2];
+              const a1 = arm[k1];
+              const a2 = arm[k2];
+              if (a1) {
+                pave(d2, R, R + SW, d1, R, 0.5);
+                face(d2, R, d1, R, 0.5, -1);
+                face(d2, R + SW, d1, a2 ? R + SW : R, 0.5, 1);
+                if (bridgeAt(d1)) face(d1, 0.5, d2, R, R + SW, 1);
+              }
+              if (a2) {
+                pave(d1, R, R + SW, d2, a1 ? R + SW : R, 0.5);
+                face(d1, R, d2, R, 0.5, -1);
+                face(d1, R + SW, d2, a1 ? R + SW : R, 0.5, 1);
+                if (bridgeAt(d2)) face(d2, 0.5, d1, R, R + SW, 1);
+              }
+              if (!a1 && !a2) {
+                pave(d1, R, R + SW, d2, R, R + SW);
+                face(d1, R + SW, d2, R, R + SW, 1);
+                face(d2, R + SW, d1, R, R + SW, 1);
+              }
+            }
+          }
+        }
+        b.surf = SURF.concrete;
         if (r === 2) {
           // Bridge: a pillar down to the riverbed and low parapets.
           const deck = surfaceHeight(map, cx, cz);
@@ -199,7 +414,7 @@ export class RoadsView {
         }
       }
     }
-    const m = b.mesh();
+    const m = b.mesh(roadMat);
     if (m) {
       this.chunks.set(c, m);
       this.group.add(m);
@@ -489,13 +704,16 @@ export class ShipsView {
 // Railways and trains
 
 const railMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.3, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+applyInfra(railMat, 'infra-rail');
 applyOverlay(railMat);
 applyFow(railMat);
-const BALLAST = new THREE.Color(0x7d766c);
-const SLEEPER = new THREE.Color(0x5a4232);
+const BALLAST = new THREE.Color(0x857d72);
+const SLEEPER = new THREE.Color(0x544638);
+const SLEEPER_SHADE = new THREE.Color();
 const STEEL = new THREE.Color(0xb8bcc0);
 const RAIL_LIFT = 0.07;
-const GUIDEWAY = new THREE.Color(0xe8eaec);
+const GUIDEWAY = new THREE.Color(0xe0e2e4);
+const GUIDEWAY_WEB = new THREE.Color(0xb4b6b8);
 const MAGSTRIP = new THREE.Color(0x4aa0ff);
 
 export class RailsView {
@@ -554,11 +772,19 @@ export class RailsView {
     const b = new Builder();
     const at = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < map.height && rail[y * w + x]! > 0;
     const h = (x: number, z: number) => surfaceHeight(map, x, z) + RAIL_LIFT;
-    const hs = (x: number, z: number) => h(x, z) + 0.02;
-    const hr = (x: number, z: number) => h(x, z) + 0.05;
+    const ground = (x: number, z: number) => surfaceHeight(map, x, z) - 0.01;
+    const hs0 = (x: number, z: number) => h(x, z) - 0.01;
+    const hs = (x: number, z: number) => h(x, z) + 0.025;
+    const hr = (x: number, z: number) => h(x, z) + 0.06;
+    const gTop = (x: number, z: number) => h(x, z) + 0.12;
+    const gUnder = (x: number, z: number) => h(x, z) + 0.075;
+    const D: Record<'n' | 's' | 'e' | 'w', XZ> = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+    const BW = 0.27; // ballast top half width
+    const SH = 0.09; // shoulder, sloping down to the ground
     for (let ty = y0; ty < Math.min(y0 + RCHUNK, map.height); ty++) {
       for (let tx = x0; tx < Math.min(x0 + RCHUNK, w); tx++) {
-        if (!rail[ty * w + tx]) continue;
+        const kind = rail[ty * w + tx]!;
+        if (!kind) continue;
         const cx = tx + 0.5;
         const cz = ty + 0.5;
         const n = at(tx, ty - 1);
@@ -572,39 +798,66 @@ export class RailsView {
         if (e) arms.push('e');
         if (wv) arms.push('w');
         if (!arms.length) arms.push(...(vertical ? (['n', 's'] as const) : (['e', 'w'] as const)));
-        // Ballast bed in the centre, then each arm: ballast, sleepers, two rails.
-        const BW = 0.3;
-        b.flat([[cx - BW, cz - BW], [cx - BW, cz + BW], [cx + BW, cz + BW], [cx + BW, cz - BW]], h, BALLAST);
+        const has = { n: arms.includes('n'), s: arms.includes('s'), e: arms.includes('e'), w: arms.includes('w') };
+        const P = (d1: XZ, a: number, d2: XZ, bb: number): XZ => [cx + d1[0] * a + d2[0] * bb, cz + d1[1] * a + d2[1] * bb];
+        const P3 = (d1: XZ, a: number, d2: XZ, bb: number, f: HFn): [number, number, number] => {
+          const [x, z] = P(d1, a, d2, bb);
+          return [x, f(x, z), z];
+        };
+        if (kind === 1) {
+          // Ballast bed: a flat top over the centre and arms, with sloping shoulders.
+          b.surf = SURF.ballast;
+          b.flat([[cx - BW, cz - BW], [cx - BW, cz + BW], [cx + BW, cz + BW], [cx + BW, cz - BW]], h, BALLAST);
+          const slope = (d1: XZ, a: number, d2: XZ, b0: number, b1: number) =>
+            b.quad([P3(d1, a, d2, b0, h), P3(d1, a, d2, b1, h), P3(d1, a + SH, d2, b1, ground), P3(d1, a + SH, d2, b0, ground)], d1[0], 0.6, d1[1], BALLAST);
+          for (const k of ['n', 's', 'e', 'w'] as const) {
+            const d = D[k];
+            const p: XZ = [-d[1], d[0]];
+            if (has[k]) b.flat([P(d, BW, p, -BW), P(d, BW, p, BW), P(d, 0.5, p, BW), P(d, 0.5, p, -BW)], h, BALLAST);
+            else slope(d, BW, p, -BW, BW);
+          }
+          for (const k1 of ['n', 's'] as const) {
+            for (const k2 of ['e', 'w'] as const) {
+              const d1 = D[k1];
+              const d2 = D[k2];
+              if (has[k1]) slope(d2, BW, d1, BW, 0.5);
+              if (has[k2]) slope(d1, BW, d2, BW, 0.5);
+              if (!has[k1] && !has[k2]) {
+                // Outer corner: a little pyramid face joining the two shoulders.
+                const top = P3(d1, BW, d2, BW, h);
+                b.quad([top, P3(d1, BW + SH, d2, BW, ground), P3(d1, BW + SH, d2, BW + SH, ground), P3(d1, BW, d2, BW + SH, ground)], d1[0] + d2[0], 0.8, d1[1] + d2[1], BALLAST);
+              }
+            }
+          }
+        }
         for (const a of arms) {
-          const along = a === 'n' || a === 's' ? 'z' : 'x';
-          const sign = a === 's' || a === 'e' ? 1 : -1;
-          const lo = (u: number, v: number): [number, number] => (along === 'x' ? [cx + sign * u, cz + v] : [cx + v, cz + sign * u]);
-          const quad = (u0: number, u1: number, v0: number, v1: number, hh: (x: number, z: number) => number, col: THREE.Color) => {
-            const p = [lo(u0, v0), lo(u0, v1), lo(u1, v1), lo(u1, v0)];
-            // Keep counter-clockwise winding seen from above.
-            const cross = (p[1]![0] - p[0]![0]) * (p[2]![1] - p[0]![1]) - (p[1]![1] - p[0]![1]) * (p[2]![0] - p[0]![0]);
-            b.flat(cross > 0 ? p : p.reverse(), hh, col);
-          };
-          if (rail[ty * w + tx] === 2) {
-            // Maglev: a raised white guideway with a blue power strip.
-            quad(0, 0.5, -0.24, 0.24, (x, z) => h(x, z) + 0.12, GUIDEWAY);
-            quad(0, 0.5, -0.04, 0.04, (x, z) => h(x, z) + 0.125, MAGSTRIP);
+          const d = D[a];
+          const p: XZ = [-d[1], d[0]];
+          const rect = (u0: number, u1: number, v0: number, v1: number): XZ[] => [P(d, u0, p, v0), P(d, u0, p, v1), P(d, u1, p, v1), P(d, u1, p, v0)];
+          if (kind === 2) {
+            // Maglev: a concrete T-beam guideway on a central web, with a glowing power strip.
+            b.surf = SURF.concrete;
+            b.prism(rect(0, 0.5, -0.24, 0.24), gUnder, gTop, GUIDEWAY);
+            b.prism(rect(0, 0.5, -0.07, 0.07), ground, gUnder, GUIDEWAY_WEB);
+            for (const v of [-0.2, 0.2]) b.prism(rect(0, 0.5, v - 0.025, v + 0.025), gTop, (x, z) => gTop(x, z) + 0.025, GUIDEWAY);
+            b.surf = SURF.glow;
+            b.flat(rect(0, 0.5, -0.04, 0.04), (x, z) => gTop(x, z) + 0.004, MAGSTRIP);
             continue;
           }
-          quad(0, 0.5, -BW, BW, h, BALLAST);
-          for (const u of [0.12, 0.37]) quad(u - 0.05, u + 0.05, -0.26, 0.26, hs, SLEEPER);
-          for (const v of [-0.15, 0.15]) quad(0, 0.5, v - 0.025, v + 0.025, hr, STEEL);
+          // Sleepers, each a slightly different weathered shade, then the two rails on top.
+          b.surf = SURF.sleeper;
+          for (const [i, u] of [1 / 12, 3 / 12, 5 / 12].entries()) {
+            const t = 0.8 + 0.4 * hash01(tx, ty, i + (a === 'n' || a === 'w' ? 7 : 0));
+            b.prism(rect(u - 0.035, u + 0.035, -0.27, 0.27), hs0, hs, SLEEPER_SHADE.copy(SLEEPER).multiplyScalar(t));
+          }
+          b.surf = SURF.steel;
+          for (const v of [-0.15, 0.15]) b.prism(rect(0, 0.5, v - 0.02, v + 0.02), hs, hr, STEEL);
         }
       }
     }
-    if (!b.pos.length) return;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
-    geo.computeVertexNormals();
-    geo.computeBoundingSphere();
-    const m = new THREE.Mesh(geo, railMat);
-    m.receiveShadow = true;
+    const m = b.mesh(railMat);
+    if (!m) return;
+    m.castShadow = true;
     this.chunks.set(c, m);
     this.group.add(m);
   }
@@ -788,9 +1041,12 @@ export class TrainsView {
 // ---------------------------------------------------------------------------
 // Pipelines: a grey pipe on short posts, joints at bends.
 
-const PIPE_COL = new THREE.Color(0x9aa0a6);
+const PIPE_COL = new THREE.Color(0xa4aab0);
+const JOINT_COL = new THREE.Color(0x8a9096);
 const POST_COL = new THREE.Color(0x5a5f64);
+const FOOTING_COL = new THREE.Color(0x9a978f);
 const PIPE_H = 0.32;
+const PIPE_R = 0.05;
 
 export class PipesView {
   readonly group = new THREE.Group();
@@ -857,22 +1113,30 @@ export class PipesView {
         const s = at(tx, ty + 1);
         const e = at(tx + 1, ty);
         const wv = at(tx - 1, ty);
-        b.box(ox, base, oz, 0.07, PIPE_H, 0.07, POST_COL);
-        b.box(ox, y - 0.06, oz, 0.16, 0.14, 0.16, PIPE_COL);
-        if (e) b.box(ox + 0.5, y - 0.05, oz, 1, 0.1, 0.1, PIPE_COL);
-        if (s) b.box(ox, y - 0.05, oz + 0.5, 0.1, 0.1, 1, PIPE_COL);
-        if (!(n || s || e || wv)) b.box(ox, y - 0.05, oz, 0.5, 0.1, 0.1, PIPE_COL);
+        const yc = y - 0.01; // pipe axis
+        // A concrete footing, a steel post and a saddle under the pipe.
+        b.surf = SURF.concrete;
+        b.box(ox, base - 0.04, oz, 0.13, 0.06, 0.13, FOOTING_COL);
+        b.surf = SURF.pipe;
+        b.box(ox, base, oz, 0.05, yc - base - PIPE_R, 0.05, POST_COL);
+        b.box(ox, yc - PIPE_R - 0.025, oz, 0.13, 0.03, 0.13, POST_COL);
+        const straight = (n && s && !e && !wv) || (e && wv && !n && !s);
+        if (straight) {
+          // Bolted flange where two lengths meet.
+          if (e || wv) b.tube([ox - 0.025, oz], [ox + 0.025, oz], yc, PIPE_R * 1.45, PIPE_COL, true);
+          else b.tube([ox, oz - 0.025], [ox, oz + 0.025], yc, PIPE_R * 1.45, PIPE_COL, true);
+        } else {
+          // Bend, tee or end: a cast fitting.
+          b.box(ox, yc - 0.075, oz, 0.15, 0.15, 0.15, JOINT_COL);
+        }
+        if (e) b.tube([ox, oz], [ox + 1, oz], yc, PIPE_R, PIPE_COL);
+        if (s) b.tube([ox, oz], [ox, oz + 1], yc, PIPE_R, PIPE_COL);
+        if (!(n || s || e || wv)) b.tube([ox - 0.25, oz], [ox + 0.25, oz], yc, PIPE_R, PIPE_COL, true);
       }
     }
-    if (!b.pos.length) return;
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
-    geo.computeVertexNormals();
-    geo.computeBoundingSphere();
-    const m = new THREE.Mesh(geo, railMat);
+    const m = b.mesh(railMat);
+    if (!m) return;
     m.castShadow = true;
-    m.receiveShadow = true;
     this.chunks.set(c, m);
     this.group.add(m);
   }

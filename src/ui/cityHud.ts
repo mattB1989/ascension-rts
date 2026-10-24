@@ -10,6 +10,7 @@ import { houseCapacity, gameMonth, gameYear } from '../sim/city/economy.ts';
 import { stockTotal } from '../sim/city/logistics.ts';
 import { get } from '../sim/city/state.ts';
 import { buyPrice, sellPrice } from '../sim/city/trade.ts';
+import { dependence, DIPLO, marketOf, purchasePrice, stateOffers, stateValue, theyCharge, theyPay } from '../sim/city/diplomacy.ts';
 import { DEPOSIT_NAMES, TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
 import type { Building, GameEvent, World } from '../sim/world.ts';
 import { materialsText, type PlaceType } from './cityTools.ts';
@@ -61,7 +62,9 @@ export class CityHud {
   private shownOverlay: OverlayKind | null = null;
   private overlayAt = 0;
   private readonly overlayBar: HTMLDivElement;
-  private panelKind: 'goods' | 'budget' | 'trade' | 'menu' | 'help' | null = null;
+  private panelKind: 'goods' | 'budget' | 'trade' | 'diplomacy' | 'menu' | 'help' | null = null;
+  /** City-state whose deals are open in the diplomacy panel (0: none). */
+  private dealsWith = 0;
   private lastTop = '';
   private lastInfo = '';
   private lastPanel = '';
@@ -96,6 +99,7 @@ export class CityHud {
     right.append(
       this.btn('🗺', 'Overlays: land, water, power, services, happiness, pollution', () => this.overlayBar.classList.toggle('hidden')),
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
+      this.btn('🤝', 'Diplomacy: city-states, deals, unions', () => this.togglePanel('diplomacy')),
       this.btn('🚢', 'Trade with the overseas market', () => this.togglePanel('trade')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
       this.btn('☰', 'Save, load, new game', () => this.togglePanel('menu')),
@@ -178,7 +182,7 @@ export class CityHud {
     return false;
   }
 
-  private togglePanel(kind: 'goods' | 'budget' | 'trade' | 'menu' | 'help'): void {
+  private togglePanel(kind: 'goods' | 'budget' | 'trade' | 'diplomacy' | 'menu' | 'help'): void {
     this.panelKind = this.panelKind === kind ? null : kind;
     this.panel.classList.toggle('hidden', this.panelKind === null);
     this.lastPanel = '';
@@ -229,6 +233,29 @@ export class CityHud {
         this.lastPanel = '';
         break;
       }
+      case 'deals':
+        this.dealsWith = this.dealsWith === Number(arg) ? 0 : Number(arg);
+        this.lastPanel = '';
+        break;
+      case 'deal': {
+        const [st, g, field, delta] = arg.split(':') as [string, GoodId, 'import' | 'export', string];
+        const state = Number(st);
+        const pc = this.world.city!.players[this.game.humanPlayer]!;
+        const rule = pc.deals[state]?.[g] ?? { import: 0, export: -1 };
+        const steps = [0, 20, 50, 100, 200, 400];
+        const move = (v: number, list: number[], d: number) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a))) + d))]!;
+        const imp = field === 'import' ? move(rule.import, steps, Number(delta)) : rule.import;
+        const exp = field === 'export' ? move(rule.export, [-1, ...steps], Number(delta)) : rule.export;
+        this.game.issue({ kind: 'deal', player: this.game.humanPlayer, state, good: g, import: imp, export: exp });
+        this.lastPanel = '';
+        break;
+      }
+      case 'union':
+        this.game.issue({ kind: 'acceptUnion', player: this.game.humanPlayer, state: Number(arg) });
+        break;
+      case 'buy':
+        this.game.issue({ kind: 'buyState', player: this.game.humanPlayer, state: Number(arg) });
+        break;
       case 'tax': {
         const pc = this.world.city!.players[this.game.humanPlayer]!;
         this.game.issue({ kind: 'taxRate', player: this.game.humanPlayer, rate: pc.taxRate + Number(arg) });
@@ -457,6 +484,7 @@ export class CityHud {
       if (held.length) rows.push(`<div class="stock">${held.map((g) => chip(g, `${Math.floor(get(c.stock, g))}`)).join('')}</div>`);
       if (e.trucks || e.crews) rows.push(`<div class="muted">${e.trucks ? `🚚 ${c.trucksOut}/${e.trucks} out` : ''}${e.trucks && e.crews ? ' · ' : ''}${e.crews ? `👷 ${c.crewsOut}/${e.crews} crews out` : ''}</div>`);
     }
+    if (!own) title = `${this.world.players[b.owner]?.name ?? 'Foreign'} · ${title}`;
     const head = `<div class="card-head"><div class="card-title">${esc(title)}</div><div class="card-status ${status && status !== '' ? 'warn' : ''}">${esc(status || (b.complete ? 'Working' : ''))}</div></div>`;
     const actions = own && b.type !== 'town_hall' ? `<div class="info-actions"><button class="cmd danger" data-action="demolish" data-arg="${b.id}">🗑 Demolish</button></div>` : '';
     return head + rows.join('') + actions;
@@ -472,7 +500,8 @@ export class CityHud {
     const r = reg ? map.regions[reg - 1] : undefined;
     const owner = reg ? this.world.city!.regionOwner[reg]! : -1;
     const dep = map.deposit[i]!;
-    const lines = [`<div class="card-head"><div class="card-title">${esc(r?.name ?? TERRAIN_NAMES[map.terrain[i] as TerrainId])}</div><div class="card-status">${r ? (owner === this.game.humanPlayer ? 'Your region' : owner >= 0 ? 'Claimed' : 'Unclaimed') : ''}</div></div>`];
+    const ownerName = owner >= 0 ? this.world.players[owner]?.name ?? 'Claimed' : '';
+    const lines = [`<div class="card-head"><div class="card-title">${esc(r?.name ?? TERRAIN_NAMES[map.terrain[i] as TerrainId])}</div><div class="card-status">${r ? (owner === this.game.humanPlayer ? 'Your region' : owner >= 0 ? `City-state of ${esc(ownerName)}` : 'Unclaimed') : ''}</div></div>`];
     lines.push(`<div>${TERRAIN_NAMES[map.terrain[i] as TerrainId]}${dep ? ` · ${DEPOSIT_NAMES[dep as 1]} deposit` : ''}${map.fresh[i] ? ' · fresh water' : ''}</div>`);
     if (r) {
       const offers = [r.fertile ? `🌾 ${r.fertile} fertile` : '', r.forest ? `🌲 ${r.forest} forest` : '', r.ore ? `⛏ ore` : '', r.stone ? `🪨 stone` : '', r.oil ? `🛢 oil` : '', r.coast ? '🌊 coast' : '', r.river ? '〰 river' : ''].filter(Boolean);
@@ -484,6 +513,49 @@ export class CityHud {
 
   // -------------------------------------------------------------------------
   // Panels
+
+  private diplomacyHtml(): string {
+    const me = this.game.humanPlayer;
+    const w = this.world;
+    const states = w.players.filter((p) => p.role === 'cityState' && !p.defeated);
+    if (!states.length) return '<p class="muted">No city-states left: every one has joined a nation.</p>';
+    const pc = w.city!.players[me]!;
+    const mine = w.buildings.filter((b) => b.owner === me && b.complete && b.def.econ?.storage && b.city!.access >= 0);
+    return states.map((p) => {
+      const rel = w.city!.players[p.id]!.relations!;
+      const hall = marketOf(w, p.id);
+      const v = stateValue(w, p.id);
+      const op = Math.round(rel.opinion[me] ?? 0);
+      const dep = dependence(w, p.id, me);
+      // Connected if one of our storage buildings shares a road network with their town hall.
+      const connected = !!hall?.city && hall.city.access >= 0 && mine.some((b) => b.city!.comp === hall.city!.comp);
+      const color = '#' + p.color.toString(16).padStart(6, '0');
+      const price = purchasePrice(w, p.id);
+      const offer = rel.offer === me;
+      const actions = [
+        hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : '',
+        `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>`,
+        offer ? `<button class="mini wide primary" data-action="union" data-arg="${p.id}">Accept union</button>` : '',
+        `<button class="mini wide ${op >= DIPLO.buyOpinion && pc.credits >= price ? '' : 'disabled'}" data-action="buy" data-arg="${p.id}" title="${op >= DIPLO.buyOpinion ? '' : `They sell only to friends (opinion ${DIPLO.buyOpinion}+)`}">Buy ₡${fmt(price)}</button>`,
+      ].join('');
+      let deals = '';
+      if (this.dealsWith === p.id) {
+        const rows = GOOD_IDS.map((g) => {
+          const r = pc.deals[p.id]?.[g] ?? { import: 0, export: -1 };
+          const step = (field: string, d: number, label: string) => `<button class="mini" data-action="deal" data-arg="${p.id}:${g}:${field}:${d}">${label}</button>`;
+          return `<tr><td>${GOODS[g].icon} ${GOODS[g].name}</td><td class="pos">₡${theyPay(w, p.id, g).toFixed(1)}</td><td class="neg">₡${theyCharge(w, p.id, g).toFixed(1)}</td><td>${Math.floor(stateOffers(w, p.id, g))}</td>
+            <td class="rule">${step('import', -1, '−')}<span>${r.import > 0 ? `up to ${r.import}` : '—'}</span>${step('import', 1, '+')}</td><td class="rule">${step('export', -1, '−')}<span>${r.export >= 0 ? `above ${r.export}` : '—'}</span>${step('export', 1, '+')}</td></tr>`;
+        }).join('');
+        deals = `<table class="goods trade"><tr><th></th><th>They pay</th><th>They charge</th><th>Spare</th><th>Import</th><th>Export</th></tr>${rows}</table>
+          <p class="muted">Your trucks carry the goods from your Town Hall, warehouses and ports along the roads to their town hall.</p>`;
+      }
+      return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
+        <span class="muted">👥 ${v.population} · ₡${fmt(w.city!.players[p.id]!.credits)}</span></div>
+        <div class="state-row">Opinion ${bar(op, -100, 100, op >= 40 ? 'good' : op < 0 ? 'bad' : '')} ${op} · Dependence ${bar(dep, 0, 1, dep >= DIPLO.unionDependence ? 'good' : '')} ${Math.round(dep * 100)}%</div>
+        <div class="state-row ${connected ? 'pos' : 'neg'}">${connected ? 'Connected by road' : 'Not connected: build a road to their town hall to trade'}${offer ? ' · <b>They ask to join you!</b>' : ''}</div>
+        <div class="state-actions">${actions}</div>${deals}</div>`;
+    }).join('') + `<p class="muted">Trade raises their opinion of you. When a city-state likes you (${DIPLO.unionOpinion}+) and most of its economy is trade with you (${Math.round(DIPLO.unionDependence * 100)}%+), it asks to join your nation. Friends (${DIPLO.buyOpinion}+) can also be bought.</p>`;
+  }
 
   private renderPanel(): void {
     if (!this.panelKind) return;
@@ -530,6 +602,8 @@ export class CityHud {
           <table class="goods trade"><tr><th></th><th>You have</th><th>Sell</th><th>Buy</th><th>Import</th><th>Export</th></tr>${rows}</table>
           <p class="muted">Import tops your stock up to the amount; export ships out everything above it. Ships carry ${OVERSEAS.capacity} each way. World prices drift over time. This year: exports ₡${fmt(pc.year.trade)}, imports ₡${fmt(pc.year.imports)}.</p>`;
       }
+      case 'diplomacy':
+        return `${close}<h3>City-states</h3>${this.diplomacyHtml()}`;
       case 'budget': {
         const y = pc.year;
         const l = pc.lastYear;
@@ -554,6 +628,11 @@ export class CityHud {
         return '';
     }
   }
+}
+
+function bar(v: number, min: number, max: number, cls: string): string {
+  const k = Math.max(0, Math.min(1, (v - min) / (max - min)));
+  return `<span class="bar ${cls}"><span style="width:${Math.round(k * 100)}%"></span></span>`;
 }
 
 function chip(g: GoodId, text: string): string {

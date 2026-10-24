@@ -13,6 +13,8 @@ import { accessIndex, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './lo
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, emptyBudget, get, type PlayerCity, type Stock } from './state.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
+import { updateDiplomacy } from './diplomacy.ts';
+import { botStep } from '../../ai/cityBot.ts';
 
 const SECOND = 15; // ticks
 /** Share of residents who work. */
@@ -47,6 +49,10 @@ export function updateCity(world: World): void {
   construction(world);
   if (world.tick % SECOND === 0) everySecond(world);
   dispatch(world, cachedIndex(world));
+  for (const bot of city.bots) {
+    if (!world.players[bot.player]) continue;
+    city.aiQueue.push(...botStep(world, bot));
+  }
 }
 
 let idxCache: { world: World; tick: number; idx: Map<number, Building[]> } | null = null;
@@ -144,6 +150,7 @@ function everySecond(world: World): void {
   households(world);
   budget(world);
   updateTrade(world);
+  updateDiplomacy(world, sec);
   roadUpkeep(world, sec);
   for (const pc of city.players) {
     pc.made = sumLog(pc.madeLog);
@@ -233,13 +240,15 @@ function power(world: World): void {
     pc.powerSupply = 0;
     pc.powerDemand = 0;
   }
+  // Each owner's grid is separate even where roads join up.
   const supply = new Map<number, number>();
+  const key = (b: Building) => b.city!.comp * 64 + b.owner;
   for (const b of world.buildings) {
     const c = b.city;
     if (!c || !b.complete) continue;
     const mw = b.def.econ?.power ?? 0;
     if (mw < 0 && c.comp) {
-      supply.set(c.comp, (supply.get(c.comp) ?? 0) + c.powerOut);
+      supply.set(key(b), (supply.get(key(b)) ?? 0) + c.powerOut);
       city.players[b.owner]!.powerSupply += c.powerOut;
     }
   }
@@ -250,9 +259,9 @@ function power(world: World): void {
     const c = b.city!;
     const need = b.type === 'house' ? HOUSE_POWER : b.def.econ!.power!;
     city.players[b.owner]!.powerDemand += need;
-    const left = supply.get(c.comp) ?? 0;
+    const left = supply.get(key(b)) ?? 0;
     c.powered = c.comp > 0 && left >= need;
-    if (c.powered) supply.set(c.comp, left - need);
+    if (c.powered) supply.set(key(b), left - need);
   }
 }
 
@@ -274,7 +283,7 @@ function coverage(world: World): void {
     const sup = b.def.econ?.waterSupply;
     if (!c || !sup || !b.complete || !c.comp) continue;
     const ok = c.workers > 0 && (!(b.def.econ!.power ?? 0) || c.powered);
-    if (ok) waterLeft.set(c.comp, (waterLeft.get(c.comp) ?? 0) + sup * Math.min(1, c.workers / (b.def.econ!.jobs?.count ?? 1)));
+    if (ok) waterLeft.set(c.comp * 64 + b.owner, (waterLeft.get(c.comp * 64 + b.owner) ?? 0) + sup * Math.min(1, c.workers / (b.def.econ!.jobs?.count ?? 1)));
   }
   const services = world.buildings.filter((b) => b.city && b.complete && b.def.econ?.service);
   for (const s of services) {
@@ -297,7 +306,7 @@ function coverage(world: World): void {
     }
     let capacity = svc.capacity * (s.def.econ!.jobs ? Math.min(1, c.workers / s.def.econ!.jobs.count) : 1);
     if (svc.kind === 'water') {
-      const left = waterLeft.get(c.comp) ?? 0;
+      const left = waterLeft.get(c.comp * 64 + s.owner) ?? 0;
       if (left <= 0) {
         c.status = 'No water: build a Pumping Station on these roads';
         continue;
@@ -321,7 +330,7 @@ function coverage(world: World): void {
       return false;
     });
     c.served = used;
-    if (svc.kind === 'water') waterLeft.set(c.comp, (waterLeft.get(c.comp) ?? 0) - used);
+    if (svc.kind === 'water') waterLeft.set(c.comp * 64 + s.owner, (waterLeft.get(c.comp * 64 + s.owner) ?? 0) - used);
   }
 }
 
@@ -527,13 +536,15 @@ function budget(world: World): void {
       pc.year.upkeep += up;
     }
   }
-  // Roads, charged to whoever owns the region they're in (simplification: the first player).
-  const roads = (city.roadCount * ROAD.upkeepPerYear) / YEAR_SECONDS;
-  const pc0 = city.players[0];
-  if (pc0) {
-    pc0.credits -= roads;
-    pc0.year.roads += roads;
-  }
+  // Roads are paid for by whoever owns the region they're in (bridges: the nearest region).
+  const perOwner = roadsByOwner(world);
+  perOwner.forEach((n, p) => {
+    const pc = city.players[p];
+    if (!pc || !n) return;
+    const cost = (n * ROAD.upkeepPerYear) / YEAR_SECONDS;
+    pc.credits -= cost;
+    pc.year.roads += cost;
+  });
 }
 
 /** Roads age; maintenance depots repair the worst roads within their reach. */
@@ -567,6 +578,24 @@ function roadUpkeep(world: World, sec: number): void {
     c.status = tiles.length ? '' : 'All roads in reach are in good repair';
     c.efficiency = staff;
   }
+}
+
+let roadOwners: { world: World; version: number; counts: number[] } | null = null;
+
+/** Road tiles per owner, recounted when roads change. */
+export function roadsByOwner(world: World): number[] {
+  const city = world.city!;
+  if (roadOwners && roadOwners.world === world && roadOwners.version === city.roadVersion) return roadOwners.counts;
+  const counts = new Array(world.players.length).fill(0);
+  const near = world.map.nearRegion;
+  for (let i = 0; i < city.road.length; i++) {
+    if (!city.road[i]) continue;
+    const o = city.regionOwner[near[i]!] ?? -1;
+    if (o >= 0) counts[o]++;
+    else counts[0]++; // roads on unclaimed land: whoever is building there is the human for now
+  }
+  roadOwners = { world, version: city.roadVersion, counts };
+  return counts;
 }
 
 /** Game year (calendar) at the current tick. */

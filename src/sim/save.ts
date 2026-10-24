@@ -58,7 +58,12 @@ function migrate(w: World): void {
   city.ships ??= [];
   city.nextShipId ??= 1;
   city.prices ??= Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>;
+  city.bots ??= [];
+  city.aiQueue ??= [];
+  for (const t of city.trucks) t.buy ??= null;
   for (const pc of city.players) {
+    pc.deals ??= {};
+    pc.relations ??= null;
     pc.trade ??= {};
     pc.stockpile ??= {};
     pc.year.imports ??= 0;

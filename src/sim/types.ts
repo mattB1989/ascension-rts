@@ -176,11 +176,15 @@ export interface ResourceState {
   claimedBy: number;
 }
 
+export type PlayerRole = 'human' | 'nation' | 'cityState';
+
 export interface PlayerState {
   id: number;
   name: string;
   color: number;
   isHuman: boolean;
+  /** Economy game: who this is (skirmish players are 'human' or 'nation'). */
+  role?: PlayerRole;
   age: AgeId;
   res: Record<ResourceId, number>;
   /** Cumulative totals, for income rates and the post-game report. */

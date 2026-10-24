@@ -22,6 +22,8 @@ export interface BotState {
   noLand: string[];
   /** Game time of the next look at the trade rules. */
   tradeAt: number;
+  /** Stop adding houses at this population (city-states stay small). */
+  maxPop: number;
   /** Grid rings laid out so far. */
   rings: number;
   /** Seconds until the next decision. */
@@ -29,8 +31,8 @@ export interface BotState {
   log: string[];
 }
 
-export function newBot(player: number): BotState {
-  return { player, noLand: [], tradeAt: 0, rings: 0, wait: 0, log: [] };
+export function newBot(player: number, maxPop = Infinity): BotState {
+  return { player, noLand: [], tradeAt: 0, maxPop, rings: 0, wait: 0, log: [] };
 }
 
 function hall(world: World, player: number): Building | undefined {
@@ -306,7 +308,10 @@ export function botStep(world: World, bot: BotState): Command[] {
     if (!cond) continue;
     // Producers of building materials are never held back: everything else waits on them.
     if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port'].includes(type)) continue;
+    // City-states keep money in hand to trade with.
+    if (bot.maxPop < Infinity && credits < 2500 + buildingDef(type).econ!.credits && type !== 'house') continue;
     if (type === 'house') {
+      if (pop >= bot.maxPop) continue;
       const out: Command[] = [];
       for (let i = 0; i < 4; i++) out.push(...place(world, bot, 'house'));
       if (out.length) return out.slice(0, 4);

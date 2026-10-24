@@ -137,7 +137,7 @@ test('the scripted city grows: technicians, a positive budget, every chain runni
   assert.ok(pc.population[1] > 50, `technicians ${pc.population[1]}`);
   assert.ok(pc.lastYear.taxes > pc.lastYear.upkeep + pc.lastYear.roads, `taxes ${pc.lastYear.taxes} vs upkeep ${pc.lastYear.upkeep}`);
   for (const g of ['lumber', 'food', 'concrete', 'steel'] as const) assert.ok((pc.made[g] ?? 0) > 0 || world.buildings.some((b) => (b.city?.stock[g] ?? 0) > 0), `${g} in the economy`);
-  assert.ok(pc.powerSupply > 0, 'power');
+  assert.ok(world.buildings.some((b) => b.owner === 0 && b.complete && (b.def.econ?.power ?? 0) < 0), 'a power station');
   assert.ok(pc.history.length >= 11, 'yearly history');
 });
 
@@ -271,4 +271,77 @@ test('roads wear with age and traffic, and a maintenance depot repairs them', as
   run(world, 60);
   const avg = street.reduce((s, [x, y]) => s + city.condition[y * world.map.width + x]!, 0) / street.length;
   assert.ok(avg > 0.5, `repaired to ${avg.toFixed(2)}`);
+});
+
+test('city-states grow on their own, trade by road with you, and can join your nation', async () => {
+  const { dependence, marketOf, relationsOf } = await import('../src/sim/city/diplomacy.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 2 });
+  const states = world.players.filter((p) => p.role === 'cityState');
+  assert.equal(states.length, 2);
+  run(world, 4 * 120);
+  const s = states[0]!.id;
+  const spc = world.city!.players[s]!;
+  assert.ok(spc.population[0] + spc.population[1] > 30, 'the city-state grew');
+  assert.ok(world.buildings.filter((b) => b.owner === s).length > 5, 'it built a town');
+  // Connect our town hall to theirs with a road (L-shape through any land we may cross).
+  const mine = world.buildings.find((b) => b.owner === 0 && b.type === 'town_hall')!;
+  const theirs = marketOf(world, s)!;
+  const from: [number, number] = [mine.tx + 2, mine.ty + 5];
+  const to: [number, number] = [theirs.tx + 2, theirs.ty + 5];
+  // Breadth-first search over tiles where we may lay road.
+  const { roadProblem } = await import('../src/sim/city/roads.ts');
+  const W = world.map.width;
+  const prev = new Map<number, number>();
+  const start = from[1] * W + from[0];
+  const goal = to[1] * W + to[0];
+  prev.set(start, -1);
+  const q = [start];
+  for (let k = 0; k < q.length && !prev.has(goal); k++) {
+    const i = q[k]!;
+    const x = i % W;
+    const y = Math.floor(i / W);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx!;
+      const ny = y + dy!;
+      const j = ny * W + nx;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= world.map.height || prev.has(j)) continue;
+      if (world.city!.road[j] || roadProblem(world, 0, nx, ny) === null) {
+        prev.set(j, i);
+        q.push(j);
+      }
+    }
+  }
+  assert.ok(prev.has(goal), 'a road can reach the city-state');
+  const path: Array<[number, number]> = [];
+  for (let i = goal; i >= 0; i = prev.get(i)!) path.push([i % W, Math.floor(i / W)]);
+  world.city!.players[0]!.credits += 50000;
+  world.step([{ kind: 'road', player: 0, tiles: path }]);
+  // Sell them lumber (they have used up theirs).
+  mine.city!.stock.lumber = 300;
+  for (const b of world.buildings) if (b.owner === s && b.city) b.city.stock.lumber = 0;
+  world.step([{ kind: 'deal', player: 0, state: s, good: 'lumber', import: 0, export: 0 }]);
+  const rel = relationsOf(world, s)!;
+  const before = rel.opinion[0]!;
+  world.city!.players[s]!.credits += 5000;
+  let sold = false;
+  let liked = false;
+  for (let i = 0; i < 400 * 15 && !(sold && liked); i++) {
+    world.step();
+    if (rel.traded[0]! > 0) sold = true;
+    if (rel.opinion[0]! > before + 1) liked = true;
+  }
+  assert.ok(sold, 'goods sold to the city-state');
+  assert.ok(liked, 'they like us more');
+  // Make them depend on us and like us: they ask to join, we accept.
+  rel.opinion[0] = 90;
+  rel.traded[0] = 1e6;
+  assert.ok(dependence(world, s, 0) > 0.35);
+  run(world, 70);
+  assert.equal(rel.offer, 0, 'they asked to join');
+  world.step([{ kind: 'acceptUnion', player: 0, state: s }]);
+  assert.ok(world.players[s]!.defeated, 'the city-state is gone');
+  assert.equal(world.buildings.filter((b) => b.owner === s).length, 0, 'their buildings are ours');
+  const theirRegion = world.map.region[theirs.ty * W + theirs.tx]!;
+  assert.equal(world.city!.regionOwner[theirRegion], 0, 'their region is ours');
+  run(world, 30);
 });

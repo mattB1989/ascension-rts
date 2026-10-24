@@ -4,6 +4,9 @@
 import type { HouseNeed } from '../../data/city.ts';
 import { GOOD_IDS, type GoodId } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
+import type { BotState } from '../../ai/cityBot.ts';
+import type { Command } from '../commands.ts';
+import type { Relations } from './diplomacy.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
 
@@ -72,6 +75,8 @@ export interface Truck {
   amount: number;
   /** Destination building. */
   to: number;
+  /** Trade run: drive out empty and buy this at the destination (a city-state's town hall). */
+  buy: GoodId | null;
 }
 
 export interface Budget {
@@ -133,6 +138,10 @@ export interface PlayerCity {
   usedLog: Stock[];
   /** Trade port rules per good. */
   trade: Partial<Record<GoodId, TradeRule>>;
+  /** Deals with city-states: per city-state player id, per good. */
+  deals: Record<number, Partial<Record<GoodId, TradeRule>>>;
+  /** City-states only: how they feel about everyone. */
+  relations: Relations | null;
   /** Goods held across all your buildings (computed each second). */
   stockpile: Stock;
   /** Value of goods made this year and last year (credits at reference prices). */
@@ -162,6 +171,9 @@ export interface CityState {
   coverage: Partial<Record<ServiceKind, Int32Array>>;
   ships: Ship[];
   nextShipId: number;
+  /** AI players (city-states, later nations): their planner state, and commands for the next tick. */
+  bots: BotState[];
+  aiQueue: Command[];
   /** Overseas market price multiplier per good (drifts over time). */
   prices: Record<GoodId, number>;
 }
@@ -188,6 +200,8 @@ export function newPlayerCity(credits: number): PlayerCity {
     madeLog: [],
     usedLog: [],
     trade: {},
+    deals: {},
+    relations: null,
     stockpile: {},
     gdp: 0,
     lastGdp: 0,
@@ -241,6 +255,8 @@ export function createCityState(width: number, height: number, regions: number, 
     coverage: {},
     ships: [],
     nextShipId: 1,
+    bots: [],
+    aiQueue: [],
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
   };
 }

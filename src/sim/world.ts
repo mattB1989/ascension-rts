@@ -39,6 +39,7 @@ export interface PlayerInfo {
   name: string;
   color: number;
   isHuman: boolean;
+  role?: import('./types.ts').PlayerRole;
 }
 
 export type GameMode = 'skirmish' | 'city';
@@ -328,6 +329,12 @@ export class World {
       u.pa = u.angle;
     }
     for (const c of commands) this.apply(c);
+    // AI players (economy game) decided these at the end of the last tick.
+    if (this.city?.aiQueue.length) {
+      const q = this.city.aiQueue;
+      this.city.aiQueue = [];
+      for (const c of q) this.apply(c);
+    }
     for (const u of this.units) {
       if (u.carrier) continue;
       if (u.chute > 0) {
@@ -393,6 +400,9 @@ export class World {
       case 'demolish':
       case 'taxRate':
       case 'tradeRule':
+      case 'deal':
+      case 'acceptUnion':
+      case 'buyState':
         applyCityCommand(this, c);
         break;
       case 'move': {

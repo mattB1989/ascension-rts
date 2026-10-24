@@ -24,6 +24,8 @@ interface BuildingObject {
   top: number;
   /** House level the model was built for. */
   level: number;
+  /** Owner when created (annexed buildings change colour). */
+  owner: number;
 }
 
 /** A few puffs rising from a chimney top while the building works. */
@@ -211,6 +213,7 @@ export class BuildingsView {
       hb,
       top: base + height + 0.4,
       level,
+      owner: b.owner,
     };
   }
 
@@ -226,7 +229,7 @@ export class BuildingsView {
     for (const b of this.world.buildings) {
       seen.add(b.id);
       let o = this.objects.get(b.id);
-      if (o && b.city && b.complete && o.level !== b.city.level) {
+      if (o && ((b.city && b.complete && o.level !== b.city.level) || o.owner !== b.owner)) {
         // A house grew (or shrank): new model.
         this.group.remove(o.root, o.hb.group);
         this.objects.delete(b.id);

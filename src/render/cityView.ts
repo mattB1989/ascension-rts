@@ -333,35 +333,41 @@ export class RegionBorders {
       this.group.remove(c);
       (c as THREE.LineSegments).geometry.dispose();
     }
-    const owned: number[] = [];
-    const other: number[] = [];
+    // One line set per colour: borders of owned land in the owner's colour, others faint.
+    const byColor = new Map<number, number[]>();
     const w = map.width;
-    const own = (r: number) => !!city && r > 0 && city.regionOwner[r] === viewer;
+    const ownerOf = (r: number) => (city ? city.regionOwner[r] ?? -1 : -1);
     const y = (x: number, z: number) => Math.max(0, groundHeight(map, x, z)) + 0.12;
+    const push = (a: number, b: number, pts: number[]) => {
+      const oa = ownerOf(a);
+      const ob = ownerOf(b);
+      const o = oa === viewer || ob === viewer ? viewer : oa >= 0 ? oa : ob;
+      const color = o >= 0 && oa !== ob ? this.world.players[o]?.color ?? 0xfff0b0 : -1;
+      const list = byColor.get(color) ?? [];
+      list.push(...pts);
+      byColor.set(color, list);
+    };
     for (let ty = 0; ty < map.height; ty++) {
       for (let tx = 0; tx < w; tx++) {
         const a = map.region[ty * w + tx]!;
         if (!a) continue;
         if (tx + 1 < w) {
           const b = map.region[ty * w + tx + 1]!;
-          if (b && b !== a) (own(a) !== own(b) ? owned : other).push(tx + 1, y(tx + 1, ty), ty, tx + 1, y(tx + 1, ty + 1), ty + 1);
+          if (b && b !== a) push(a, b, [tx + 1, y(tx + 1, ty), ty, tx + 1, y(tx + 1, ty + 1), ty + 1]);
         }
         if (ty + 1 < map.height) {
           const b = map.region[(ty + 1) * w + tx]!;
-          if (b && b !== a) (own(a) !== own(b) ? owned : other).push(tx, y(tx, ty + 1), ty + 1, tx + 1, y(tx + 1, ty + 1), ty + 1);
+          if (b && b !== a) push(a, b, [tx, y(tx, ty + 1), ty + 1, tx + 1, y(tx + 1, ty + 1), ty + 1]);
         }
       }
     }
-    const mk = (pts: number[], color: number, opacity: number) => {
-      if (!pts.length) return;
+    for (const [color, pts] of byColor) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      const l = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+      const l = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: color < 0 ? 0xfff0b0 : color, transparent: true, opacity: color < 0 ? 0.35 : 0.95, depthWrite: false }));
       l.renderOrder = 3;
       this.group.add(l);
-    };
-    mk(other, 0xfff0b0, 0.35);
-    mk(owned, this.world.players[viewer]?.color ?? 0x3a7bd5, 0.95);
+    }
   }
 }
 

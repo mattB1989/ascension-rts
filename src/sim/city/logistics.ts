@@ -14,6 +14,7 @@ import type { World } from '../world.ts';
 import { pathTo, searchRoads } from './roads.ts';
 import { add, get, type Stock, type Truck } from './state.ts';
 import { exportDemand } from './trade.ts';
+import { dealFor, isCityState, marketOf, settle, stateOffers, stateWants, theyCharge, theyPay } from './diplomacy.ts';
 
 /** Inputs a factory keeps on hand: this many production cycles. */
 const INPUT_CYCLES = 4;
@@ -22,6 +23,8 @@ export const MARKET_STOCK = 60;
 /** Outputs a producer can hold before it stops (waiting for trucks). */
 export const OUTPUT_CAP = 30;
 const MAX_TRIP = 220;
+/** Trips to city-states may be longer. */
+const TRADE_TRIP = 400;
 const MAX_CREWS_PER_SITE = 3;
 
 export function stockTotal(s: Stock): number {
@@ -84,7 +87,7 @@ export function accessIndex(world: World): Map<number, Building[]> {
 
 function newTruck(world: World, home: Building, kind: 'truck' | 'crew', path: number[], to: number, good: GoodId | null, amount: number): Truck {
   const city = world.city!;
-  const t: Truck = { id: city.nextTruckId++, owner: home.owner, home: home.id, kind, path, pos: 0, prevPos: 0, phase: 'out', good, amount, to };
+  const t: Truck = { id: city.nextTruckId++, owner: home.owner, home: home.id, kind, path, pos: 0, prevPos: 0, phase: 'out', good, amount, to, buy: null };
   city.trucks.push(t);
   if (kind === 'crew') home.city!.crewsOut++;
   else home.city!.trucksOut++;
@@ -105,11 +108,29 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
   let fallback: Building | null = null;
   let fallbackGood: GoodId | null = null;
   let fallbackTile = -1;
-  const end = searchRoads(world, c.access, MAX_TRIP, (tile) => {
+  const end = searchRoads(world, c.access, TRADE_TRIP, (tile) => {
     const list = idx.get(tile);
     if (!list) return false;
     for (const b of list) {
-      if (b === src || b.owner !== src.owner || !b.city) continue;
+      if (b === src || !b.city) continue;
+      if (b.owner !== src.owner) {
+        // A city-state's town hall: sell what our deal with them says to export.
+        if (b.type !== 'town_hall' || !isCityState(world, b.owner)) continue;
+        for (const g of goods) {
+          const deal = dealFor(world, src.owner, b.owner, g);
+          if (!deal || deal.export < 0) continue;
+          const surplus = get(world.city!.players[src.owner]!.stockpile, g) - deal.export;
+          const d = Math.min(surplus, stateWants(world, b.owner, g));
+          if (d < 1) continue;
+          const n = Math.min(get(c.stock, g), TRUCK_LOAD, d);
+          if (n < Math.min(TRUCK_LOAD, d)) continue;
+          target = b;
+          good = g;
+          amount = Math.floor(n);
+          return true;
+        }
+        continue;
+      }
       for (const g of goods) {
         const d = demandFor(b, g, world);
         if (d < 1) continue;
@@ -155,6 +176,38 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
   newTruck(world, src, 'truck', path, dest.id, g, amount);
 }
 
+/** Storage sends an empty truck to buy from a city-state when a deal says to import. */
+function dispatchImport(world: World, src: Building, idx: Map<number, Building[]>): void {
+  const c = src.city!;
+  const e = src.def.econ!;
+  if ((e.trucks ?? 0) <= c.trucksOut || c.access < 0 || !e.storage) return;
+  const pc = world.city!.players[src.owner]!;
+  const states = Object.keys(pc.deals).map(Number);
+  if (!states.length) return;
+  const pending = (g: GoodId) => world.city!.trucks.reduce((s, t) => s + (t.owner === src.owner && t.buy === g && t.phase === 'out' ? TRUCK_LOAD : 0), 0);
+  const space = (e.storage ?? 0) - stockTotal(c.stock) - stockTotal(c.incoming);
+  if (space < TRUCK_LOAD) return;
+  for (const state of states) {
+    const m = marketOf(world, state);
+    if (!m?.city || m.city.access < 0 || !isCityState(world, state)) continue;
+    for (const g of GOOD_IDS) {
+      const deal = pc.deals[state]?.[g];
+      if (!deal || deal.import <= 0) continue;
+      const need = deal.import - get(pc.stockpile, g) - pending(g);
+      if (need < Math.min(TRUCK_LOAD, deal.import) / 2) continue;
+      if (stateOffers(world, state, g) < Math.min(TRUCK_LOAD, need)) continue;
+      if (pc.credits < theyCharge(world, state, g) * TRUCK_LOAD) continue;
+      const goal = m.city.access;
+      const end = searchRoads(world, c.access, TRADE_TRIP, (tile) => tile === goal);
+      if (end < 0) continue;
+      const t = newTruck(world, src, 'truck', pathTo(world, end), m.id, null, 0);
+      t.buy = g;
+      void idx;
+      return;
+    }
+  }
+}
+
 /** Crews from the town hall and construction offices go to sites whose materials are in. */
 function dispatchCrews(world: World, home: Building, idx: Map<number, Building[]>, assigned: Map<number, number>): void {
   const c = home.city!;
@@ -195,6 +248,7 @@ export function dispatch(world: World, idx: Map<number, Building[]>): void {
     const e = b.def.econ;
     if (!e) continue;
     if (e.trucks) dispatchFrom(world, b, idx);
+    if (e.storage && world.players[b.owner]?.role !== 'cityState') dispatchImport(world, b, idx);
     if (e.crews) dispatchCrews(world, b, idx, assigned);
   }
 }
@@ -271,9 +325,28 @@ export function moveTrucks(world: World): void {
       }
       continue;
     }
+    if (dest?.city && t.buy && dest.owner !== t.owner) {
+      // Buying from a city-state: take what they can spare, pay, drive home with it.
+      const g = t.buy;
+      const n = Math.min(TRUCK_LOAD, stateOffers(world, dest.owner, g));
+      const cost = n * theyCharge(world, dest.owner, g);
+      if (n > 0 && world.city!.players[t.owner]!.credits >= cost) {
+        add(dest.city.stock, g, -n);
+        settle(world, dest.owner, t.owner, cost);
+        t.good = g;
+        t.amount = n;
+      }
+      t.buy = null;
+      turnBack(t);
+      continue;
+    }
     if (dest?.city && t.good) {
       add(dest.city.incoming, t.good, -t.amount);
-      if (!dest.complete) add(dest.city.delivered, t.good, t.amount);
+      if (dest.owner !== t.owner) {
+        // Selling to a city-state.
+        settle(world, t.owner, dest.owner, t.amount * theyPay(world, dest.owner, t.good));
+        add(dest.city.stock, t.good, t.amount);
+      } else if (!dest.complete) add(dest.city.delivered, t.good, t.amount);
       else add(dest.city.stock, t.good, t.amount);
       t.amount = 0;
       t.good = null;

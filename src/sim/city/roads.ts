@@ -20,13 +20,26 @@ export function roadProblem(world: World, player: number, tx: number, ty: number
   if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return 'Off the map';
   const i = ty * map.width + tx;
   if (city.road[i]) return 'Already a road';
-  if (city.regionOwner[map.region[i]!] !== player && !waterNextToOwned(world, player, tx, ty)) return 'Not your territory';
+  if (!roadAllowed(world, player, map.region[i]!) && !waterNextToOwned(world, player, tx, ty)) return 'Not your territory';
   if (world.occupancy[i]) return 'Blocked';
   const t = map.terrain[i] as TerrainId;
   if (isOpenLand(t) || t === Terrain.Forest) return null;
   if (t === Terrain.Shallow) return null;
   if (t === Terrain.Deep) return 'Too deep to bridge';
   return 'Too steep';
+}
+
+/**
+ * Where a player may build roads: their own regions; the human player also on
+ * unclaimed land and through city-states (to reach them for trade). AI players
+ * keep to their own land.
+ */
+export function roadAllowed(world: World, player: number, region: number): boolean {
+  if (!region) return false;
+  const owner = world.city!.regionOwner[region]!;
+  if (owner === player) return true;
+  if (!world.players[player]?.isHuman) return false;
+  return owner === -1 || world.players[owner]?.role === 'cityState';
 }
 
 /** Water tiles have no region: a bridge may start from (or cross to) land you own nearby. */
@@ -40,7 +53,7 @@ function waterNextToOwned(world: World, player: number, tx: number, ty: number):
       const y = ty + DY[k]! * r;
       if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
       const reg = map.region[y * map.width + x]!;
-      if (reg && world.city!.regionOwner[reg] === player) return true;
+      if (reg && roadAllowed(world, player, reg)) return true;
     }
   }
   return false;
@@ -147,8 +160,8 @@ export function removeRoads(world: World, player: number, tiles: ReadonlyArray<r
     if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) continue;
     const i = ty * map.width + tx;
     if (!city.road[i]) continue;
-    const reg = map.region[i]!;
-    if (reg && city.regionOwner[reg] !== player) continue;
+    const reg = map.nearRegion[i]!;
+    if (reg && city.regionOwner[reg] !== player && city.regionOwner[reg] !== -1) continue;
     setRoad(world, tx, ty, false);
     n++;
   }

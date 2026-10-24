@@ -25,6 +25,8 @@ export const FOG_INTERVAL = 4; // ticks
 export function updateFog(world: World): void {
   const { width: w, height: h } = world.map;
   for (const p of world.players) {
+    // AI players in the economy game don't use the fog: skip the work.
+    if (world.city && !p.isHuman) continue;
     const vis = p.visible;
     vis.fill(0);
     const stamp = (x: number, y: number, r: number) => {
@@ -45,8 +47,10 @@ export function updateFog(world: World): void {
     if (city) {
       const region = world.map.nearRegion;
       const owner = city.regionOwner;
+      // City-states are open societies: their land is in view too.
+      const open = owner.map((o) => (o === p.id || world.players[o]?.role === 'cityState' ? 1 : 0));
       for (let i = 0; i < vis.length; i++) {
-        if (region[i] !== 0 && owner[region[i]!] === p.id) {
+        if (region[i] !== 0 && open[region[i]!]) {
           vis[i] = 1;
           p.explored[i] = 1;
         }

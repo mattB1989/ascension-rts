@@ -7,6 +7,7 @@ import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { World } from '../world.ts';
 import { DIPLO, isCityState, newRelations, relationsOf, type Relations } from './diplomacy.ts';
 import { atWar, setWar } from './military.ts';
+import { PERSONALITIES } from '../../ai/cityBot.ts';
 
 export type TreatyKind = 'peace' | 'research' | 'trade';
 
@@ -72,7 +73,8 @@ export function treatyProblem(world: World, from: number, to: number, kind: Trea
   if (atWar(world, from, to)) return 'You are at war: offer peace first';
   if (hasTreaty(world, from, to, kind)) return 'Already signed';
   const op = opinionOf(world, to, from);
-  const need = TREATIES[kind].opinion + (kind === 'peace' && world.city!.bots.find((b) => b.player === to)?.difficulty === 'hard' ? 25 : 0);
+  const bot = world.city!.bots.find((b) => b.player === to);
+  const need = TREATIES[kind].opinion + (kind === 'peace' && bot?.difficulty === 'hard' ? 25 : 0) + (bot?.personality ? PERSONALITIES[bot.personality].treaty : 0);
   if (op < need) return `${them.name} won't sign: they like you too little (${Math.round(op)}, need ${need})`;
   return null;
 }

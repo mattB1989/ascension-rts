@@ -279,7 +279,9 @@ export function startCity(map: GameMap, seed: number, cityStates = 0, nations = 
       const y = info.siteY + h;
       if (y < map.height && x >= 0 && x < map.width && !world.occupancy[y * map.width + x]) setRoad(world, x, y, true);
     }
-    world.city!.bots.push(newBot(id, Infinity, true, difficulty));
+    const bot = newBot(id, Infinity, true, difficulty);
+    bot.personality = (['trader', 'expansionist', 'warlike', 'builder'] as const)[(seed + k * 3) % 4];
+    world.city!.bots.push(bot);
     world.city!.players[id]!.relations = newRelations(players.length);
     for (let i = 0; i < map.region.length; i++) if (map.nearRegion[i] === reg) world.players[0]!.explored[i] = 1;
   });

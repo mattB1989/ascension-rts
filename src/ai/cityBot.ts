@@ -36,6 +36,8 @@ export interface BotState {
   expandAt?: number;
   /** Game time of the next check for streets cut off from the town hall. */
   linkAt?: number;
+  /** Nations: their character (see PERSONALITIES). */
+  personality?: Personality;
   /** Nations: game time of the next look at city-states (deals, unions, roads), and those out of road reach. */
   dealAt?: number;
   noRoadTo?: number[];
@@ -59,6 +61,19 @@ export const DIFFICULTY: Record<Difficulty, { think: number; expandPop: number; 
   normal: { think: 3, expandPop: 180, warYear: 14, warRatio: 1.6, army: 0.5 },
   hard: { think: 2, expandPop: 140, warYear: 9, warRatio: 1.2, army: 0.7 },
 };
+
+/** Nations' characters: they change how early they expand, how keen they are on war, how big an army they keep and how readily they sign treaties. */
+export type Personality = 'trader' | 'builder' | 'expansionist' | 'warlike';
+export const PERSONALITIES: Record<Personality, { name: string; blurb: string; expand: number; war: number; army: number; treaty: number }> = {
+  trader: { name: 'Traders', blurb: 'courts city-states and signs treaties readily', expand: 1.2, war: 1.4, army: 0.8, treaty: -15 },
+  builder: { name: 'Builders', blurb: 'grows its cities first, slow to fight', expand: 1.1, war: 1.6, army: 0.7, treaty: -5 },
+  expansionist: { name: 'Expansionists', blurb: 'claims land early and often', expand: 0.7, war: 1.0, army: 1.0, treaty: 5 },
+  warlike: { name: 'Warlords', blurb: 'arms early and picks fights', expand: 1.0, war: 0.75, army: 1.3, treaty: 15 },
+};
+
+function traits(bot: BotState) {
+  return PERSONALITIES[bot.personality ?? 'builder'];
+}
 
 export function newBot(player: number, maxPop = Infinity, nation = false, difficulty: Difficulty = 'normal'): BotState {
   return { player, noLand: [], tradeAt: 0, maxPop, nation, difficulty, warAt: 0, attackTarget: 0, rings: 0, wait: 0, log: [] };
@@ -522,7 +537,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port'].includes(type)) continue;
     // City-states keep money in hand to trade with; nations save up to expand when it is time.
     if (bot.maxPop < Infinity && credits < 2500 + buildingDef(type).econ!.credits && type !== 'house') continue;
-    if (bot.nation && pop >= DIFFICULTY[bot.difficulty].expandPop * (1 + seatsOf(world, p).length * 0.5) && credits < 5500 && !['house', 'logging_camp', 'sawmill', 'farm', 'food_plant', 'market'].includes(type)) continue;
+    if (bot.nation && pop >= DIFFICULTY[bot.difficulty].expandPop * traits(bot).expand * (1 + seatsOf(world, p).length * 0.5) && credits < 5500 && !['house', 'logging_camp', 'sawmill', 'farm', 'food_plant', 'market'].includes(type)) continue;
     if (type === 'house') {
       if (pop >= bot.maxPop) continue;
       const out: Command[] = [];
@@ -664,7 +679,8 @@ function militaryStep(world: World, bot: BotState): Command[] {
   const out: Command[] = [];
 
   // Grow: claim land while there is money and people.
-  if (pop >= d.expandPop * (1 + seatsOf(world, p).length * 0.5) && pc.credits > 4000 && world.time >= (bot.expandAt ?? 0)) {
+  const tr = traits(bot);
+  if (pop >= d.expandPop * tr.expand * (1 + seatsOf(world, p).length * 0.5) && pc.credits > 4000 && world.time >= (bot.expandAt ?? 0)) {
     const e = expand(world, bot);
     if (e.length) return e;
     // Nowhere to go for now: look again in a minute.
@@ -676,7 +692,7 @@ function militaryStep(world: World, bot: BotState): Command[] {
   const cap = armyCap(world, p);
   // Building sites come first: no recruiting while they wait for materials and money is short.
   const starved = pc.credits < 6000 && world.buildings.some((b) => b.owner === p && !b.complete && b.type !== 'house' && /Waiting for (lumber|concrete|steel)/.test(b.city?.status ?? ''));
-  if (army.length < cap * d.army && pc.credits > 3000 && !starved) {
+  if (army.length < cap * Math.min(0.9, d.army * tr.army) && pc.credits > 3000 && !starved) {
     for (const b of world.buildings) {
       if (b.owner !== p || !b.complete || b.queue.length >= 2) continue;
       const digital = pc.age >= 1;
@@ -702,7 +718,7 @@ function militaryStep(world: World, bot: BotState): Command[] {
     const rivals = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && !hasTreaty(world, p, o.id, 'peace') && opinionOf(world, p, o.id) < 40);
     for (const o of rivals) {
       const theirs = armyOf(world, o.id).length;
-      if (army.length >= Math.max(6, theirs * d.warRatio)) {
+      if (army.length >= Math.max(6, theirs * d.warRatio * tr.war)) {
         out.push({ kind: 'declareWar', player: p, target: o.id });
         bot.log.push(`war on ${o.name}`);
         break;

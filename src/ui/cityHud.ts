@@ -11,6 +11,7 @@ import { PIPE } from '../sim/city/pipes.ts';
 import { canTrade, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import type { Sound } from './sound.ts';
+import { PERSONALITIES } from '../ai/cityBot.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { GOOD_IDS, GOODS, sumTiers, TIERS, type GoodId } from '../data/goods.ts';
@@ -703,7 +704,9 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
       const offered = war && w.city!.peaceOffers.some((o) => o.from === p.id && o.to === me);
       const peaceWhy = war && !offered ? peaceProblem(w, me, p.id) : null;
       const trade = canTrade(w, me, p.id);
-      return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
+      const persona = w.city!.bots.find((b) => b.player === p.id)?.personality;
+      const trait = persona ? PERSONALITIES[persona] : null;
+      return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>${trait ? ` <span class="persona" title="${esc(trait.blurb)}">${esc(trait.name)}</span>` : ''}
         <span class="muted">👥 ${sumTiers(pc.population)} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'} · ${esc(AGE_NAMES[pc.age]!.replace(' Age', ''))}</span></div>
         <div class="state-row">Opinion of you ${bar(op, -100, 100, op >= 20 ? 'good' : op < 0 ? 'bad' : '')} ${op}</div>
         <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>${treaties}

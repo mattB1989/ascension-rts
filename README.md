@@ -45,7 +45,8 @@ original **Twin Shores** skirmish.
   opinion and their dependence on you; a friendly, dependent city-state asks to join your nation,
   and friends can be bought outright. 🤝 Diplomacy shows it all.
 - **Rival nations and war (E6)**: 1–3 AI nations (Easy never attacks, Normal goes to war when
-  it is stronger, Hard early and often) build, trade and expand with Regional Offices. The
+  it is stronger, Hard early and often), each with a character (Traders, Builders,
+  Expansionists, Warlords), build, trade, absorb city-states and expand with Regional Offices. The
   Military tab has barracks, vehicle factories and defences; units cost credits plus steel or
   fuel delivered to the building, and upkeep; the army limit grows with population. Declare war
   or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no

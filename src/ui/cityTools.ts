@@ -11,12 +11,12 @@ import { RAIL, railProblem } from '../sim/city/rail.ts';
 import { PIPE, pipeProblem } from '../sim/city/pipes.ts';
 import type { World } from '../sim/world.ts';
 
-export type CityTool = 'road' | 'rail' | 'pipe' | 'bulldoze';
+export type CityTool = 'road' | 'rail' | 'maglev' | 'pipe' | 'bulldoze';
 export type PlaceType = BuildingTypeId | CityTool;
 
 /** Tools that are dragged as a line in the economy game. */
 export function isCityLine(type: PlaceType): boolean {
-  return type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house';
+  return type === 'road' || type === 'rail' || type === 'maglev' || type === 'pipe' || type === 'bulldoze' || type === 'house';
 }
 
 /** Tiles from start to end: along the longer axis first, then the other (an L), like city builders. */
@@ -80,18 +80,19 @@ export function previewLine(world: World, player: number, type: PlaceType, tiles
     const problem = n === 0 ? firstProblem ?? 'Already a road' : cost > credits(world, player) ? 'Not enough credits' : null;
     return { tiles, ok, valid: problem === null, problem, info: `${n} tile${n === 1 ? '' : 's'} · ₡${cost}` };
   }
-  if (type === 'rail') {
-    const ok = (tx: number, ty: number) => railProblem(world, player, tx, ty) === null;
+  if (type === 'rail' || type === 'maglev') {
+    const mag = type === 'maglev';
+    const ok = (tx: number, ty: number) => railProblem(world, player, tx, ty, mag) === null;
     let n = 0;
     let firstProblem: string | null = null;
     for (const [tx, ty] of tiles) {
-      const why = railProblem(world, player, tx, ty);
+      const why = railProblem(world, player, tx, ty, mag);
       if (why === null) n++;
       else if (why !== 'Already a railway') firstProblem ??= why;
     }
-    const cost = n * RAIL.cost;
+    const cost = n * (mag ? RAIL.maglevCost : RAIL.cost);
     const problem = n === 0 ? firstProblem ?? 'Already a railway' : cost > credits(world, player) ? 'Not enough credits' : null;
-    return { tiles, ok, valid: problem === null, problem, info: `${n} tile${n === 1 ? '' : 's'} of track · ₡${cost}` };
+    return { tiles, ok, valid: problem === null, problem, info: `${n} tile${n === 1 ? '' : 's'} of ${mag ? 'maglev' : 'track'} · ₡${cost}` };
   }
   if (type === 'pipe') {
     const ok = (tx: number, ty: number) => pipeProblem(world, player, tx, ty) === null;
@@ -155,8 +156,8 @@ export function confirmLine(game: Game, type: PlaceType, tiles: Array<[number, n
   const world = game.world;
   if (type === 'road') {
     game.issue({ kind: 'road', player, tiles });
-  } else if (type === 'rail') {
-    game.issue({ kind: 'rail', player, tiles });
+  } else if (type === 'rail' || type === 'maglev') {
+    game.issue({ kind: 'rail', player, tiles, maglev: type === 'maglev' });
   } else if (type === 'pipe') {
     game.issue({ kind: 'pipe', player, tiles });
   } else if (type === 'bulldoze') {

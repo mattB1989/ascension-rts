@@ -51,6 +51,7 @@ const AGE_NAMES = ['Modern Age', 'Digital Age', 'Nano Age', 'Space Age'] as cons
 
 const TOOL_INFO: Record<string, { name: string; text: string }> = {
   road: { name: 'Road', text: `Drag to draw a road (₡${ROAD.cost} a tile, ₡${ROAD.bridgeCost} over shallow water). Every building needs one.` },
+  maglev: { name: 'Maglev', text: `Lay over existing track, or new (₡${RAIL.maglevCost} a tile): trains run ${RAIL.maglevSpeed}× as fast on it.` },
   pipe: { name: 'Pipeline', text: `Drag to lay a pipeline (₡${PIPE.cost} a tile). Oil wells, refineries, power plants and launch sites touching it share oil and fuel, no trucks needed.` },
   rail: { name: 'Railway', text: `Drag to lay track (₡${RAIL.cost} a tile). It crosses roads, and water on road bridges. Rail Stations on the line send trains.` },
   bulldoze: { name: 'Bulldozer', text: 'Drag over roads and railways to remove them, or click a building to demolish it. No refunds.' },
@@ -494,6 +495,10 @@ export class CityHud {
         return `<button class="cmd pal-item" data-action="build" data-arg="road" data-id="road"><span class="cmd-name">🛣 Road</span><span class="cmd-cost">₡${ROAD.cost}/tile · R</span></button>`
           + `<button class="cmd pal-item" data-action="build" data-arg="bulldoze" data-id="bulldoze"><span class="cmd-name">🚜 Bulldozer</span><span class="cmd-cost">B</span></button>`;
       }
+      if (id === 'maglev') {
+        const lock = this.world.city!.players[this.game.humanPlayer]!.age < 2;
+        return `<button class="cmd pal-item ${lock ? 'locked' : ''}" data-action="build" data-arg="maglev" data-id="maglev" title="Nano age: lay over track (or new) for trains ${RAIL.maglevSpeed}× as fast"><span class="cmd-name">🚄 Maglev</span><span class="cmd-cost">${lock ? '🔒 Nano Age' : `₡${RAIL.maglevCost}/tile`}</span></button>`;
+      }
       if (id === 'pipe') {
         return `<button class="cmd pal-item" data-action="build" data-arg="pipe" data-id="pipe" title="Oil and fuel flow along pipelines from wells and refineries to the buildings that use them, no trucks needed"><span class="cmd-name">🛢 Pipeline</span><span class="cmd-cost">₡${PIPE.cost}/tile</span></button>`;
       }
@@ -516,6 +521,7 @@ export class CityHud {
 
   /** Why a building is locked for now (a later age), or null. */
   private ageLock(id: string): string | null {
+    if (id === 'maglev') return this.world.city!.players[this.game.humanPlayer]!.age < 2 ? 'Needs the Nano Age' : null;
     if (id === 'road' || id === 'rail' || id === 'pipe' || id === 'bulldoze') return null;
     const def = buildingDef(id as BuildingTypeId);
     return AGES[def.age].index > this.world.city!.players[this.game.humanPlayer]!.age ? `Needs the ${AGES[def.age].name}` : null;
@@ -529,7 +535,7 @@ export class CityHud {
     const active = this.input.placing?.type;
     for (const b of this.palette.querySelectorAll<HTMLElement>('.pal-item')) {
       const id = b.dataset.id!;
-      const price = id === 'road' ? ROAD.cost : id === 'rail' ? RAIL.cost : id === 'pipe' ? PIPE.cost : id === 'bulldoze' ? 0 : buildingDef(id as BuildingTypeId).econ?.credits ?? 0;
+      const price = id === 'road' ? ROAD.cost : id === 'rail' ? RAIL.cost : id === 'maglev' ? RAIL.maglevCost : id === 'pipe' ? PIPE.cost : id === 'bulldoze' ? 0 : buildingDef(id as BuildingTypeId).econ?.credits ?? 0;
       b.classList.toggle('disabled', price > credits);
       b.classList.toggle('on', id === active);
     }
@@ -567,8 +573,8 @@ export class CityHud {
     const touch = this.input.touchDevice;
     const extra = def?.econ ? econSummary(type as BuildingTypeId) : '';
     const hint = touch
-      ? type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Tap the start, then the end, then ✓.' : 'Tap the map to position it, then ✓.'
-      : type === 'road' || type === 'rail' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Drag to draw. Right click or Esc to stop.' : 'Click to place (Shift: keep placing). Right click or Esc to cancel.';
+      ? type === 'road' || type === 'rail' || type === 'maglev' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Tap the start, then the end, then ✓.' : 'Tap the map to position it, then ✓.'
+      : type === 'road' || type === 'rail' || type === 'maglev' || type === 'pipe' || type === 'bulldoze' || type === 'house' ? 'Drag to draw. Right click or Esc to stop.' : 'Click to place (Shift: keep placing). Right click or Esc to cancel.';
     const btns = `${touch ? `<button class="cmd primary ${problem ? 'disabled' : ''}" data-action="confirm">✓ Build</button>` : ''}<button class="cmd" data-action="cancel">✕ ${touch ? 'Cancel' : 'Stop'}</button>`;
     return `<div class="card-head"><div class="card-title">${esc(name)}</div><div class="card-status">${esc(info)}</div></div>
       <div class="info-text">${esc(text)}</div>${extra}

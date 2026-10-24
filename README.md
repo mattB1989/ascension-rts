@@ -67,7 +67,8 @@ original **Twin Shores** skirmish.
 - **The Nano age (E8)**: Scientists and spires (they want pharmaceuticals and a university),
   universities (research and higher education), nano fabs, robotics plants, fusion power, and
   the Disruptor (its EMP stuns vehicles and mechs), Juggernaut and Arclight, and shield
-  generators. Robots in stock halve the staff a farm, mine or factory needs.
+  generators, and maglev track for faster trains. Robots in stock halve the staff a farm, mine
+  or factory needs.
 - **The Space age and ways to win (E9)**: launch sites bring orbital alloys down from the
   asteroids; orbital solar relays; the Space Elevator. Win by the economy (half the world's GDP
   for 10 years), federation (half the regions, at least half of them joined peacefully), space

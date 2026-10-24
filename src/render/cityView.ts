@@ -495,6 +495,8 @@ const BALLAST = new THREE.Color(0x7d766c);
 const SLEEPER = new THREE.Color(0x5a4232);
 const STEEL = new THREE.Color(0xb8bcc0);
 const RAIL_LIFT = 0.07;
+const GUIDEWAY = new THREE.Color(0xe8eaec);
+const MAGSTRIP = new THREE.Color(0x4aa0ff);
 
 export class RailsView {
   readonly group = new THREE.Group();
@@ -583,6 +585,12 @@ export class RailsView {
             const cross = (p[1]![0] - p[0]![0]) * (p[2]![1] - p[0]![1]) - (p[1]![1] - p[0]![1]) * (p[2]![0] - p[0]![0]);
             b.flat(cross > 0 ? p : p.reverse(), hh, col);
           };
+          if (rail[ty * w + tx] === 2) {
+            // Maglev: a raised white guideway with a blue power strip.
+            quad(0, 0.5, -0.24, 0.24, (x, z) => h(x, z) + 0.12, GUIDEWAY);
+            quad(0, 0.5, -0.04, 0.04, (x, z) => h(x, z) + 0.125, MAGSTRIP);
+            continue;
+          }
           quad(0, 0.5, -BW, BW, h, BALLAST);
           for (const u of [0.12, 0.37]) quad(u - 0.05, u + 0.05, -0.26, 0.26, hs, SLEEPER);
           for (const v of [-0.15, 0.15]) quad(0, 0.5, v - 0.025, v + 0.025, hr, STEEL);

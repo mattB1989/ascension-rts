@@ -814,3 +814,20 @@ test('a save from before E6-E10 (no rail, pipes, treaties, ages, victory) still 
   assert.ok(back.city!.rail && back.city!.pipe && back.city!.victory, 'migrated');
   assert.equal(back.city!.players[0]!.population.length, 4);
 });
+
+test('maglev (Nano age) upgrades track in place', async () => {
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const city = world.city!;
+  const hall = world.buildings[0]!;
+  const track: Array<[number, number]> = [];
+  for (let x = hall.tx - 10; x <= hall.tx + 10; x++) track.push([x, hall.ty + 8]);
+  world.step([{ kind: 'rail', player: 0, tiles: track }]);
+  const n = city.railCount;
+  const i = (hall.ty + 8) * world.map.width + hall.tx;
+  world.step([{ kind: 'rail', player: 0, tiles: track, maglev: true }]);
+  assert.equal(city.rail[i], 1, 'not before the Nano age');
+  city.players[0]!.age = 2;
+  world.step([{ kind: 'rail', player: 0, tiles: track, maglev: true }]);
+  assert.equal(city.rail[i], 2, 'maglev');
+  assert.equal(city.railCount, n, 'same track, upgraded');
+});

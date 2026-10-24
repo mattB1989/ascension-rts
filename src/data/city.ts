@@ -315,7 +315,7 @@ export type HouseNeed = (typeof HOUSE_LEVELS)[number]['needs'][number];
 
 /** Order of the build palette in the economy game. */
 export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }> = [
-  { tab: 'Roads', icon: '🛣', items: ['road', 'rail', 'pipe'] },
+  { tab: 'Roads', icon: '🛣', items: ['road', 'rail', 'maglev', 'pipe'] },
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well', 'rare_earth_mine', 'uranium_mine'] },
   { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant', 'launch_site'] },

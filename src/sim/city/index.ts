@@ -26,7 +26,7 @@ export type CityCommand =
   /** Lay a pipeline along these tiles. */
   | { kind: 'pipe'; player: number; tiles: Array<[number, number]> }
   /** Lay railway along these tiles. */
-  | { kind: 'rail'; player: number; tiles: Array<[number, number]> }
+  | { kind: 'rail'; player: number; tiles: Array<[number, number]>; maglev?: boolean }
   /** Remove roads (and railways) from these tiles. */
   | { kind: 'unroad'; player: number; tiles: Array<[number, number]> }
   /** Place a building (economy game). */
@@ -75,7 +75,7 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       break;
     }
     case 'rail': {
-      const r = placeRails(world, c.player, c.tiles.slice(0, 2000));
+      const r = placeRails(world, c.player, c.tiles.slice(0, 2000), !!c.maglev);
       if (r.problem && r.built < c.tiles.length) say(r.built ? `Railway stopped: ${r.problem.toLowerCase()}` : `Can't lay a railway: ${r.problem.toLowerCase()}`);
       break;
     }

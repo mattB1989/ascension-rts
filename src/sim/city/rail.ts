@@ -14,6 +14,9 @@ import { add, get, type Stock } from './state.ts';
 
 export const RAIL = {
   cost: 40,
+  /** Maglev (Nano age): laid over track or new, faster trains. */
+  maglevCost: 120,
+  maglevSpeed: 2.5,
   upkeepPerYear: 2,
   /** Tiles per second. */
   speed: 8,
@@ -41,13 +44,15 @@ export interface Train {
   air?: boolean;
 }
 
-/** Why a railway cannot go on this tile (null: it can). */
-export function railProblem(world: World, player: number, tx: number, ty: number): string | null {
+/** Why a railway (or maglev) cannot go on this tile (null: it can). Maglev may upgrade existing track. */
+export function railProblem(world: World, player: number, tx: number, ty: number, maglev = false): string | null {
   const map = world.map;
   const city = world.city!;
   if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return 'Off the map';
   const i = ty * map.width + tx;
-  if (city.rail[i]) return 'Already a railway';
+  if (maglev && (city.players[player]?.age ?? 0) < 2) return 'Maglev needs the Nano Age';
+  if (city.rail[i] === 2 || (city.rail[i] && !maglev)) return 'Already a railway';
+  if (city.rail[i] && maglev) return roadAllowed(world, player, map.nearRegion[i]!) ? null : 'Not your territory';
   if (!roadAllowed(world, player, map.nearRegion[i]!)) return 'Not your territory';
   if (world.occupancy[i]) return 'Blocked';
   const t = map.terrain[i] as TerrainId;
@@ -57,36 +62,39 @@ export function railProblem(world: World, player: number, tx: number, ty: number
   return 'Too steep';
 }
 
-export function placeRails(world: World, player: number, tiles: ReadonlyArray<readonly [number, number]>): { built: number; problem: string | null } {
+export function placeRails(world: World, player: number, tiles: ReadonlyArray<readonly [number, number]>, maglev = false): { built: number; problem: string | null } {
   const pc = world.city!.players[player]!;
+  const cost = maglev ? RAIL.maglevCost : RAIL.cost;
   let built = 0;
   let problem: string | null = null;
   for (const [tx, ty] of tiles) {
-    const why = railProblem(world, player, tx, ty);
+    const why = railProblem(world, player, tx, ty, maglev);
     if (why) {
       if (why !== 'Already a railway') problem ??= why;
       continue;
     }
-    if (pc.credits < RAIL.cost) {
+    if (pc.credits < cost) {
       problem = 'Not enough credits';
       break;
     }
-    pc.credits -= RAIL.cost;
-    pc.year.construction += RAIL.cost;
-    setRail(world, tx, ty, true);
+    pc.credits -= cost;
+    pc.year.construction += cost;
+    setRail(world, tx, ty, true, maglev);
     built++;
   }
   return { built, problem };
 }
 
-export function setRail(world: World, tx: number, ty: number, on: boolean): void {
+export function setRail(world: World, tx: number, ty: number, on: boolean, maglev = false): void {
   const map = world.map;
   const city = world.city!;
   const i = ty * map.width + tx;
-  if (on === !!city.rail[i]) return;
+  const want = on ? (maglev ? 2 : 1) : 0;
+  if (city.rail[i] === want) return;
   if (on && map.terrain[i] === Terrain.Forest) map.terrain[i] = Terrain.Grass;
-  city.rail[i] = on ? 1 : 0;
-  city.railCount += on ? 1 : -1;
+  if (!city.rail[i] && on) city.railCount++;
+  if (city.rail[i] && !on) city.railCount--;
+  city.rail[i] = want;
   city.railVersion++;
 }
 
@@ -250,7 +258,9 @@ export function updateRail(world: World, idx: Map<number, Building[]>, demand: (
   for (const t of [...city.trains]) {
     t.prevPos = t.pos;
     const last = t.path.length - 1;
-    const next = Math.min(last, t.pos + (t.air ? AIR.speed : RAIL.speed) * DT);
+    const here = t.path[Math.min(last, Math.floor(t.pos))]!;
+    const speed = t.air ? AIR.speed : RAIL.speed * (city.rail[here] === 2 ? RAIL.maglevSpeed : 1);
+    const next = Math.min(last, t.pos + speed * DT);
     const k = Math.min(last, Math.ceil(next));
     if (!t.air && !city.rail[t.path[k]!]) {
       // Track taken up: the train is lost, its cargo goes back to the station.

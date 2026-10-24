@@ -27,6 +27,9 @@ export function setWar(world: World, a: number, b: number, on: boolean): void {
     const start = (world.city!.warStart ??= world.players.map(() => world.players.map(() => 0)));
     start[a]![b] = start[b]![a] = world.time;
   }
+  // Any standing offers of peace between them are settled either way.
+  const city = world.city!;
+  if (city.peaceOffers?.length) city.peaceOffers = city.peaceOffers.filter((o) => !((o.from === a && o.to === b) || (o.from === b && o.to === a)));
 }
 
 /** Army size limit: grows with population. */
@@ -67,9 +70,18 @@ export function recruit(world: World, player: number, b: Building, type: UnitTyp
   return null;
 }
 
-/** Once a second: unit upkeep, and seats being captured. */
+/** War weariness: grows while at war with a nation (full after WEARINESS.years), fades twice as fast in peace. */
+export const WEARINESS = { max: 0.25, years: 2 } as const;
+
+/** Once a second: unit upkeep, war weariness, and seats being captured. */
 export function updateMilitary(world: World): void {
   const city = world.city!;
+  for (const p of world.players) {
+    const pc = city.players[p.id]!;
+    const war = world.players.some((o) => o.id !== p.id && o.role !== 'cityState' && !o.defeated && atWar(world, p.id, o.id));
+    const step = WEARINESS.max / (WEARINESS.years * YEAR_SECONDS);
+    pc.weariness = war ? Math.min(WEARINESS.max, pc.weariness + step) : Math.max(0, pc.weariness - 2 * step);
+  }
   for (const u of world.units) {
     const cost = UNIT_ECON[u.type];
     if (!cost) continue;

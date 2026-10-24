@@ -530,7 +530,7 @@ function households(world: World): void {
     const target = next ?? cur;
     const wanted = target.needs.length ? target.needs : (['food'] as HouseNeed[]);
     const met = wanted.filter((n) => c.needs[n]).length / wanted.length;
-    let happy = 0.4 + 0.45 * met + (curOk ? 0.1 : -0.15) - c.pollution * 0.35 - (pc.taxRate - 1) * 0.6 - unemployment[h.owner]! * 0.25;
+    let happy = 0.4 + 0.45 * met + (curOk ? 0.1 : -0.15) - c.pollution * 0.35 - (pc.taxRate - 1) * 0.6 - unemployment[h.owner]! * 0.25 * Math.min(1, sumTiers(pc.population) / 60) - pc.weariness;
     happy = Math.max(0, Math.min(1, happy));
     c.happiness = happy;
     happySum[h.owner] += happy * Math.max(1, c.residents);

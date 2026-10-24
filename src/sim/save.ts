@@ -76,6 +76,7 @@ function migrate(w: World): void {
   city.victory ??= newVictoryState(w.players.length);
   city.warStart ??= w.players.map(() => w.players.map(() => 0));
   city.treaties ??= [];
+  city.peaceOffers ??= [];
   if (!city.rail) {
     city.rail = new Uint8Array(n);
     city.railComp = new Int32Array(n);
@@ -92,6 +93,7 @@ function migrate(w: World): void {
   for (const pc of city.players) {
     for (const k of ['population', 'workforce', 'jobs', 'employed'] as const) while (pc[k].length < 4) (pc[k] as number[]).push(0);
     pc.age ??= 0;
+    pc.weariness ??= 0;
     pc.research ??= 0;
     pc.deals ??= {};
     pc.relations ??= null;

@@ -161,9 +161,19 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     }
     case 'makePeace': {
       if (!atWar(world, c.player, c.target)) break;
-      // You must persuade a nation; AI players' offers are accepted.
+      const offers = (world.city.peaceOffers ??= []);
+      // You must persuade a nation (unless they asked first); an AI's offer to you waits for your answer.
       if (world.players[c.player]?.role === 'human') {
-        say(offerPeace(world, c.player, c.target));
+        const asked = offers.some((o) => o.from === c.target && o.to === c.player);
+        if (!asked) {
+          say(offerPeace(world, c.player, c.target));
+          break;
+        }
+      } else if (world.players[c.target]?.role === 'human') {
+        if (!offers.some((o) => o.from === c.player && o.to === c.target)) {
+          offers.push({ from: c.player, to: c.target });
+          world.emit({ kind: 'notify', player: c.target, text: `🕊 ${world.players[c.player]!.name} offers peace (see 🤝 Diplomacy)` });
+        }
         break;
       }
       setWar(world, c.player, c.target, false);

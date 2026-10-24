@@ -400,6 +400,9 @@ export class CityHud {
     const o = el('div', 'gameover');
     const card = el('div', 'gameover-card');
     card.append(el('h1', cls, title), el('p', 'muted', text));
+    const report = el('div', 'end-report');
+    report.innerHTML = this.reportHtml();
+    card.append(report);
     const again = el('button', 'btn primary', 'New game');
     again.addEventListener('click', () => this.onNew());
     const look = el('button', 'btn', stay);
@@ -464,7 +467,7 @@ export class CityHud {
     const powerShort = pc.powerDemand > pc.powerSupply + 0.01;
     const wars = this.world.players.filter((p) => p.id !== this.game.humanPlayer && atWar(this.world, this.game.humanPlayer, p.id)).map((p) => p.name);
     const next = nextAge(this.world, this.game.humanPlayer);
-    const s = [wars.join(','), pc.age, next?.ready, Math.floor(pc.credits), Math.round(net), pop, pc.population.join(','), happy, Math.round(pc.powerSupply), Math.round(pc.powerDemand), date, this.game.paused, this.game.timeScale].join('|');
+    const s = [wars.join(','), Math.round(pc.weariness * 100), pc.age, next?.ready, Math.floor(pc.credits), Math.round(net), pop, pc.population.join(','), happy, Math.round(pc.powerSupply), Math.round(pc.powerDemand), date, this.game.paused, this.game.timeScale].join('|');
     if (s === this.lastTop) return;
     this.lastTop = s;
     this.topRes.innerHTML = `
@@ -473,7 +476,7 @@ export class CityHud {
       <span class="res ${happy < 40 ? 'neg' : ''}" title="Happiness"><b>${happy >= 60 ? '😊' : happy >= 40 ? '😐' : '😟'}</b> ${happy}%</span>
       <span class="res ${powerShort ? 'neg' : ''}" title="Power supply / demand (MW)"><b class="c-energy">⚡</b> ${Math.round(pc.powerSupply)}<small>/${Math.round(pc.powerDemand)} MW</small></span>
       <span class="res res-age ${next?.ready ? 'pos' : ''}" title="${esc(AGE_NAMES[pc.age]!)}${next ? `: ${next.ready ? 'the next age is ready (🔬)' : 'see 🔬 for the next age'}` : ''}">🔬 ${esc(AGE_NAMES[pc.age]!.replace(' Age', ''))}${next?.ready ? ' ⬆' : ''}</span>
-      <span class="res res-date" title="Date">📅 ${date}</span>${wars.length ? `<span class="res neg" title="At war with ${esc(wars.join(', '))}">⚔ War</span>` : ''}`;
+      <span class="res res-date" title="Date">📅 ${date}</span>${wars.length || pc.weariness > 0.01 ? `<span class="res neg" title="${wars.length ? `At war with ${esc(wars.join(', '))}. ` : ''}War weariness: people are ${Math.round(pc.weariness * 100)}% less happy (it fades in peace)">⚔ ${wars.length ? 'War' : 'Weary'}${pc.weariness > 0.01 ? ` <small>−${Math.round(pc.weariness * 100)}%</small>` : ''}</span>` : ''}`;
     this.speedBtns.forEach((b, i) => b.classList.toggle('active', i === 0 ? this.game.paused : !this.game.paused && this.game.timeScale === SPEEDS[i - 1]));
   }
 
@@ -691,7 +694,8 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
         return `<button class="mini wide ${why ? 'disabled' : ''}" data-action="treaty" data-arg="${p.id}:${k}" title="${esc(TREATIES[k].text)}${why ? `
 ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
       }).join('');
-      const peaceWhy = war ? peaceProblem(w, me, p.id) : null;
+      const offered = war && w.city!.peaceOffers.some((o) => o.from === p.id && o.to === me);
+      const peaceWhy = war && !offered ? peaceProblem(w, me, p.id) : null;
       const trade = canTrade(w, me, p.id);
       return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
         <span class="muted">👥 ${sumTiers(pc.population)} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'} · ${esc(AGE_NAMES[pc.age]!.replace(' Age', ''))}</span></div>
@@ -700,7 +704,7 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         ${offers ? `<div class="state-actions">${offers}</div>` : ''}
         <div class="state-actions">${hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : ''}
         ${trade ? `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>` : ''}
-        ${war ? `<button class="mini wide ${peaceWhy ? 'disabled' : ''}" data-action="peace" data-arg="${p.id}" title="${esc(peaceWhy ?? 'They will accept')}">Offer peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div>
+        ${war ? `<button class="mini wide ${offered ? 'primary' : peaceWhy ? 'disabled' : ''}" data-action="peace" data-arg="${p.id}" title="${esc(offered ? 'They asked for peace' : peaceWhy ?? 'They will accept')}">${offered ? 'Accept their peace offer' : 'Offer peace'}</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div>
         ${this.dealsWith === p.id && trade ? this.dealsHtml(p.id) : ''}</div>`;
     }).join('')}<p class="muted">Nations sign treaties when they like you enough: trade with them, sign pacts, and don't break your word.</p>`;
   }
@@ -771,6 +775,24 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
       <button class="btn ${next.ready ? 'primary' : 'disabled'} wide" data-action="advance">${next.ready ? `⬆ Enter the ${esc(next.name)}` : 'Not ready yet'}</button>` : later}
       <p class="muted">Research comes from Research Institutes staffed by technicians (and universities, by engineers). GDP is the value of everything your nation made last year.</p>
       ${this.goalsHtml()}`;
+  }
+
+  /** Post-game report: the year, your nation in numbers, and the history graphs. */
+  private reportHtml(): string {
+    const w = this.world;
+    const me = this.game.humanPlayer;
+    const pc = w.city!.players[me]!;
+    const regions = Array.from(w.city!.regionOwner).filter((o) => o === me).length;
+    const peak = pc.history.reduce((m, h) => Math.max(m, h.population), sumTiers(pc.population));
+    const stats = [
+      ['Year', `${gameYear(w)}`],
+      ['Age', AGE_NAMES[pc.age]!],
+      ['Population', `${fmt(sumTiers(pc.population))} (peak ${fmt(peak)})`],
+      ['Regions', `${regions} of ${w.map.regions.length}`],
+      ['GDP last year', `₡${fmt(pc.lastGdp)}`],
+      ['Treasury', `₡${fmt(pc.credits)}`],
+    ];
+    return `<table class="end-stats">${stats.map(([k, v]) => `<tr><td>${esc(k!)}</td><td>${esc(v!)}</td></tr>`).join('')}</table>${this.historyHtml()}`;
   }
 
   /** Yearly population and GDP: you and the rival nations. */

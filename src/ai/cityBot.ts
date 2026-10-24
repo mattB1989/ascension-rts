@@ -16,6 +16,7 @@ import type { Building, Unit } from '../sim/types.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { hasTreaty, opinionOf } from '../sim/city/treaties.ts';
+import { roadsByOwner } from '../sim/city/economy.ts';
 import type { World } from '../sim/world.ts';
 
 const BLOCK = 8; // street spacing
@@ -30,6 +31,10 @@ export interface BotState {
   maxPop: number;
   /** Nations: expand into new regions and keep an army. */
   nation: boolean;
+  /** Game time of the next attempt to expand (after one found nowhere to go). */
+  expandAt?: number;
+  /** Game time of the next check for streets cut off from the town hall. */
+  linkAt?: number;
   difficulty: Difficulty;
   /** Game time of the next military decision, and of the earliest war it may start. */
   warAt: number;
@@ -144,35 +149,45 @@ function roadTo(world: World, player: number, sx: number, sy: number, spot: [num
   const W = map.width;
   const city = world.city!;
   const inFoot = (x: number, y: number) => x >= spot[0] && x < spot[0] + size[0] && y >= spot[1] && y < spot[1] + size[1];
-  const prev = new Map<number, number>();
   const start = sy * W + sx;
-  if (roadProblem(world, player, sx, sy) !== null) return null;
+  if (!city.road[start] && roadProblem(world, player, sx, sy) !== null) return null;
   // Join our own road network (the one the town hall is on), not a neighbour's.
   const th = hall(world, player);
   const home = th?.city && th.city.access >= 0 ? city.comp[th.city.access]! : -1;
-  const queue = [start];
-  prev.set(start, -1);
-  for (let q = 0; q < queue.length && q < 40000; q++) {
+  // Scratch arrays shared between searches (a stamp marks this search's visits).
+  const n = W * map.height;
+  if (!search || search.prev.length !== n) search = { prev: new Int32Array(n), stamp: new Int32Array(n), queue: new Int32Array(40001), run: 0 };
+  const s = search;
+  s.run++;
+  const queue = s.queue;
+  let tail = 0;
+  queue[tail++] = start;
+  s.stamp[start] = s.run;
+  s.prev[start] = -1;
+  for (let q = 0; q < tail; q++) {
     const i = queue[q]!;
     const x = i % W;
     const y = (i - x) / W;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = x + dx;
-      const ny = y + dy;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0);
+      const ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
       if (nx < 0 || ny < 0 || nx >= W || ny >= map.height || inFoot(nx, ny)) continue;
       const j = ny * W + nx;
-      if (prev.has(j)) continue;
-      prev.set(j, i);
+      if (s.stamp[j] === s.run) continue;
+      s.stamp[j] = s.run;
+      s.prev[j] = i;
       if (city.road[j] && (home < 0 || city.comp[j] === home)) {
         const path: Array<[number, number]> = [];
-        for (let k = i; k >= 0; k = prev.get(k)!) path.push([k % W, Math.floor(k / W)]);
+        for (let m = i; m >= 0; m = s.prev[m]!) path.push([m % W, Math.floor(m / W)]);
         return path.reverse();
       }
-      if (roadProblem(world, player, nx, ny) === null || city.road[j]) queue.push(j);
+      if (tail < queue.length && (city.road[j] || roadProblem(world, player, nx, ny) === null)) queue[tail++] = j;
     }
   }
   return null;
 }
+
+let search: { prev: Int32Array; stamp: Int32Array; queue: Int32Array; run: number } | null = null;
 
 /** Footprints promised by commands not yet executed (several houses in one decision). */
 let reserved: Array<[number, number, number, number]> = [];
@@ -238,6 +253,22 @@ export function botStep(world: World, bot: BotState): Command[] {
   if (bot.rings === 0) {
     const g = growGrid(world, bot);
     return g ? [g] : [];
+  }
+  // Streets that ended up cut off from the town hall's network: join them up.
+  if (world.time >= (bot.linkAt ?? 0)) {
+    bot.linkAt = world.time + 30;
+    const th = hall(world, p);
+    const home = th?.city && th.city.access >= 0 ? world.city!.comp[th.city.access]! : 0;
+    const cut = home ? world.buildings.find((b) => b.owner === p && b.city && b.city.access >= 0 && b.city.comp !== home) : undefined;
+    if (cut) {
+      const a = cut.city!.access;
+      const W = world.map.width;
+      const road = roadTo(world, p, a % W, Math.floor(a / W), [-10, -10], [0, 0]);
+      if (road && road.length > 1) {
+        bot.log.push(`link ${cut.type} (${road.length} road)`);
+        return [{ kind: 'road', player: p, tiles: road }];
+      }
+    }
   }
   const pending = world.buildings.filter((b) => b.owner === p && !b.complete && b.type !== 'house').length;
   const busy = pending >= 3 + count(world, p, 'construction_office') * 2;
@@ -348,7 +379,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('clinic') && pc.population[1] >= 30, 'clinic'],
     [bot.nation && !has('barracks') && pop >= 120, 'barracks'],
     [bot.nation && !has('vehicle_factory') && has('barracks') > 0 && pop >= 300 && has('oil_refinery') > 0, 'vehicle_factory'],
-    [has('maintenance_depot') * 300 < world.city!.roadCount && world.city!.roadCount > 150, 'maintenance_depot'],
+    [has('maintenance_depot') * 300 < roadsByOwner(world)[p]! && roadsByOwner(world)[p]! > 150, 'maintenance_depot'],
     // Towards the Digital age, and what it brings.
     [pc.age < MAX_AGE && !has('research_institute') && pc.population[1] >= 120 && bot.maxPop === Infinity, 'research_institute'],
     [pc.age >= 1 && !has('data_exchange'), 'data_exchange'],
@@ -436,13 +467,18 @@ function expand(world: World, bot: BotState): Command[] {
     .map((r) => ({ r, d: Math.sqrt((r.cx - th.x) * (r.cx - th.x) + (r.cy - th.y) * (r.cy - th.y)), score: r.fertile / 300 + r.forest / 400 + (r.ore + r.stone + r.oil + r.rare + r.uranium) / 60 + (r.ocean ? 1 : 0) }))
     .sort((a, b) => b.score - b.d / 80 - (a.score - a.d / 80) || a.r.id - b.r.id);
   void mine;
+  let tries = 0;
   for (const { r } of options) {
-    // The office sits on the region's clear site; look for a spot near it.
-    for (let dy = 0; dy <= 3; dy++) {
-      for (let dx = 0; dx <= 3; dx++) {
+    if (tries >= 3) break;
+    // The office sits on the region's clear site; look for a spot near it (one road search per region).
+    let placed = false;
+    for (let dy = 0; dy <= 3 && !placed; dy++) {
+      for (let dx = 0; dx <= 3 && !placed; dx++) {
         const tx = r.siteX + dx;
         const ty = r.siteY + dy;
         if (cityPlacementProblem(world, p, 'regional_office', tx, ty) !== null) continue;
+        placed = true;
+        tries++;
         const road = roadTo(world, p, tx + 1, ty + 3, [tx, ty], [3, 3]);
         if (!road) continue;
         bot.log.push(`expand into ${r.name}`);
@@ -473,9 +509,11 @@ function militaryStep(world: World, bot: BotState): Command[] {
   const out: Command[] = [];
 
   // Grow: claim land while there is money and people.
-  if (pop >= d.expandPop * (1 + seatsOf(world, p).length * 0.5) && pc.credits > 4000) {
+  if (pop >= d.expandPop * (1 + seatsOf(world, p).length * 0.5) && pc.credits > 4000 && world.time >= (bot.expandAt ?? 0)) {
     const e = expand(world, bot);
     if (e.length) return e;
+    // Nowhere to go for now: look again in a minute.
+    bot.expandAt = world.time + 60;
   }
 
   // Recruit up to a share of the army limit.

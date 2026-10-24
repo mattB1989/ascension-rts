@@ -139,6 +139,8 @@ export interface PlayerCity {
   workforce: PerTier;
   jobs: PerTier;
   employed: PerTier;
+  /** War weariness: happiness lost to long wars (0..WEARINESS.max), recovers in peace. */
+  weariness: number;
   /** Age reached (0 Modern, 1 Digital, 2 Nano, 3 Space) and research points towards the next. */
   age: number;
   research: number;
@@ -203,6 +205,8 @@ export interface CityState {
   warStart: number[][];
   /** Treaties in force between nations. */
   treaties: Treaty[];
+  /** Peace offered by an AI nation to you, waiting for your answer. */
+  peaceOffers: Array<{ from: number; to: number }>;
   /** Overseas market price multiplier per good (drifts over time). */
   prices: Record<GoodId, number>;
   /** Ways to win: progress and the winner. */
@@ -223,6 +227,7 @@ export function newPlayerCity(credits: number): PlayerCity {
     workforce: perTier(),
     jobs: perTier(),
     employed: perTier(),
+    weariness: 0,
     age: 0,
     research: 0,
     happiness: 0.6,
@@ -302,6 +307,7 @@ export function createCityState(width: number, height: number, regions: number, 
     war: Array.from({ length: players }, () => new Array(players).fill(0)),
     warStart: Array.from({ length: players }, () => new Array(players).fill(0)),
     treaties: [],
+    peaceOffers: [],
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
     victory: newVictoryState(players),
   };

@@ -624,3 +624,19 @@ test('railways: stations on a line, and trains carry goods to where they are wan
   world.step([{ kind: 'unroad', player: 0, tiles: track }]);
   assert.equal(city.railCount, 0);
 });
+
+test('war weariness grows during a war with a nation and fades in peace', () => {
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1 });
+  const pc = world.city!.players[0]!;
+  world.step([{ kind: 'declareWar', player: 0, target: 1 }]);
+  run(world, 30);
+  const w = pc.weariness;
+  assert.ok(w > 0.005, `weary (${w})`);
+  // With no army, they ask for peace; it waits for your answer.
+  assert.ok(world.city!.peaceOffers.some((o) => o.from === 1 && o.to === 0), 'they offer peace');
+  assert.ok(world.city!.war[0]![1], 'still at war until you accept');
+  world.step([{ kind: 'makePeace', player: 0, target: 1 }]);
+  assert.equal(world.city!.war[0]![1], 0, 'accepted');
+  run(world, 10);
+  assert.ok(pc.weariness < w, 'fades in peace');
+});

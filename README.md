@@ -50,7 +50,8 @@ original **Twin Shores** skirmish.
 - **Treaties (E5)**: rival nations keep an opinion of you. Propose a non-aggression pact (no
   war while it lasts), a research pact (both research 25% faster) or a trade agreement (trade
   with their town hall by truck, as with a city-state). Breaking a pact costs trust, and peace
-  must be agreed: a nation talks after a long war or when it is losing.
+  must be agreed: a nation talks after a long war or when it is losing, and its own offers of
+  peace wait for your answer. Long wars make people weary (less happy) until peace returns.
 - **The Digital age (E7)**: 🔬 Ages shows what the next age needs: research from Research
   Institutes, enough technicians, a yearly GDP and a price. The Digital age brings Engineers and
   glass towers (they want electronics and the data network), rare-earth and uranium deposits,

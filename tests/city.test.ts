@@ -842,7 +842,7 @@ test('river docks: a barge carries goods between docks on the same water', async
   const W = map.width;
   // Two dock spots on land beside connected water, some way apart.
   const fits = (x: number, y: number) => {
-    for (let yy = y; yy < y + 3; yy++) for (let xx = x; xx < x + 3; xx++) if (xx < 0 || yy < 0 || xx >= W || yy >= map.height || !isOpenLand(map.terrain[yy * W + xx]!) || world.occupancy[yy * W + xx]) return false;
+    for (let yy = y; yy < y + 3; yy++) for (let xx = x; xx < x + 3; xx++) if (xx < 0 || yy < 0 || xx >= W || yy >= map.height || !isOpenLand(map.terrain[yy * W + xx] as never) || world.occupancy[yy * W + xx]) return false;
     return waterBeside(world, { tx: x, ty: y, w: 3, h: 3 }) >= 0;
   };
   const spots: Array<[number, number]> = [];

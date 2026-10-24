@@ -9,10 +9,10 @@ import { Game } from './game.ts';
 import { GameRenderer } from './render/renderer.ts';
 import { gameYear } from './sim/city/economy.ts';
 import { createCity } from './sim/city/index.ts';
-import { newBot } from './ai/cityBot.ts';
 import { MAP_SIZES, type GenBiome } from './sim/mapgen.ts';
 import { createMatch } from './sim/scenario.ts';
 import type { World } from './sim/world.ts';
+import type { TimedCommand } from './sim/commands.ts';
 import { CityHud } from './ui/cityHud.ts';
 import { Sound } from './ui/sound.ts';
 import { Hud } from './ui/hud.ts';
@@ -37,8 +37,27 @@ async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const mode = params.get('mode');
   const load = params.get('load');
+  const replay = params.get('replay');
   let world: World | null = null;
-  if (load) {
+  let recording: Recording | null = null;
+  if (replay) {
+    // A replay: the saved game's setup, recreated, and its orders played back.
+    const l = loading(uiRoot, 'Rebuilding the game for the replay…');
+    try {
+      const saved = await loadFromBrowser(replay);
+      if (saved?.city?.setup && saved.city.log) {
+        world = createCity(saved.city.setup);
+        recording = { log: saved.city.log, until: saved.tick };
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    l.remove();
+    if (!world) {
+      showMenu(uiRoot);
+      return;
+    }
+  } else if (load) {
     const l = loading(uiRoot, 'Loading…');
     try {
       world = await loadFromBrowser(load);
@@ -59,12 +78,7 @@ async function boot(): Promise<void> {
     const d = params.get('difficulty');
     const difficulty = d === 'easy' || d === 'hard' ? d : 'normal';
     const rivals = params.has('rivals') ? Math.max(0, Math.min(3, Number(params.get('rivals')))) : undefined;
-    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0' });
-    // Spectator: an AI nation plays your seat too.
-    if (params.get('spectate') === '1') {
-      world.city!.bots.push(newBot(0, Infinity, true, difficulty));
-      world.players[0]!.name = 'Blue League';
-    }
+    world = createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0', spectate: params.get('spectate') === '1' });
     l.remove();
   } else if (mode === 'skirmish' || mode === 'sandbox') {
     world = createMatch({ seed: Number(params.get('seed')) || 1337, mode: mode === 'sandbox' ? 'sandbox' : 'standard' });
@@ -72,12 +86,26 @@ async function boot(): Promise<void> {
     showMenu(uiRoot);
     return;
   }
-  start(world, uiRoot, params);
+  start(world, uiRoot, params, recording);
 }
 
-function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void {
+interface Recording {
+  log: TimedCommand[];
+  /** Tick the recording ends at. */
+  until: number;
+}
+
+function start(world: World, uiRoot: HTMLElement, params: URLSearchParams, recording: Recording | null = null): void {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const game = new Game(world, 0);
+  if (recording) {
+    game.playBack(recording.log);
+    uiRoot.classList.add('replaying');
+    const badge = document.createElement('div');
+    badge.className = 'replay-badge';
+    badge.textContent = '▶ Replay';
+    uiRoot.appendChild(badge);
+  }
   const renderer = new GameRenderer(canvas, world, game.humanPlayer, params.get('fog') !== '0');
   const selection = new Selection(world);
   const input = new InputController(canvas, renderer, game, selection, uiRoot);
@@ -85,6 +113,7 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
   let handleEvents: (events: ReturnType<Game['drainEvents']>) => void;
   let updateHud: (dt: number, realDt: number) => void;
   let lastYear = -1;
+  let recordingDone = false;
   const sound = new Sound();
   // The player's own orders make a sound; so do button clicks.
   const issue = game.issue.bind(game);
@@ -103,7 +132,9 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
       saveToBrowser(world, slot, `${world.map.name.split(' ')[0]}, ${gameYear(world)}`)
         .then(() => slot === 'manual' && hud.toast('Game saved'))
         .catch((e) => hud.toast(`Could not save: ${String(e)}`));
-    hud.onSave = () => void save('manual');
+    hud.onSave = () => void (recording ? hud.toast('This is a replay: nothing to save') : save('manual'));
+    hud.canReplay = () => !recording && !!world.city!.log;
+    hud.onReplay = () => void save('replay').then(() => (location.search = 'replay=replay'));
     hud.onLoad = () => (location.search = 'load=manual');
     hud.onNew = () => (location.search = '');
     hud.hasSave = () => !!saveInfo('manual');
@@ -115,7 +146,12 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams): void
       hud.update();
       // Autosave every game year.
       const y = gameYear(world);
-      if (lastYear >= 0 && y !== lastYear) void save('auto');
+      if (lastYear >= 0 && y !== lastYear && !recording) void save('auto');
+      if (recording && world.tick >= recording.until && !recordingDone) {
+        recordingDone = true;
+        game.paused = true;
+        hud.toast('End of the recording. Press play to let the world carry on without you.');
+      }
       lastYear = y;
     };
   } else {

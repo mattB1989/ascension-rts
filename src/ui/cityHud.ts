@@ -95,6 +95,9 @@ export class CityHud {
   onLoad: () => void = () => {};
   onNew: () => void = () => {};
   hasSave: () => boolean = () => false;
+  /** Replays: whether this game can be replayed, and how. */
+  canReplay: () => boolean = () => false;
+  onReplay: () => void = () => {};
   /** Tint buildings for the current overlay (set by main: renderer.marks.set). */
   onMarks: (marks: OverlayMark[]) => void = () => {};
 
@@ -347,6 +350,9 @@ export class CityHud {
       case 'new':
         this.onNew();
         break;
+      case 'replay':
+        this.onReplay();
+        break;
       case 'goto': {
         const [x, y] = arg.split(',').map(Number);
         this.input.lookAt(x!, y!);
@@ -418,6 +424,11 @@ export class CityHud {
     look.addEventListener('click', () => o.remove());
     const row = el('div', 'gameover-actions');
     row.append(again, look);
+    if (this.canReplay()) {
+      const watch = el('button', 'btn', '🎬 Watch the replay');
+      watch.addEventListener('click', () => this.onReplay());
+      row.append(watch);
+    }
     card.append(row);
     o.appendChild(card);
     o.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -936,7 +947,8 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         return `${close}<h3>Game</h3><div class="menu-col">
           <button class="btn" data-action="save">💾 Save</button>
           <button class="btn ${this.hasSave() ? '' : 'disabled'}" data-action="load">📂 Load last save</button>
-          <button class="btn" data-action="new">✨ New game…</button></div>
+          <button class="btn" data-action="new">✨ New game…</button>
+          ${this.canReplay() ? '<button class="btn" data-action="replay" title="Watch this game again from the first day, at any speed">🎬 Watch the replay</button>' : ''}</div>
           <h3>Sound</h3><div class="menu-col">
           <button class="btn ${this.sound?.settings.sfx ? 'active' : ''}" data-action="sound" data-arg="sfx">🔊 Sound effects: ${this.sound?.settings.sfx ? 'on' : 'off'}</button>
           <button class="btn ${this.sound?.settings.music ? 'active' : ''}" data-action="sound" data-arg="music">🎵 Music: ${this.sound?.settings.music ? 'on' : 'off'}</button>

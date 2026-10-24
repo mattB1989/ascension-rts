@@ -6,7 +6,8 @@ import type { Building } from '../types.ts';
 import { GOOD_IDS, perTier, type GoodId, type PerTier } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 import type { BotState } from '../../ai/cityBot.ts';
-import type { Command } from '../commands.ts';
+import type { Command, TimedCommand } from '../commands.ts';
+import type { CityOptions } from './index.ts';
 import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
 import type { Embargo, Treaty } from './treaties.ts';
@@ -223,6 +224,9 @@ export interface CityState {
   prices: Record<GoodId, number>;
   /** Ways to win: progress and the winner. */
   victory: VictoryState;
+  /** Replays: the options the game was created with, and every player order since (absent in games from older saves). */
+  setup?: CityOptions;
+  log?: TimedCommand[];
 }
 
 export function emptyBudget(): Budget {

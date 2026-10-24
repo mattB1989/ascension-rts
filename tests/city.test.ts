@@ -951,7 +951,7 @@ test('later navies, air forces and space craft: where they are built, what they 
   for (let x = hall.tx - 30; x <= hall.tx + 30; x++) street.push([x, row]);
   world.step([{ kind: 'road', player: 0, tiles: street }]);
   pc.age = 3;
-  const ready = (type: string, x: number, goods: Record<string, number>) => {
+  const ready = (type: keyof typeof BUILDINGS, x: number, goods: Record<string, number>) => {
     const [bx, by] = spotOnStreet(world, type, x, row);
     const b = addCityBuilding(world, type, 0, bx, by, true);
     stockUp(b, goods);
@@ -974,4 +974,42 @@ test('later navies, air forces and space craft: where they are built, what they 
   assert.match(recruitProblem(world, 0, site, 'star_lance') ?? '', /At most 1/, 'one Star Lance each');
   site.city!.stock.orbital = 0;
   assert.match(recruitProblem(world, 0, site, 'drop_ship') ?? '', /orbital/);
+});
+
+test('replays: a game recreated from its setup and order log ends in exactly the same state', async () => {
+  const { botStep, newBot } = await import('../src/ai/cityBot.ts');
+  const { snapshot, revive } = await import('../src/sim/save.ts');
+  const { Game } = await import('../src/game.ts');
+  const setup = { seed: 5, size: 256, biome: 'lakeland' as const, difficulty: 'hard' as const };
+  // Play: a scripted player gives orders through the game driver (as the UI does), with a save and load midway.
+  let world = createCity(setup);
+  let game = new Game(world, 0);
+  const me = newBot(0, Infinity, false);
+  const play = (seconds: number) => {
+    for (let i = 0; i < seconds * 15; i++) {
+      for (const c of botStep(game.world, me)) game.issue(c);
+      game.update(1 / 15);
+    }
+  };
+  play(240);
+  world = revive(structuredClone(snapshot(world, 'mid')));
+  game = new Game(world, 0);
+  play(240);
+  const log = world.city!.log!;
+  assert.ok(log.length > 20, `orders recorded (${log.length})`);
+  // Replay from scratch.
+  const again = createCity(world.city!.setup!);
+  const viewer = new Game(again, 0);
+  viewer.playBack(structuredClone(log));
+  viewer.issue({ kind: 'taxRate', player: 0, rate: 2 }); // ignored while replaying
+  while (again.tick < world.tick) viewer.update(1 / 15);
+  const sig = (w: typeof world) => JSON.stringify({
+    tick: w.tick,
+    players: w.city!.players.map((p) => [Math.round(p.credits * 100), p.population, p.age, Math.round(p.research)]),
+    buildings: w.buildings.map((b) => [b.id, b.type, b.owner, b.tx, b.ty, b.complete]),
+    units: w.units.map((u) => [u.id, u.type, u.owner, Math.round(u.x * 100), Math.round(u.y * 100)]),
+    roads: w.city!.roadCount,
+    regions: Array.from(w.city!.regionOwner),
+  });
+  assert.equal(sig(again), sig(world));
 });

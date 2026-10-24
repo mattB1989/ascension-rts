@@ -84,6 +84,9 @@ original **Twin Shores** skirmish.
 - **Sound and graphs (E10)**: procedural sound effects (building, roads, battles, alerts) and
   a slow generative music pad, all made in the browser; on/off and volume in ☰. ₡ Budget shows
   population and GDP over the years against the rival nations.
+- **Replays (E10)**: the simulation is deterministic, so a game is its setup plus your orders.
+  ☰ → 🎬 Watch the replay (or the button on the end screen) replays your game from the first
+  day at any speed; the start menu keeps the last one.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.
@@ -93,7 +96,7 @@ army on land, sea and air, transports, walls, gates, garrisoned towers, victory.
 
 URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation directly (add
 `&spectate=1&fog=0` to watch AI nations play every seat, `&victory=0` for a sandbox);
-`?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
+`?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?replay=replay` replays; `?fog=0`
 turns the fog of war off. `node --experimental-strip-types tools/headless.ts 7 256 temperate normal 30`
 plays an AI-only game in Node and prints how every nation does (the balance harness).
 

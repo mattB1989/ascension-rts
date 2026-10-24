@@ -83,8 +83,9 @@ export function newBot(player: number, maxPop = Infinity, nation = false, diffic
   return { player, noLand: [], tradeAt: 0, maxPop, nation, difficulty, warAt: 0, attackTarget: 0, rings: 0, wait: 0, log: [] };
 }
 
+/** The seat the bot builds around: its town hall, or (if that has fallen) a regional office. */
 function hall(world: World, player: number): Building | undefined {
-  return world.buildings.find((b) => b.owner === player && b.type === 'town_hall');
+  return world.buildings.find((b) => b.owner === player && b.type === 'town_hall') ?? world.buildings.find((b) => b.owner === player && b.type === 'regional_office' && b.complete);
 }
 
 function count(world: World, player: number, type: string): number {

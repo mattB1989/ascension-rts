@@ -229,6 +229,8 @@ export interface CityOptions {
   difficulty?: Difficulty;
   /** Ways to win on (default) or off (sandbox: endless play). */
   victory?: boolean;
+  /** Spectator: an AI nation plays your seat too. */
+  spectate?: boolean;
 }
 
 const NATION_COLORS = [0xd64541, 0x8e44ad, 0x16a085];
@@ -241,6 +243,13 @@ export function createCity(opts: CityOptions): World {
   const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + nations + states });
   const world = startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
   world.city!.victory.on = opts.victory ?? true;
+  if (opts.spectate) {
+    world.city!.bots.push(newBot(0, Infinity, true, opts.difficulty ?? 'normal'));
+    world.players[0]!.name = 'Blue League';
+  }
+  // How it began, and every order since: enough to replay the game (the sim is deterministic).
+  world.city!.setup = { ...opts };
+  world.city!.log = [];
   return world;
 }
 

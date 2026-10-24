@@ -36,6 +36,12 @@ export function showMenu(root: HTMLElement): void {
     }
     card.appendChild(row);
   }
+  const rec = saveInfo('replay');
+  if (rec) {
+    const b = el('button', 'btn menu-btn', `🎬 Watch the replay <small>${rec.name}</small>`);
+    b.addEventListener('click', () => go({ replay: 'replay' }));
+    card.appendChild(b);
+  }
 
   card.appendChild(el('h2', '', 'New nation'));
   let size = 512;

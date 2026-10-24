@@ -788,3 +788,29 @@ test('supply: troops far from home wear down; near a seat or supply depot they m
   assert.ok(home.hp > home.maxHp / 2, 'mends at home');
   assert.ok(lost.hp < h0, 'wears down far away');
 });
+
+test('a save from before E6-E10 (no rail, pipes, treaties, ages, victory) still loads and plays', async () => {
+  const { snapshot, revive } = await import('../src/sim/save.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1 });
+  run(world, 5);
+  const snap = structuredClone(snapshot(world, 'old')) as unknown as { world: { city: Record<string, unknown>; buildings: Array<{ city?: Record<string, unknown> }> } };
+  const c = snap.world.city;
+  for (const k of ['rail', 'railComp', 'railCount', 'railVersion', 'railCompVersion', 'trains', 'nextTrainId', 'pipe', 'pipeComp', 'pipeCount', 'pipeVersion', 'pipeCompVersion', 'treaties', 'warStart', 'peaceOffers', 'victory']) delete c[k];
+  for (const pc of c.players as Array<Record<string, unknown>>) {
+    delete pc.age;
+    delete pc.research;
+    delete pc.weariness;
+    for (const k of ['population', 'workforce', 'jobs', 'employed']) pc[k] = (pc[k] as number[]).slice(0, 2);
+  }
+  for (const b of snap.world.buildings) {
+    if (!b.city) continue;
+    const needs = b.city.needs as Record<string, boolean>;
+    const covered = b.city.covered as Record<string, boolean>;
+    for (const k of ['electronics', 'data', 'pharma', 'university']) delete needs[k];
+    for (const k of ['data', 'university']) delete covered[k];
+  }
+  const back = revive(snap as never);
+  run(back, 10);
+  assert.ok(back.city!.rail && back.city!.pipe && back.city!.victory, 'migrated');
+  assert.equal(back.city!.players[0]!.population.length, 4);
+});

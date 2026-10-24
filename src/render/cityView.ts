@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { GOODS } from '../data/goods.ts';
 import { surfaceHeight, groundHeight, type GameMap } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
+import { routePoint } from '../sim/city/trade.ts';
 import { applyFow, applyOverlay } from './fog.ts';
 
 const RCHUNK = 32;
@@ -358,5 +359,76 @@ export class OverlayMarks {
     mesh.frustumCulled = false;
     this.mesh = mesh;
     this.group.add(mesh);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cargo ships (overseas trade)
+
+const hullGeo = (() => {
+  const shape = new THREE.Shape([
+    new THREE.Vector2(-1.3, -0.42), new THREE.Vector2(0.9, -0.42), new THREE.Vector2(1.45, 0), new THREE.Vector2(0.9, 0.42), new THREE.Vector2(-1.3, 0.42),
+  ]);
+  const g = new THREE.ExtrudeGeometry(shape, { depth: 0.36, bevelEnabled: false });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, -0.12, 0);
+  return g;
+})();
+const bridgeGeo = new THREE.BoxGeometry(0.34, 0.42, 0.62).translate(-1.0, 0.45, 0);
+const boxesGeo = new THREE.BoxGeometry(1.5, 0.3, 0.6).translate(0.05, 0.38, 0);
+
+export class ShipsView {
+  readonly group = new THREE.Group();
+  private readonly world: World;
+  private readonly hull: THREE.InstancedMesh;
+  private readonly bridge: THREE.InstancedMesh;
+  private readonly boxes: THREE.InstancedMesh;
+
+  constructor(world: World) {
+    this.world = world;
+    const mk = (geo: THREE.BufferGeometry, color: number, n = 16) => {
+      const material = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.2, flatShading: true });
+      applyFow(material);
+      const m = new THREE.InstancedMesh(geo, material, n);
+      m.castShadow = true;
+      m.frustumCulled = false;
+      m.count = 0;
+      this.group.add(m);
+      return m;
+    };
+    this.hull = mk(hullGeo, 0x3a4a5a);
+    this.bridge = mk(bridgeGeo, 0xeeeeea);
+    this.boxes = mk(boxesGeo, 0xffffff);
+  }
+
+  update(alpha: number, time: number): void {
+    const ships = this.world.city?.ships ?? [];
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+    const v = new THREE.Vector3();
+    const sc = new THREE.Vector3(1.4, 1.4, 1.4);
+    const c = new THREE.Color();
+    const palette = [0xc0402a, 0x3a7bd5, 0xe0b23a, 0x5fa043, 0xd070b0];
+    let n = 0;
+    for (const s of ships) {
+      if (n >= 16) break;
+      const d = s.prevPos + (s.pos - s.prevPos) * alpha;
+      const p = routePoint(s.path, d);
+      const heading = s.phase === 'out' ? p.angle + Math.PI : p.angle;
+      q.setFromAxisAngle(up, -heading);
+      v.set(p.x, 0.05 + Math.sin(time * 1.3 + s.id) * 0.04, p.y);
+      m.compose(v, q, sc);
+      this.hull.setMatrixAt(n, m);
+      this.bridge.setMatrixAt(n, m);
+      this.boxes.setMatrixAt(n, m);
+      this.boxes.setColorAt(n, c.setHex(palette[s.id % palette.length]!));
+      n++;
+    }
+    for (const im of [this.hull, this.bridge, this.boxes]) {
+      im.count = n;
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
   }
 }

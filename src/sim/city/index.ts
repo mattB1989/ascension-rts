@@ -2,6 +2,7 @@
 
 import { BUILDINGS, type BuildingTypeId } from '../../data/buildings.ts';
 import { START_CREDITS, START_STOCK } from '../../data/city.ts';
+import { GOODS, type GoodId } from '../../data/goods.ts';
 import { updateFog } from '../fog.ts';
 import { generateMap, type GenBiome } from '../mapgen.ts';
 import type { GameMap } from '../map.ts';
@@ -21,7 +22,9 @@ export type CityCommand =
   /** Place a row of buildings (houses along a street). */
   | { kind: 'placeMany'; player: number; building: BuildingTypeId; spots: Array<[number, number]> }
   | { kind: 'demolish'; player: number; building: number }
-  | { kind: 'taxRate'; player: number; rate: number };
+  | { kind: 'taxRate'; player: number; rate: number }
+  /** Trade port rule for one good: import up to `import` (0 off), export above `export` (-1 off). */
+  | { kind: 'tradeRule'; player: number; good: GoodId; import: number; export: number };
 
 export function applyCityCommand(world: World, c: CityCommand): void {
   if (!world.city) return;
@@ -56,6 +59,15 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     case 'demolish': {
       const b = world.getBuilding(c.building);
       if (b && b.owner === c.player && b.city && b.type !== 'town_hall') demolish(world, b);
+      break;
+    }
+    case 'tradeRule': {
+      const pc = world.city.players[c.player];
+      if (!pc || !(c.good in GOODS)) break;
+      const imp = Math.max(0, Math.min(2000, Math.floor(c.import)));
+      const exp = c.export < 0 ? -1 : Math.min(5000, Math.floor(c.export));
+      if (imp === 0 && exp < 0) delete pc.trade[c.good];
+      else pc.trade[c.good] = { import: imp, export: exp };
       break;
     }
     case 'taxRate': {

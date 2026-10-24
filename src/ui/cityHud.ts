@@ -3,12 +3,13 @@
 // placed, and the goods, budget and game panels.
 
 import { buildingDef, type BuildingTypeId } from '../data/buildings.ts';
-import { CITY_PALETTE, HOUSE_LEVELS, ROAD } from '../data/city.ts';
+import { CITY_PALETTE, HOUSE_LEVELS, OVERSEAS, ROAD } from '../data/city.ts';
 import { GOOD_IDS, GOODS, TIERS, type GoodId } from '../data/goods.ts';
 import type { Game } from '../game.ts';
 import { houseCapacity, gameMonth, gameYear } from '../sim/city/economy.ts';
 import { stockTotal } from '../sim/city/logistics.ts';
 import { get } from '../sim/city/state.ts';
+import { buyPrice, sellPrice } from '../sim/city/trade.ts';
 import { DEPOSIT_NAMES, TERRAIN_NAMES, type TerrainId } from '../sim/map.ts';
 import type { Building, GameEvent, World } from '../sim/world.ts';
 import { materialsText, type PlaceType } from './cityTools.ts';
@@ -60,7 +61,7 @@ export class CityHud {
   private shownOverlay: OverlayKind | null = null;
   private overlayAt = 0;
   private readonly overlayBar: HTMLDivElement;
-  private panelKind: 'goods' | 'budget' | 'menu' | 'help' | null = null;
+  private panelKind: 'goods' | 'budget' | 'trade' | 'menu' | 'help' | null = null;
   private lastTop = '';
   private lastInfo = '';
   private lastPanel = '';
@@ -95,6 +96,7 @@ export class CityHud {
     right.append(
       this.btn('🗺', 'Overlays: land, water, power, services, happiness, pollution', () => this.overlayBar.classList.toggle('hidden')),
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
+      this.btn('🚢', 'Trade with the overseas market', () => this.togglePanel('trade')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
       this.btn('☰', 'Save, load, new game', () => this.togglePanel('menu')),
       this.btn('?', 'How to play', () => this.togglePanel('help')),
@@ -176,7 +178,7 @@ export class CityHud {
     return false;
   }
 
-  private togglePanel(kind: 'goods' | 'budget' | 'menu' | 'help'): void {
+  private togglePanel(kind: 'goods' | 'budget' | 'trade' | 'menu' | 'help'): void {
     this.panelKind = this.panelKind === kind ? null : kind;
     this.panel.classList.toggle('hidden', this.panelKind === null);
     this.lastPanel = '';
@@ -211,6 +213,20 @@ export class CityHud {
         const b = this.world.getBuilding(Number(arg));
         if (b) this.game.issue({ kind: 'demolish', player: this.game.humanPlayer, building: b.id });
         this.selection.clear();
+        break;
+      }
+      case 'trade': {
+        const [g, field, delta] = arg.split(':') as [GoodId, 'import' | 'export', string];
+        const pc = this.world.city!.players[this.game.humanPlayer]!;
+        const rule = pc.trade[g] ?? { import: 0, export: -1 };
+        let imp = rule.import;
+        let exp = rule.export;
+        const steps = [0, 20, 50, 100, 200, 400];
+        const move = (v: number, list: number[], d: number) => list[Math.max(0, Math.min(list.length - 1, list.indexOf(list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a))) + d))]!;
+        if (field === 'import') imp = move(imp, steps, Number(delta));
+        else exp = move(exp, [-1, ...steps], Number(delta));
+        this.game.issue({ kind: 'tradeRule', player: this.game.humanPlayer, good: g, import: imp, export: exp });
+        this.lastPanel = '';
         break;
       }
       case 'tax': {
@@ -315,7 +331,7 @@ export class CityHud {
     // Net per year: last full year, or this year so far scaled up.
     const frac = (this.world.time % 120) / 120;
     const src = y.taxes + y.upkeep > 0 ? y : null;
-    const net = src ? src.taxes + src.trade - src.upkeep - src.roads : frac > 0.05 ? (cur.taxes + cur.trade - cur.upkeep - cur.roads) / frac : 0;
+    const net = src ? src.taxes + src.trade - src.imports - src.upkeep - src.roads : frac > 0.05 ? (cur.taxes + cur.trade - cur.imports - cur.upkeep - cur.roads) / frac : 0;
     const pop = pc.population[0] + pc.population[1];
     const happy = Math.round(pc.happiness * 100);
     const date = `${MONTHS[gameMonth(this.world)]} ${gameYear(this.world)}`;
@@ -496,13 +512,31 @@ export class CityHud {
         return `${close}<h3>Goods</h3><table class="goods"><tr><th></th><th>Stored</th><th>Made/min</th><th>Used/min</th><th></th></tr>${rows}</table>
           <p class="muted">Made and used over the last game minute. Trucks carry goods from producers to whoever needs them, or into the Town Hall and warehouses.</p>`;
       }
+      case 'trade': {
+        const ports = this.world.buildings.filter((b) => b.owner === this.game.humanPlayer && b.type === 'trade_port');
+        const rows = GOOD_IDS.map((g) => {
+          const r = pc.trade[g] ?? { import: 0, export: -1 };
+          const imp = r.import > 0 ? `up to ${r.import}` : '—';
+          const exp = r.export >= 0 ? `above ${r.export}` : '—';
+          const step = (field: string, d: number, label: string) => `<button class="mini" data-action="trade" data-arg="${g}:${field}:${d}">${label}</button>`;
+          return `<tr><td>${GOODS[g].icon} ${GOODS[g].name}</td><td>${Math.floor(get(pc.stockpile, g))}</td><td class="pos">₡${sellPrice(this.world, g).toFixed(1)}</td><td class="neg">₡${buyPrice(this.world, g).toFixed(1)}</td>
+            <td class="rule">${step('import', -1, '−')}<span>${imp}</span>${step('import', 1, '+')}</td><td class="rule">${step('export', -1, '−')}<span>${exp}</span>${step('export', 1, '+')}</td></tr>`;
+        }).join('');
+        const ships = this.world.city!.ships.filter((s) => s.owner === this.game.humanPlayer).length;
+        const portLine = ports.length
+          ? `${ports.length} trade port${ports.length > 1 ? 's' : ''} · ${ships} ship${ships === 1 ? '' : 's'} at sea${ports.some((p) => p.city!.status) ? ` · ${esc(ports.find((p) => p.city!.status)!.city!.status)}` : ''}`
+          : '<span class="neg">Build a Trade Port on the coast (Logistics) to trade.</span>';
+        return `${close}<h3>Overseas trade</h3><p class="muted">${portLine}</p>
+          <table class="goods trade"><tr><th></th><th>You have</th><th>Sell</th><th>Buy</th><th>Import</th><th>Export</th></tr>${rows}</table>
+          <p class="muted">Import tops your stock up to the amount; export ships out everything above it. Ships carry ${OVERSEAS.capacity} each way. World prices drift over time. This year: exports ₡${fmt(pc.year.trade)}, imports ₡${fmt(pc.year.imports)}.</p>`;
+      }
       case 'budget': {
         const y = pc.year;
         const l = pc.lastYear;
         const row = (name: string, a: number, b: number, neg = false) => `<tr><td>${name}</td><td class="${neg ? 'neg' : 'pos'}">${neg ? '−' : ''}${fmt(a)}</td><td class="${neg ? 'neg' : 'pos'}">${neg ? '−' : ''}${fmt(b)}</td></tr>`;
-        const net = (x: typeof y) => x.taxes + x.trade - x.upkeep - x.roads - x.construction;
+        const net = (x: typeof y) => x.taxes + x.trade - x.imports - x.upkeep - x.roads - x.construction;
         return `${close}<h3>Budget</h3><table class="goods"><tr><th></th><th>This year</th><th>Last year</th></tr>
-          ${row('Taxes', y.taxes, l.taxes)}${row('Trade', y.trade, l.trade)}${row('Building upkeep', y.upkeep, l.upkeep, true)}${row('Road upkeep', y.roads, l.roads, true)}${row('Construction', y.construction, l.construction, true)}
+          ${row('Taxes', y.taxes, l.taxes)}${row('Exports', y.trade, l.trade)}${row('Imports', y.imports, l.imports, true)}${row('Building upkeep', y.upkeep, l.upkeep, true)}${row('Road upkeep', y.roads, l.roads, true)}${row('Construction', y.construction, l.construction, true)}
           <tr class="total"><td>Net</td><td>${sign(net(y))}</td><td>${sign(net(l))}</td></tr></table>
           <div class="tax-row">Taxes <button class="btn" data-action="tax" data-arg="-0.1">−</button><b>${Math.round(pc.taxRate * 100)}%</b><button class="btn" data-action="tax" data-arg="0.1">+</button>
           <span class="muted">Higher taxes bring money but make people unhappy.</span></div>

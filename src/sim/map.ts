@@ -68,6 +68,8 @@ export interface RegionInfo {
   oil: number;
   coast: number;
   river: number;
+  /** Touches water connected to the open sea (a trade port can go here). */
+  ocean: boolean;
 }
 
 export interface ResourceSpot {

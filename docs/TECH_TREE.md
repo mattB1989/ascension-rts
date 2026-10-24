@@ -360,6 +360,7 @@ seconds at normal speed.
 | **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
 | **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |
 | **Warehouse** | Logistics | 4×3 | ₡600 | 30 lumber + 10 concrete | 80 | 6 workers | stores 400 | Takes in what producers make and sends it on to whoever needs it. Three trucks. 3 trucks |
+| **Trade Port** | Logistics | 4×3 | ₡3000 | 50 lumber | 200 | 8 workers | stores 400 | Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea. 3 trucks |
 | **House** | Housing | 2×2 | ₡60 | — | 0 | — | 8 / 16 / 24 / 40 residents by level | Settlers build it themselves once it has a road. Grows from cottage to apartment as its needs are met. |
 | **Farm** | Resource | 4×4 | ₡400 | 10 lumber | 30 | 6 workers | 4 crops every 20s | Grows crops. Fertile floodplain yields full output, grassland 60%, sand 20%. 1 truck |
 | **Fishing Harbour** | Resource | 3×3 | ₡500 | 15 lumber | 40 | 4 workers | 3 food every 12s | Lands fish straight as food. Output depends on open water nearby. 1 truck |
@@ -374,6 +375,7 @@ seconds at normal speed.
 | **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 1 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
 | **Goods Factory** | Industry | 3×3 | ₡1400 | 15 steel + 15 concrete | 100 | 10 technicians | 1 steel + 1 plastics → 2 consumer goods every 10s | Makes consumer goods from steel and plastics. Needs technicians. needs 6 MW 1 truck |
 | **Oil Power Plant** | Utility | 4×3 | ₡1200 | 10 lumber + 20 concrete + 10 steel | 100 | 6 workers | 1 crude oil → power every 6s; 30 MW | Burns crude oil: 30 MW for every building connected to it by road. |
+| **Hydro Plant** | Utility | 3×3 | ₡2200 | 40 concrete + 10 steel | 120 | 4 workers | power every 10s; 20 MW | A dam on a river or lake: 20 MW with no fuel. Needs concrete and steel to build. |
 | **Pumping Station** | Utility | 2×2 | ₡500 | 10 concrete + 5 steel | 50 | 2 workers | water for 600 | Pumps river or lake water for 600 residents. Water Towers spread it to houses. |
 | **Water Tower** | Utility | 2×2 | ₡250 | 5 concrete + 2 steel | 20 | — | water: 400 residents within 24 road tiles | Gives running water to houses within 24 road tiles, fed by a Pumping Station on the same roads. |
 | **Market** | Service | 3×3 | ₡400 | 15 lumber | 40 | 4 workers | market: 500 residents within 26 road tiles | Sells food and consumer goods to households within 26 road tiles. Trucks keep it stocked. |
@@ -390,11 +392,11 @@ seconds at normal speed.
 | 🌾 **Crops** | ₡4 | Farm | Food Plant |
 | 🍞 **Food** | ₡9 | Fishing Harbour, Food Plant | households (markets) |
 | 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
-| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Construction Office (construction), Warehouse (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
+| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
 | 🪨 **Stone** | ₡3 | Quarry | Cement Works |
-| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
+| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
 | ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
-| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction) |
+| 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction) |
 | 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |
 | ⛽ **Fuel** | ₡14 | Oil Refinery | — |
 | 🧴 **Plastics** | ₡12 | Oil Refinery | Goods Factory |

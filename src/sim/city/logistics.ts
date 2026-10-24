@@ -13,6 +13,7 @@ import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { pathTo, searchRoads } from './roads.ts';
 import { add, get, type Stock, type Truck } from './state.ts';
+import { exportDemand } from './trade.ts';
 
 /** Inputs a factory keeps on hand: this many production cycles. */
 const INPUT_CYCLES = 4;
@@ -30,10 +31,11 @@ export function stockTotal(s: Stock): number {
 }
 
 /** Units of `g` this building wants delivered (after what is already on its way). */
-export function demandFor(b: Building, g: GoodId): number {
+export function demandFor(b: Building, g: GoodId, world?: World): number {
   const c = b.city;
   const e = b.def.econ;
   if (!c || !e) return 0;
+  if (b.type === 'trade_port' && b.complete) return world ? exportDemand(world, b, g) : 0;
   const incoming = get(c.incoming, g);
   if (!b.complete) {
     if (b.type === 'house') return 0;
@@ -109,7 +111,7 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
     for (const b of list) {
       if (b === src || b.owner !== src.owner || !b.city) continue;
       for (const g of goods) {
-        const d = demandFor(b, g);
+        const d = demandFor(b, g, world);
         if (d < 1) continue;
         const have = get(c.stock, g);
         const n = Math.min(have, TRUCK_LOAD, d);

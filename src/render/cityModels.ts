@@ -149,6 +149,36 @@ function warehouse(team: number): THREE.Group {
   return g;
 }
 
+function tradePort(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(4, 3, mat(0x8c8a84, { rough: 1 }));
+  // Quay edge on the water side (+x), container stacks, a gantry crane and an office.
+  g.add(box(0.25, 0.3, 2.9, concrete(), 1.85, 0.15, 0));
+  const colors = [0xc0402a, 0x3a7bd5, 0xe0b23a, 0x5fa043, 0xd070b0, 0x6f8fa0];
+  let k = 0;
+  for (let x = -1.5; x <= 0.2; x += 0.62) {
+    for (const z of [-0.9, -0.4]) {
+      const h = 1 + ((k * 7) % 3);
+      for (let y = 0; y < h; y++) g.add(box(0.56, 0.24, 0.42, mat(colors[(k + y) % colors.length]!), x, 0.24 + y * 0.25, z));
+      k++;
+    }
+  }
+  const crane = new THREE.Group();
+  crane.position.set(1.0, 0, 0.6);
+  for (const z of [-0.45, 0.45]) {
+    crane.add(box(0.1, 1.9, 0.1, t.main, -0.4, 0.95, z));
+    crane.add(box(0.1, 1.9, 0.1, t.main, 0.4, 0.95, z));
+  }
+  crane.add(box(2.1, 0.14, 1.0, t.main, 0.45, 1.95, 0));
+  crane.add(box(0.3, 0.22, 0.3, darkMetal(), 0.9, 1.78, 0));
+  g.add(crane);
+  g.add(box(0.8, 0.6, 0.6, plaster(), -1.4, 0.42, 1.0));
+  windowRow(g, 2, 0.4, 0.5, 'x', 1.31);
+  g.add(cyl(0.025, 0.03, 1.4, 5, darkMetal(), -1.7, 0.8, 1.3));
+  g.add(box(0.36, 0.22, 0.02, t.accent, -1.52, 1.4, 1.3));
+  return g;
+}
+
 // ---------------------------------------------------------------------------
 // Houses: four levels
 
@@ -449,6 +479,28 @@ function powerPlant(team: number): THREE.Group {
   return g;
 }
 
+function hydroPlant(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3);
+  // A curved dam wall facing the water (+x), a turbine hall and pylons.
+  const dam = mesh(cached('dam', () => new THREE.CylinderGeometry(1.6, 1.6, 1.3, 16, 1, true, -0.7, 1.4)), concrete(), -0.6, 0.65, 0);
+  dam.scale.set(1, 1, 1);
+  g.add(dam);
+  g.add(box(0.9, 0.8, 1.6, mat(0xc9c4ba), -0.6, 0.5, 0));
+  g.add(box(0.94, 0.08, 1.64, t.accent, -0.6, 0.94, 0));
+  windowRow(g, 3, 1.0, 0.55, 'z', -0.14);
+  const wheel = new THREE.Group();
+  wheel.name = 'spin';
+  wheel.position.set(0.5, 0.35, 0);
+  wheel.add(mesh(cached('hydroWheel', () => new THREE.TorusGeometry(0.3, 0.05, 6, 12)), metal(), 0, 0, 0));
+  g.add(wheel);
+  for (const z of [-1.1, 1.1]) {
+    g.add(box(0.06, 1.6, 0.06, darkMetal(), -1.2, 0.85, z));
+    g.add(box(0.5, 0.05, 0.05, darkMetal(), -1.2, 1.55, z));
+  }
+  return g;
+}
+
 function pumpingStation(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2);
@@ -539,6 +591,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'regional_office': return regionalOffice(team);
     case 'construction_office': return constructionOffice(team);
     case 'warehouse': return warehouse(team);
+    case 'trade_port': return tradePort(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(3, level))]!(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
@@ -554,6 +607,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'goods_factory': return goodsFactory(team);
     case 'power_plant': return powerPlant(team);
     case 'pumping_station': return pumpingStation(team);
+    case 'hydro_plant': return hydroPlant(team);
     case 'water_tower': return waterTower(team);
     case 'market': return market(team);
     case 'police_station': return policeStation(team);

@@ -645,7 +645,7 @@ function buildRegions(map: GameMap): void {
   for (const id of ids.values()) {
     regions.push({
       id, name: regionName(seed, id), tiles: 0, cx: 0, cy: 0, siteX: -1, siteY: -1, neighbors: [],
-      fertile: 0, forest: 0, ore: 0, stone: 0, oil: 0, coast: 0, river: 0,
+      fertile: 0, forest: 0, ore: 0, stone: 0, oil: 0, coast: 0, river: 0, ocean: false,
     });
   }
   const sumX = new Float64Array(regions.length + 1);
@@ -680,6 +680,45 @@ function buildRegions(map: GameMap): void {
       }
     }
   }
+  // Ocean access: land next to water that connects to the map edge.
+  const open = new Uint8Array(n);
+  const oq: number[] = [];
+  const water = (i: number) => terrain[i] === Terrain.Deep || terrain[i] === Terrain.Shallow;
+  for (let i = 0; i < n; i++) {
+    const x = i % w;
+    const y = (i - x) / w;
+    if ((x === 0 || y === 0 || x === w - 1 || y === h - 1) && water(i)) {
+      open[i] = 1;
+      oq.push(i);
+    }
+  }
+  for (let q = 0; q < oq.length; q++) {
+    const i = oq[q]!;
+    const x = i % w;
+    const y = (i - x) / w;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + DX4[k]!;
+      const ny = y + DY4[k]!;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const j = ny * w + nx;
+      if (!open[j] && water(j)) {
+        open[j] = 1;
+        oq.push(j);
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    const o = map.region[i]!;
+    if (!o) continue;
+    const x = i % w;
+    const y = (i - x) / w;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + DX4[k]!;
+      const ny = y + DY4[k]!;
+      if (nx >= 0 && ny >= 0 && nx < w && ny < h && open[ny * w + nx] && !map.fresh[ny * w + nx]) regions[o - 1]!.ocean = true;
+    }
+  }
+
   // Neighbours: regions touching, or facing each other across a river.
   for (let i = 0; i < n; i++) {
     const tx = i % w;
@@ -745,7 +784,7 @@ export function findSite(map: GameMap, region: number, cx: number, cy: number, s
 function pickStarts(map: GameMap, count: number): void {
   const good = map.regions.filter((r) => r.siteX >= 0 && r.tiles > 1500);
   const score = (r: RegionInfo) =>
-    Math.min(r.fertile, 400) / 400 + Math.min(r.forest, 300) / 300 + Math.min(r.stone + r.ore, 60) / 60 + (r.coast + r.river > 0 ? 1 : 0) + Math.min(r.tiles, 5000) / 5000;
+    Math.min(r.fertile, 400) / 400 + Math.min(r.forest, 300) / 300 + Math.min(r.stone + r.ore, 60) / 60 + (r.coast + r.river > 0 ? 1 : 0) + Math.min(r.tiles, 5000) / 5000 + (r.ocean ? 1.5 : 0);
   const pool = good.length ? good : map.regions.filter((r) => r.siteX >= 0);
   if (!pool.length) {
     map.starts = [{ x: map.width / 2, y: map.height / 2 }];

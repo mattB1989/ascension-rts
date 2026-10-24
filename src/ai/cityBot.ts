@@ -18,6 +18,10 @@ const BLOCK = 8; // street spacing
 
 export interface BotState {
   player: number;
+  /** Raw producers it could find no land for (it imports their goods instead). */
+  noLand: string[];
+  /** Game time of the next look at the trade rules. */
+  tradeAt: number;
   /** Grid rings laid out so far. */
   rings: number;
   /** Seconds until the next decision. */
@@ -26,7 +30,7 @@ export interface BotState {
 }
 
 export function newBot(player: number): BotState {
-  return { player, rings: 0, wait: 0, log: [] };
+  return { player, noLand: [], tradeAt: 0, rings: 0, wait: 0, log: [] };
 }
 
 function hall(world: World, player: number): Building | undefined {
@@ -171,7 +175,10 @@ function place(world: World, bot: BotState, type: BuildingTypeId, near?: [number
   const def = buildingDef(type);
   if (def.placement !== 'land') {
     const r = rawSpot(world, bot.player, type);
-    if (!r) return [];
+    if (!r) {
+      if (!bot.noLand.includes(type)) bot.noLand.push(type);
+      return [];
+    }
     bot.log.push(`${type} at ${r.spot} (${r.road.length} road)`);
     const out: Command[] = [];
     if (r.road.length) out.push({ kind: 'road', player: bot.player, tiles: r.road });
@@ -214,10 +221,28 @@ export function botStep(world: World, bot: BotState): Command[] {
   const used = (g: GoodId) => get(pc.used, g);
   const stock = (g: GoodId) => world.buildings.filter((b) => b.owner === p && b.city).reduce((s, b) => s + get(b.city!.stock, g), 0);
 
+  // Trade: once there is a port, buy what the land can't give and sell surpluses.
+  if (has('trade_port') && world.time >= bot.tradeAt) {
+    bot.tradeAt = world.time + 30;
+    const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber' };
+    const rules: Array<[GoodId, number, number]> = [['steel', 60, -1], ['concrete', 40, -1], ['crops', 0, 150], ['timber', 0, 150], ['stone', 0, 150], ['food', 0, 250], ['lumber', 0, 200]];
+    for (const t of bot.noLand) {
+      const g = missing[t];
+      if (g) {
+        const r = rules.find((x) => x[0] === g);
+        if (r) r[1] = 80;
+        else rules.push([g, 80, -1]);
+      }
+    }
+    const changed = rules.filter(([g, imp, exp]) => pc.trade[g]?.import !== imp || pc.trade[g]?.export !== exp);
+    if (changed.length) return changed.map(([good, imp, exp]) => ({ kind: 'tradeRule', player: p, good, import: imp, export: exp }));
+  }
+
   // Order matters: the first thing that applies is done.
   const wants: Array<[boolean, BuildingTypeId]> = [
     [!has('logging_camp'), 'logging_camp'],
-    [!has('sawmill'), 'sawmill'],
+    [!has('sawmill') && !bot.noLand.includes('logging_camp'), 'sawmill'],
+    [!has('trade_port') && bot.noLand.length > 0, 'trade_port'],
     [credits > 400 && (room < 6 ? freeJobs > 4 || pop < 30 : freeJobs > room * 0.5 + 4), 'house'],
     [!has('farm') && pop >= 12, 'farm'],
     [!has('food_plant') && pop >= 12, 'food_plant'],
@@ -225,8 +250,10 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('pumping_station') && pop >= 30, 'pumping_station'],
     [!has('water_tower') && has('pumping_station') > 0, 'water_tower'],
     [!has('quarry') && pop >= 30, 'quarry'],
+    [!has('trade_port') && pop >= 100, 'trade_port'],
     [!has('oil_well') && pop >= 40, 'oil_well'],
-    [!has('power_plant') && has('oil_well') > 0, 'power_plant'],
+    [!has('power_plant') && (has('oil_well') > 0 || bot.noLand.includes('oil_well')), 'power_plant'],
+    [!has('hydro_plant') && pop >= 60 && bot.noLand.includes('oil_well'), 'hydro_plant'],
     [!has('cement_works') && has('power_plant') > 0, 'cement_works'],
     [!has('warehouse') && pop >= 50, 'warehouse'],
     [!has('police_station') && pop >= 60, 'police_station'],
@@ -241,7 +268,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('oil_refinery') && has('steel_mill') > 0 && pop >= 120, 'oil_refinery'],
     [!has('goods_factory') && has('oil_refinery') > 0 && pc.population[1] >= 20, 'goods_factory'],
     // Each plant burns about two thirds of a well's oil.
-    [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 < has('power_plant') + 1, 'oil_well'],
+    [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 < has('power_plant') + 1 && !bot.noLand.includes('oil_well'), 'oil_well'],
     [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 >= has('power_plant') + 1, 'power_plant'],
     [has('market') * 400 < pop, 'market'],
     [has('water_tower') * 350 < pop && has('pumping_station') > 0, 'water_tower'],

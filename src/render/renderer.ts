@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { surfaceHeight } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 import { CameraRig } from './camera.ts';
-import { OverlayMarks, RegionBorders, RoadsView, TrucksView } from './cityView.ts';
+import { OverlayMarks, RegionBorders, RoadsView, ShipsView, TrucksView } from './cityView.ts';
 import { Effects } from './effects.ts';
 import { BuildingsView } from './buildingsView.ts';
 import { applyFowTree, initFog, initOverlay, updateFogTexture } from './fog.ts';
@@ -29,6 +29,7 @@ export class GameRenderer {
   /** Economy game only. */
   readonly roads: RoadsView | null = null;
   readonly trucks: TrucksView | null = null;
+  readonly ships: ShipsView | null = null;
   readonly borders: RegionBorders | null = null;
   readonly marks: OverlayMarks;
   /** Whose eyes we see the world through (fog of war). */
@@ -93,7 +94,8 @@ export class GameRenderer {
       this.roads = new RoadsView(world);
       this.roads.onRoad = (x, y) => this.terrain.clearTrees(x, y, 1, 1);
       this.trucks = new TrucksView(world);
-      this.scene.add(this.roads.group, this.trucks.group);
+      this.ships = new ShipsView(world);
+      this.scene.add(this.roads.group, this.trucks.group, this.ships.group);
     }
     this.marks = new OverlayMarks(map);
     this.scene.add(this.marks.group);
@@ -151,6 +153,7 @@ export class GameRenderer {
     this.terrain.update(this.rig.camera);
     this.roads?.update();
     this.trucks?.update(alpha);
+    this.ships?.update(alpha, time);
     this.borders?.update(this.viewer);
     this.water.update(time);
     this.resources.update(inspect.resource, time);

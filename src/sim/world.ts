@@ -392,6 +392,7 @@ export class World {
       case 'placeMany':
       case 'demolish':
       case 'taxRate':
+      case 'tradeRule':
         applyCityCommand(this, c);
         break;
       case 'move': {

@@ -7,6 +7,7 @@ import { Deposit, isOpenLand, Terrain, type GameMap, type TerrainId } from '../m
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { findAccess } from './roads.ts';
+import { dockTile } from './trade.ts';
 import { add, newCityBuilding } from './state.ts';
 
 const FERTILITY: Partial<Record<TerrainId, number>> = {
@@ -120,7 +121,9 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
       break;
     case 'coast':
       if (!touches(map, tx, ty, w, h, (i) => isWaterT(map.terrain[i]!))) return 'Must touch the water';
-      if (y < 0.2) return 'Needs open water';
+      if (type === 'trade_port') {
+        if (dockTile(map, tx, ty, w, h) < 0) return 'Must be on water that reaches the open sea';
+      } else if (y < 0.2) return 'Needs open water';
       break;
     case 'freshWater':
       if (!touches(map, tx, ty, w, h, (i) => map.fresh[i] === 1)) return 'Must touch a river or lake';

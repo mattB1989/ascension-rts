@@ -28,6 +28,9 @@ original **Twin Shores** skirmish.
   pumping stations and water towers; markets, police, clinics, schools. Power and water reach
   buildings along the roads. Pollution, happiness, taxes and upkeep.
 - **Regions**: a Regional Office claims a neighbouring region.
+- **Overseas trade (E4)**: a Trade Port on a coast that reaches the open sea; per good, import up
+  to an amount and export everything above another; cargo ships sail in from the map edge; world
+  prices drift. A Hydro Plant gives power on rivers without oil.
 - **Information**: click anything to see what it needs and why it isn't working; 📦 goods made
   and used, ₡ budget and tax rate; pause and 1× / 2× / 4× / 8× speed; saves (and an autosave
   every game year) stay in the browser.
@@ -39,7 +42,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: overlays, then **E4**: rail, ports, the overseas market and trade routes. See [docs/PLAN.md](docs/PLAN.md).
+Next: road wear and maintenance, rail and river barges (rest of **E4**), then neighbours (E5). See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

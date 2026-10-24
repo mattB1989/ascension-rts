@@ -187,3 +187,63 @@ test('a regional office claims the neighbouring region', () => {
   run(world, 180, bot);
   if (office.complete) assert.ok(mine(nb.id), 'region claimed');
 });
+
+test('a trade port exports surplus and imports what is missing, by ship from the open sea', async () => {
+  const { dockTile, seaRoute } = await import('../src/sim/city/trade.ts');
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'archipelago' });
+  const map = world.map;
+  const hall = world.buildings[0]!;
+  // A coastal spot with a dock on open water; claim its region if it isn't ours.
+  let spot: [number, number] | null = null;
+  for (let ty = 2; ty < map.height - 5 && !spot; ty += 1) {
+    for (let tx = 2; tx < map.width - 6 && !spot; tx += 1) {
+      if (dockTile(map, tx, ty, 4, 3) < 0) continue;
+      const reg = map.region[ty * map.width + tx]!;
+      if (!reg) continue;
+      const before = world.city!.regionOwner[reg]!;
+      world.city!.regionOwner[reg] = 0;
+      if (cityPlacementProblem(world, 0, 'trade_port', tx, ty) === null) spot = [tx, ty];
+      else world.city!.regionOwner[reg] = before;
+    }
+  }
+  void hall;
+  assert.ok(spot, 'coastal spot');
+  const port = addCityBuilding(world, 'trade_port', 0, spot![0], spot![1], true);
+  assert.ok(seaRoute(world, port), 'route from the map edge');
+  // Staff: a road along the port and a full house on it.
+  const [px, py] = spot!;
+  const road: Array<[number, number]> = [];
+  for (let x = px - 3; x <= px + 6; x++) road.push([x, py + 3]);
+  world.step([{ kind: 'road', player: 0, tiles: road }]);
+  let staffed = false;
+  for (const [hx, hy] of [[px - 3, py + 4], [px, py + 4], [px + 2, py + 4], [px - 2, py + 4]] as const) {
+    if (cityPlacementProblem(world, 0, 'house', hx, hy) !== null) continue;
+    const house = addCityBuilding(world, 'house', 0, hx, hy, true);
+    house.city!.residents = 8;
+    house.city!.happiness = 0.8;
+    staffed = true;
+    break;
+  }
+  assert.ok(staffed, 'room for a house');
+  stockUp(port, { lumber: 120 });
+  const pc = world.city!.players[0]!;
+  const credits = pc.credits;
+  world.step([
+    { kind: 'tradeRule', player: 0, good: 'lumber', import: 0, export: 0 },
+    { kind: 'tradeRule', player: 0, good: 'steel', import: 150, export: -1 },
+  ]);
+  assert.deepEqual(pc.trade.steel, { import: 150, export: -1 });
+  // Keep the port staffed (no houses in this test) and let a ship come and go.
+  let arrived = false;
+  for (let i = 0; i < 15 * 240 && !arrived; i++) {
+    world.step();
+    if (pc.year.trade > 0) arrived = true;
+  }
+  assert.ok(arrived, 'a ship docked');
+  assert.ok(pc.year.trade > 0, 'exports sold');
+  assert.ok(pc.year.imports > 0, 'imports bought');
+  assert.ok((port.city!.stock.steel ?? 0) > 0, 'steel landed');
+  assert.ok((port.city!.stock.lumber ?? 0) < 120, 'lumber shipped out');
+  assert.notEqual(pc.credits, credits);
+});

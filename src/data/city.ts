@@ -32,6 +32,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 600, materials: { lumber: 30, concrete: 10 }, upkeep: 80, jobs: { tier: 0, count: 6 }, storage: 400, trucks: 3 },
     description: 'Takes in what producers make and sends it on to whoever needs it. Three trucks.',
   },
+  trade_port: {
+    ...common, id: 'trade_port', name: 'Trade Port', category: 'logistics', requires: [], buildTime: 40, hp: 2000, size: [4, 3],
+    placement: 'coast', vision: 8,
+    econ: { credits: 3000, materials: { lumber: 50 }, upkeep: 200, jobs: { tier: 0, count: 8 }, storage: 400, trucks: 3 },
+    description: 'Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea.',
+  },
   // --- Housing --------------------------------------------------------------
   house: {
     ...common, id: 'house', name: 'House', category: 'housing', requires: [], buildTime: 12, hp: 500, size: [2, 2],
@@ -120,6 +126,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 1200, materials: { lumber: 10, concrete: 20, steel: 10 }, upkeep: 100, jobs: { tier: 0, count: 6 }, recipe: { in: { oil: 1 }, out: {}, seconds: 6 }, power: -30, pollution: 0.7 },
     description: 'Burns crude oil: 30 MW for every building connected to it by road.',
   },
+  hydro_plant: {
+    ...common, id: 'hydro_plant', name: 'Hydro Plant', category: 'utility', requires: [], buildTime: 45, hp: 2000, size: [3, 3],
+    placement: 'freshWater', vision: 5,
+    econ: { credits: 2200, materials: { concrete: 40, steel: 10 }, upkeep: 120, jobs: { tier: 0, count: 4 }, recipe: { in: {}, out: {}, seconds: 10 }, power: -20 },
+    description: 'A dam on a river or lake: 20 MW with no fuel. Needs concrete and steel to build.',
+  },
   pumping_station: {
     ...common, id: 'pumping_station', name: 'Pumping Station', category: 'utility', requires: [], buildTime: 20, hp: 800, size: [2, 2],
     placement: 'freshWater', vision: 4,
@@ -174,8 +186,8 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well'] },
   { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory'] },
-  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'construction_office', 'regional_office'] },
-  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'pumping_station', 'water_tower'] },
+  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'construction_office', 'regional_office'] },
+  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'pumping_station', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school'] },
 ];
 
@@ -187,3 +199,21 @@ export const TAX_PER_RESIDENT = [10, 22] as const;
 export const ROAD = { cost: 10, bridgeCost: 120, upkeepPerYear: 1, speed: 3 } as const;
 export const START_CREDITS = 30000;
 export const START_STOCK = { lumber: 180, concrete: 100, steel: 50, food: 60 } as const;
+
+/** Overseas market (DESIGN.md §7): what it pays and charges, relative to reference prices. */
+export const OVERSEAS = {
+  /** Share of the world price you get when exporting. */
+  sell: 0.75,
+  /** Share of the world price you pay when importing. */
+  buy: 1.3,
+  /** Units a cargo ship carries each way. */
+  capacity: 200,
+  /** Seconds a ship stays docked. */
+  dock: 6,
+  /** Tiles per second at sea. */
+  speed: 5,
+  /** World prices drift by up to this much every 30 seconds, within the bounds. */
+  drift: 0.04,
+  min: 0.7,
+  max: 1.45,
+} as const;

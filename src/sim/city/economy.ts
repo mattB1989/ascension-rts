@@ -12,6 +12,7 @@ import type { World } from '../world.ts';
 import { accessIndex, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, emptyBudget, get, type PlayerCity, type Stock } from './state.ts';
+import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 
 const SECOND = 15; // ticks
 /** Share of residents who work. */
@@ -42,6 +43,7 @@ export function updateCity(world: World): void {
   const city = world.city!;
   updateComponents(city, world.map);
   moveTrucks(world);
+  moveShips(world);
   construction(world);
   if (world.tick % SECOND === 0) everySecond(world);
   dispatch(world, cachedIndex(world));
@@ -131,6 +133,7 @@ function everySecond(world: World): void {
     if (pc.madeLog.length > 60) pc.madeLog.shift();
     if (pc.usedLog.length > 60) pc.usedLog.shift();
   }
+  updateStockpiles(world);
   labour(world);
   power(world);
   if (sec % SERVICE_EVERY === 0) {
@@ -140,6 +143,7 @@ function everySecond(world: World): void {
   production(world);
   households(world);
   budget(world);
+  updateTrade(world);
   for (const pc of city.players) {
     pc.made = sumLog(pc.madeLog);
     pc.used = sumLog(pc.usedLog);

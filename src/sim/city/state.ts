@@ -2,7 +2,7 @@
 // typed arrays, arrays and records, so a save is a structured clone.
 
 import type { HouseNeed } from '../../data/city.ts';
-import type { GoodId } from '../../data/goods.ts';
+import { GOOD_IDS, type GoodId } from '../../data/goods.ts';
 import type { ServiceKind } from '../../data/types.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
@@ -76,10 +76,37 @@ export interface Truck {
 
 export interface Budget {
   taxes: number;
+  /** Exports sold. */
   trade: number;
+  /** Imports bought. */
+  imports: number;
   upkeep: number;
   roads: number;
   construction: number;
+}
+
+/** What to do with a good at the trade port: import up to `import` (0: never), export everything above `export` (-1: never). */
+export interface TradeRule {
+  import: number;
+  export: number;
+}
+
+/** A cargo ship between the open sea and a trade port. */
+export interface Ship {
+  id: number;
+  owner: number;
+  port: number;
+  /** Route at sea, flat [x, y, ...] from the map edge to the port. */
+  path: number[];
+  /** Distance travelled along the route (tiles), and at the start of the tick. */
+  pos: number;
+  prevPos: number;
+  length: number;
+  phase: 'in' | 'docked' | 'out';
+  /** Seconds left at the dock. */
+  dock: number;
+  /** Goods on board (imports on the way in). */
+  cargo: Stock;
 }
 
 export interface PlayerCity {
@@ -104,6 +131,10 @@ export interface PlayerCity {
   /** Rolling per-second history for the last minute (ring buffers). */
   madeLog: Stock[];
   usedLog: Stock[];
+  /** Trade port rules per good. */
+  trade: Partial<Record<GoodId, TradeRule>>;
+  /** Goods held across all your buildings (computed each second). */
+  stockpile: Stock;
   /** Value of goods made this year and last year (credits at reference prices). */
   gdp: number;
   lastGdp: number;
@@ -127,10 +158,14 @@ export interface CityState {
   players: PlayerCity[];
   /** Service coverage per tile of road access: residents allowed by the nearest service, recomputed every few seconds. */
   coverage: Partial<Record<ServiceKind, Int32Array>>;
+  ships: Ship[];
+  nextShipId: number;
+  /** Overseas market price multiplier per good (drifts over time). */
+  prices: Record<GoodId, number>;
 }
 
 export function emptyBudget(): Budget {
-  return { taxes: 0, trade: 0, upkeep: 0, roads: 0, construction: 0 };
+  return { taxes: 0, trade: 0, imports: 0, upkeep: 0, roads: 0, construction: 0 };
 }
 
 export function newPlayerCity(credits: number): PlayerCity {
@@ -150,6 +185,8 @@ export function newPlayerCity(credits: number): PlayerCity {
     used: {},
     madeLog: [],
     usedLog: [],
+    trade: {},
+    stockpile: {},
     gdp: 0,
     lastGdp: 0,
     history: [],
@@ -199,6 +236,9 @@ export function createCityState(width: number, height: number, regions: number, 
     nextTruckId: 1,
     players: Array.from({ length: players }, () => newPlayerCity(credits)),
     coverage: {},
+    ships: [],
+    nextShipId: 1,
+    prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
   };
 }
 

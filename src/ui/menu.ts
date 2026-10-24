@@ -4,6 +4,7 @@
 
 import { BIOMES, type GenBiome } from '../sim/mapgen.ts';
 import { saveInfo } from './saves.ts';
+import { SCENARIOS } from '../sim/city/scenarios.ts';
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, html?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -116,6 +117,15 @@ export function showMenu(root: HTMLElement): void {
   start.addEventListener('click', () => go({ mode: 'city', size, biome, seed: Number(seed.value) || 1, difficulty, ...(rivals >= 0 ? { rivals } : {}), ...(victory ? {} : { victory: 0 }) }));
   seedRow.append(el('span', 'menu-label', 'Seed'), seed, start);
   card.appendChild(seedRow);
+
+  card.appendChild(el('h2', '', 'Scenarios'));
+  const scen = el('div', 'biomes scenarios');
+  for (const sc of SCENARIOS) {
+    const b = el('button', 'biome', `<b>${sc.name}</b><span>${sc.blurb}</span><span class="goal-line">🎯 ${sc.goal}</span>`);
+    b.addEventListener('click', () => go({ mode: 'city', scenario: sc.id }));
+    scen.appendChild(b);
+  }
+  card.appendChild(scen);
 
   card.appendChild(el('h2', '', 'Other games'));
   const sk = el('div', 'menu-row');

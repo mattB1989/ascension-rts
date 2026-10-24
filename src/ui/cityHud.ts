@@ -10,6 +10,7 @@ import { RAIL } from '../sim/city/rail.ts';
 import { PIPE } from '../sim/city/pipes.ts';
 import { canTrade, EMBARGO, hasEmbargo, honouredEmbargo, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
+import { scenarioById } from '../sim/city/scenarios.ts';
 import type { Sound } from './sound.ts';
 import { PERSONALITIES } from '../ai/cityBot.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
@@ -383,6 +384,12 @@ export class CityHud {
         this.showDefeat(this.world.players[e.by]?.name ?? 'the enemy');
         continue;
       }
+      if (e.kind === 'victory' && e.how === 'scenario') {
+        const sc = scenarioById(this.world.city!.victory.scenario);
+        if (e.player === me) this.showEnd('Scenario complete!', 'win', `${sc?.name ?? 'Scenario'}: ${sc?.goal ?? ''} You can keep playing.`, 'Keep playing');
+        else this.showEnd('Scenario failed', 'lose', `${sc?.name ?? 'Scenario'}: ${sc?.goal ?? ''} ${this.world.players[me]?.defeated || !this.world.buildings.some((b) => b.owner === me && b.type === 'town_hall') ? 'Your capital has fallen.' : 'Time ran out.'}`, 'Keep playing');
+        continue;
+      }
       if (e.kind === 'victory') {
         const how = VICTORY_NAMES[e.how as VictoryKind] ?? 'Victory';
         if (e.player === me) this.showEnd('Victory!', 'win', `${how}. Your nation leads the world. You can keep playing.`, 'Keep playing');
@@ -604,8 +611,11 @@ export class CityHud {
     const todo = steps.filter(([done]) => !done).slice(0, 3);
     const done = steps.length - steps.filter(([d]) => !d).length;
     const hint = this.input.touchDevice ? 'Tap a building to see how it is doing.' : 'Click a building to see how it is doing.';
-    if (!todo.length || pop > 1500) return `<div class="muted">${hint} Your nation is on its way: see 🔬 for the next age and the ways to win.</div>`;
-    return `<div class="card-head"><div class="card-title">Next steps</div><div class="card-status">${done}/${steps.length}</div></div>
+    const v = w.city!.victory;
+    const sc = scenarioById(v.scenario);
+    const goal = sc && !v.scenarioDone ? `<div class="scenario-goal">🎯 <b>${esc(sc.name)}</b>: ${esc(sc.progress(w).text)} · by the end of ${sc.by}</div>` : '';
+    if (!todo.length || pop > 1500) return `${goal}<div class="muted">${hint} Your nation is on its way: see 🔬 for the next age and the ways to win.</div>`;
+    return `${goal}<div class="card-head"><div class="card-title">Next steps</div><div class="card-status">${done}/${steps.length}</div></div>
       <ul class="next-steps">${todo.map(([, t]) => `<li>${t}</li>`).join('')}</ul><div class="muted">${hint}</div>`;
   }
 
@@ -874,11 +884,19 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
 
   private goalsHtml(): string {
     const v = this.world.city!.victory;
+    const sc = scenarioById(v.scenario);
+    let scenario = '';
+    if (sc) {
+      const pr = sc.progress(this.world);
+      const state = v.scenarioDone === 'won' ? '<span class="pos">✔ Complete</span>' : v.scenarioDone === 'lost' ? '<span class="neg">✘ Failed</span>' : `<span class="muted">by the end of ${sc.by}</span>`;
+      scenario = `<h3>Scenario: ${esc(sc.name)}</h3><div class="goal"><div class="goal-head"><b>🎯 ${esc(sc.goal)}</b>${bar(pr.frac, 0, 1, pr.frac >= 1 ? 'good' : '')}</div><div class="muted">${esc(pr.text)} · ${state}</div></div>`;
+    }
+    if (!v.on) return `${scenario}<h3>Ways to win</h3><p class="muted">Sandbox game: nobody wins, play as long as you like.</p>`;
     if (!v.on) return `<h3>Ways to win</h3><p class="muted">Sandbox game: nobody wins, play as long as you like.</p>`;
     const me = this.game.humanPlayer;
     const rows = victoryProgress(this.world, me).map((g) => `<div class="goal"><div class="goal-head"><b>${esc(VICTORY_NAMES[g.kind])}</b>${bar(g.frac, 0, 1, g.frac >= 1 ? 'good' : '')}</div><div class="muted">${esc(g.text)}</div></div>`).join('');
     const won = v.winner >= 0 ? `<p class="${v.winner === me ? 'pos' : 'neg'}">🏆 ${esc(this.world.players[v.winner]?.name ?? '')} won: ${esc(VICTORY_NAMES[v.how as VictoryKind] ?? '')}</p>` : '';
-    return `<h3>Ways to win</h3>${won}${rows}`;
+    return `${scenario}<h3>Ways to win</h3>${won}${rows}`;
   }
 
   private renderPanel(): void {

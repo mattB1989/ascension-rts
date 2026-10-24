@@ -5,6 +5,7 @@
 import { VICTORY } from '../../data/city.ts';
 import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { World } from '../world.ts';
+import { updateScenario } from './scenarios.ts';
 
 export type VictoryKind = 'economic' | 'federation' | 'space' | 'conquest';
 
@@ -27,6 +28,11 @@ export interface VictoryState {
   elevator: number[];
   /** Regions each player has taken by force. */
   conquered: number[];
+  /** City-states each player has brought in peacefully (union or purchase). */
+  joined?: number[];
+  /** Scenario being played (see scenarios.ts), and its outcome. */
+  scenario?: string;
+  scenarioDone?: '' | 'won' | 'lost';
 }
 
 export function newVictoryState(players: number, on = true): VictoryState {
@@ -86,6 +92,7 @@ function win(world: World, player: number, how: VictoryKind): void {
 /** Once a second: time the elevators; once a year: check every way to win. */
 export function updateVictory(world: World, sec: number): void {
   const v = world.city!.victory;
+  if (v.scenario) updateScenario(world);
   if (!v.on || v.winner >= 0) return;
   const players = contenders(world);
   for (const p of players) {

@@ -19,6 +19,7 @@ import { placePipes, removePipes } from './pipes.ts';
 import { canTrade, cancelTreaty, changeOpinion, hasEmbargo, hasTreaty, offerPeace, proposeTreaty, setEmbargo, type TreatyKind } from './treaties.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
+import { applyScenario, scenarioById } from './scenarios.ts';
 
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
@@ -231,6 +232,8 @@ export interface CityOptions {
   victory?: boolean;
   /** Spectator: an AI nation plays your seat too. */
   spectate?: boolean;
+  /** A scenario (see scenarios.ts): its starting situation and goal. */
+  scenario?: string;
 }
 
 const NATION_COLORS = [0xd64541, 0x8e44ad, 0x16a085];
@@ -243,6 +246,8 @@ export function createCity(opts: CityOptions): World {
   const map = generateMap({ seed: opts.seed, size: opts.size, biome: opts.biome, starts: 1 + nations + states });
   const world = startCity(map, opts.seed, states, nations, opts.difficulty ?? 'normal');
   world.city!.victory.on = opts.victory ?? true;
+  const scenario = scenarioById(opts.scenario);
+  if (scenario) applyScenario(world, scenario);
   if (opts.spectate) {
     world.city!.bots.push(newBot(0, Infinity, true, opts.difficulty ?? 'normal'));
     world.players[0]!.name = 'Blue League';

@@ -1013,3 +1013,47 @@ test('replays: a game recreated from its setup and order log ends in exactly the
   });
   assert.equal(sig(again), sig(world));
 });
+
+test('scenarios: set up as described, won when the goal is met, lost at the deadline', async () => {
+  const { SCENARIOS, scenarioById, updateScenario } = await import('../src/sim/city/scenarios.ts');
+  const { snapshot, revive } = await import('../src/sim/save.ts');
+  const { YEAR_SECONDS } = await import('../src/data/goods.ts');
+  for (const sc of SCENARIOS) {
+    const w = createCity({ ...sc.setup, scenario: sc.id });
+    assert.equal(w.players.filter((p) => p.role === 'nation').length, sc.setup.nations, sc.id);
+    assert.equal(w.city!.victory.scenario, sc.id);
+    if (sc.credits) assert.equal(w.city!.players[0]!.credits, sc.credits);
+    if (sc.rivals) assert.ok(w.city!.bots.filter((b) => b.nation && b.player !== 0).every((b) => b.personality === sc.rivals));
+    assert.ok(sc.progress(w).frac < 1, `${sc.id} is not won at the start`);
+  }
+  // Boomtown: won once the town is big enough.
+  const boom = scenarioById('boomtown')!;
+  const w = createCity({ ...boom.setup, scenario: boom.id });
+  run(w, 2);
+  const events: string[] = [];
+  w.city!.players[0]!.population = [900, 400, 0, 0];
+  w.events.length = 0;
+  updateScenario(w);
+  for (const e of w.events) if (e.kind === 'victory') events.push(`${e.player}:${e.how}`);
+  assert.equal(w.city!.victory.scenarioDone, 'won');
+  assert.deepEqual(events, ['0:scenario']);
+  // River Republic: two city-states joining (here: bought) completes it.
+  const rr = scenarioById('river_republic')!;
+  const r = createCity({ ...rr.setup, scenario: rr.id });
+  const states = r.players.filter((p) => p.role === 'cityState').map((p) => p.id);
+  r.city!.players[0]!.credits = 1e6;
+  for (const s of states.slice(0, 2)) {
+    r.city!.players[s]!.relations!.opinion[0] = 90;
+    r.step([{ kind: 'buyState', player: 0, state: s }]);
+  }
+  assert.equal(r.city!.victory.joined?.[0], 2);
+  run(r, 1);
+  assert.equal(r.city!.victory.scenarioDone, 'won');
+  // Island Hopping: lost when the deadline passes; the state survives a save.
+  const ih = scenarioById('island_hopping')!;
+  const i = revive(structuredClone(snapshot(createCity({ ...ih.setup, scenario: ih.id }), 's')));
+  assert.equal(i.city!.victory.scenario, 'island_hopping');
+  i.tick = ((ih.by - 1950 + 1) * YEAR_SECONDS + 1) * 15;
+  run(i, 1);
+  assert.equal(i.city!.victory.scenarioDone, 'lost');
+});

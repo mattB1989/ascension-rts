@@ -184,6 +184,8 @@ export function updateDiplomacy(world: World, sec: number): void {
 /** A city-state joins a player: its regions, buildings, roads' upkeep, trucks and stock become theirs. */
 export function annex(world: World, state: number, player: number): void {
   const city = world.city!;
+  const joined = (city.victory.joined ??= new Array(world.players.length).fill(0));
+  joined[player] = (joined[player] ?? 0) + 1;
   for (let r = 0; r < city.regionOwner.length; r++) if (city.regionOwner[r] === state) city.regionOwner[r] = player;
   for (const b of world.buildings) if (b.owner === state) b.owner = player;
   for (const t of city.trucks) if (t.owner === state) t.owner = player;

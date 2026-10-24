@@ -170,6 +170,8 @@ export interface PlayerCity {
   /** Value of goods made this year and last year (credits at reference prices). */
   gdp: number;
   lastGdp: number;
+  /** Best yearly GDP so far (scenarios). */
+  bestGdp?: number;
   /** Yearly history for graphs. */
   history: Array<{ year: number; population: number; credits: number; gdp: number }>;
 }

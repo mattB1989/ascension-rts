@@ -14,6 +14,7 @@ import { createCityState } from './state.ts';
 import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } from './diplomacy.ts';
 import { atWar, recruit, setWar } from './military.ts';
 import { advanceAge } from './ages.ts';
+import { canTrade, cancelTreaty, changeOpinion, hasTreaty, offerPeace, proposeTreaty, type TreatyKind } from './treaties.ts';
 import type { UnitTypeId } from '../../data/units.ts';
 import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 
@@ -40,6 +41,9 @@ export type CityCommand =
   | { kind: 'recruit'; player: number; building: number; unit: UnitTypeId }
   | { kind: 'declareWar'; player: number; target: number }
   | { kind: 'makePeace'; player: number; target: number }
+  /** Propose a treaty to a nation (they accept or refuse at once), or end one. */
+  | { kind: 'proposeTreaty'; player: number; target: number; treaty: TreatyKind }
+  | { kind: 'cancelTreaty'; player: number; target: number; treaty: TreatyKind }
   /** Reach the next age (all requirements met). */
   | { kind: 'advanceAge'; player: number };
 
@@ -89,7 +93,7 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     }
     case 'deal': {
       const pc = world.city.players[c.player];
-      if (!pc || !(c.good in GOODS) || !isCityState(world, c.state)) break;
+      if (!pc || !(c.good in GOODS) || !canTrade(world, c.player, c.state)) break;
       const imp = Math.max(0, Math.min(2000, Math.floor(c.import)));
       const exp = c.export < 0 ? -1 : Math.min(5000, Math.floor(c.export));
       const book = (pc.deals[c.state] ??= {});
@@ -129,7 +133,14 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     case 'declareWar': {
       const t = world.players[c.target];
       if (!t || t.defeated || c.target === c.player || atWar(world, c.player, c.target)) break;
+      if (hasTreaty(world, c.player, c.target, 'peace')) {
+        say(`You have a non-aggression pact with ${t.name}: end it first`);
+        break;
+      }
       setWar(world, c.player, c.target, true);
+      changeOpinion(world, c.target, c.player, -60);
+      // A war ends trade and research pacts.
+      world.city.treaties = world.city.treaties.filter((x) => !((x.a === c.player && x.b === c.target) || (x.a === c.target && x.b === c.player)));
       world.emit({ kind: 'notify', player: -1, text: `⚔ ${world.players[c.player]!.name} declared war on ${t.name}` });
       // Attacking a city-state angers all of them; declaring war on anyone makes city-states wary.
       for (const p of world.players) {
@@ -141,10 +152,21 @@ export function applyCityCommand(world: World, c: CityCommand): void {
     }
     case 'makePeace': {
       if (!atWar(world, c.player, c.target)) break;
+      // You must persuade a nation; AI players' offers are accepted.
+      if (world.players[c.player]?.role === 'human') {
+        say(offerPeace(world, c.player, c.target));
+        break;
+      }
       setWar(world, c.player, c.target, false);
       world.emit({ kind: 'notify', player: -1, text: `🕊 ${world.players[c.player]!.name} and ${world.players[c.target]!.name} made peace` });
       break;
     }
+    case 'proposeTreaty':
+      say(proposeTreaty(world, c.player, c.target, c.treaty));
+      break;
+    case 'cancelTreaty':
+      cancelTreaty(world, c.player, c.target, c.treaty);
+      break;
     case 'advanceAge':
       say(advanceAge(world, c.player));
       break;
@@ -230,6 +252,7 @@ export function startCity(map: GameMap, seed: number, cityStates = 0, nations = 
       if (y < map.height && x >= 0 && x < map.width && !world.occupancy[y * map.width + x]) setRoad(world, x, y, true);
     }
     world.city!.bots.push(newBot(id, Infinity, true, difficulty));
+    world.city!.players[id]!.relations = newRelations(players.length);
     for (let i = 0; i < map.region.length; i++) if (map.nearRegion[i] === reg) world.players[0]!.explored[i] = 1;
   });
   stateRegions.forEach((reg, k) => {

@@ -15,6 +15,7 @@ import { get } from '../sim/city/state.ts';
 import type { Building, Unit } from '../sim/types.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
+import { hasTreaty, opinionOf } from '../sim/city/treaties.ts';
 import type { World } from '../sim/world.ts';
 
 const BLOCK = 8; // street spacing
@@ -504,7 +505,8 @@ function militaryStep(world: World, bot: BotState): Command[] {
   const enemies = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && atWar(world, p, o.id));
   if (!enemies.length && year >= d.warYear && world.time >= bot.warAt) {
     bot.warAt = world.time + 120;
-    const rivals = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState');
+    // Not against those it has a pact with, or likes.
+    const rivals = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && !hasTreaty(world, p, o.id, 'peace') && opinionOf(world, p, o.id) < 40);
     for (const o of rivals) {
       const theirs = armyOf(world, o.id).length;
       if (army.length >= Math.max(6, theirs * d.warRatio)) {

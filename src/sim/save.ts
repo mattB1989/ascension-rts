@@ -5,6 +5,7 @@
 // and in Node (tests use structuredClone directly). Browser storage: src/ui/saves.ts.
 
 import { newVictoryState } from './city/victory.ts';
+import { newRelations } from './city/diplomacy.ts';
 import { BUILDINGS } from '../data/buildings.ts';
 import { GOOD_IDS, type GoodId } from '../data/goods.ts';
 import { UNITS } from '../data/units.ts';
@@ -73,6 +74,11 @@ function migrate(w: World): void {
   }
   city.aiQueue ??= [];
   city.victory ??= newVictoryState(w.players.length);
+  city.warStart ??= w.players.map(() => w.players.map(() => 0));
+  city.treaties ??= [];
+  w.players.forEach((p, i) => {
+    if (p.role === 'nation') city.players[i]!.relations ??= newRelations(w.players.length);
+  });
   for (const t of city.trucks) t.buy ??= null;
   for (const pc of city.players) {
     for (const k of ['population', 'workforce', 'jobs', 'employed'] as const) while (pc[k].length < 4) (pc[k] as number[]).push(0);

@@ -408,6 +408,8 @@ export class World {
       case 'declareWar':
       case 'makePeace':
       case 'advanceAge':
+      case 'proposeTreaty':
+      case 'cancelTreaty':
         applyCityCommand(this, c);
         break;
       case 'move': {

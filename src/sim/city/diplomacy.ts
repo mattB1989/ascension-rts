@@ -109,16 +109,15 @@ export function settle(world: World, seller: number, buyer: number, value: numbe
   const city = world.city!;
   city.players[seller]!.credits += value;
   city.players[buyer]!.credits -= value;
-  const state = isCityState(world, seller) ? seller : buyer;
-  const other = state === seller ? buyer : seller;
-  const rel = relationsOf(world, state);
-  if (rel) {
+  // Each side that keeps relations (city-states, nations) likes the other more.
+  for (const [who, other] of [[seller, buyer], [buyer, seller]] as const) {
+    const rel = relationsOf(world, who);
+    if (!rel) continue;
     rel.traded[other] = (rel.traded[other] ?? 0) + value;
     rel.opinion[other] = Math.min(100, (rel.opinion[other] ?? 0) + value * DIPLO.opinionPerCredit);
   }
-  const pc = city.players[other]!;
-  if (other === seller) pc.year.trade += value;
-  else pc.year.imports += value;
+  city.players[seller]!.year.trade += value;
+  city.players[buyer]!.year.imports += value;
 }
 
 /** Their size, for the purchase price and dependence. */
@@ -151,6 +150,11 @@ export function dependence(world: World, state: number, player: number): number 
 export function updateDiplomacy(world: World, sec: number): void {
   const city = world.city!;
   for (const p of world.players) {
+    if (p.role === 'nation' && !p.defeated && sec % 10 === 0) {
+      // Nations' opinions drift back towards neutral.
+      const rel = city.players[p.id]!.relations;
+      if (rel) rel.opinion = rel.opinion.map((op) => (op > DIPLO.baseline ? Math.max(DIPLO.baseline, op - DIPLO.decay) : Math.min(DIPLO.baseline, op + DIPLO.decay)));
+    }
     if (p.role !== 'cityState' || p.defeated) continue;
     const rel = city.players[p.id]!.relations;
     if (!rel) continue;

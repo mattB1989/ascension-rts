@@ -23,6 +23,10 @@ export function setWar(world: World, a: number, b: number, on: boolean): void {
   const war = world.city!.war;
   war[a]![b] = on ? 1 : 0;
   war[b]![a] = on ? 1 : 0;
+  if (on) {
+    const start = (world.city!.warStart ??= world.players.map(() => world.players.map(() => 0)));
+    start[a]![b] = start[b]![a] = world.time;
+  }
 }
 
 /** Army size limit: grows with population. */

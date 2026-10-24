@@ -541,3 +541,41 @@ test('ways to win: the Space Elevator, a share of world GDP, and conquest', asyn
   run(w4, YEAR_SECONDS + 1);
   assert.equal(w4.city!.victory.how, 'conquest');
 });
+
+test('treaties: nations sign when they like you, pacts bind, and peace must be agreed', async () => {
+  const { hasTreaty, opinionOf, changeOpinion, researchBonus, canTrade } = await import('../src/sim/city/treaties.ts');
+  const { atWar } = await import('../src/sim/city/military.ts');
+  const { YEAR_SECONDS } = await import('../src/data/goods.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, difficulty: 'normal' });
+  const nation = world.players.find((p) => p.role === 'nation')!.id;
+  // Research pact: they need to like you first.
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'research' }]);
+  assert.equal(hasTreaty(world, 0, nation, 'research'), false, 'refused at first');
+  changeOpinion(world, nation, 0, 30);
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'research' }]);
+  assert.ok(hasTreaty(world, 0, nation, 'research'), 'signed once they like you');
+  assert.equal(researchBonus(world, 0), 1.25);
+  // Trade agreement: their town hall becomes a trading partner.
+  assert.equal(canTrade(world, 0, nation), false);
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'trade' }]);
+  assert.ok(canTrade(world, 0, nation));
+  world.step([{ kind: 'deal', player: 0, state: nation, good: 'steel', import: 50, export: -1 }]);
+  assert.equal(world.city!.players[0]!.deals[nation]?.steel?.import, 50);
+  // Non-aggression pact: no war while it lasts; breaking it costs trust.
+  world.step([{ kind: 'proposeTreaty', player: 0, target: nation, treaty: 'peace' }]);
+  world.step([{ kind: 'declareWar', player: 0, target: nation }]);
+  assert.equal(atWar(world, 0, nation), false, 'the pact holds');
+  const before = opinionOf(world, nation, 0);
+  world.step([{ kind: 'cancelTreaty', player: 0, target: nation, treaty: 'peace' }]);
+  assert.ok(opinionOf(world, nation, 0) < before - 30, 'breaking a pact angers them');
+  world.step([{ kind: 'declareWar', player: 0, target: nation }]);
+  assert.ok(atWar(world, 0, nation));
+  assert.equal(hasTreaty(world, 0, nation, 'trade'), false, 'war ends the other treaties');
+  // Peace: a fresh war against a stronger army is refused; after two years they talk.
+  for (let k = 0; k < 4; k++) world.spawnUnit('rifleman', nation, 10 + k, 10);
+  world.step([{ kind: 'makePeace', player: 0, target: nation }]);
+  assert.ok(atWar(world, 0, nation), 'they want to fight on');
+  world.city!.warStart[0]![nation] = world.city!.warStart[nation]![0] = world.time - 2 * YEAR_SECONDS;
+  world.step([{ kind: 'makePeace', player: 0, target: nation }]);
+  assert.equal(atWar(world, 0, nation), false, 'peace after a long war');
+});

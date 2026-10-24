@@ -44,6 +44,10 @@ original **Twin Shores** skirmish.
   or make peace in Diplomacy. Hold an enemy town hall or regional office for 30 s with no
   defenders nearby and its region is yours; garrisoned infantry defend it. Lose every seat and
   the game is over.
+- **Treaties (E5)**: rival nations keep an opinion of you. Propose a non-aggression pact (no
+  war while it lasts), a research pact (both research 25% faster) or a trade agreement (trade
+  with their town hall by truck, as with a city-state). Breaking a pact costs trust, and peace
+  must be agreed: a nation talks after a long war or when it is losing.
 - **The Digital age (E7)**: 🔬 Ages shows what the next age needs: research from Research
   Institutes, enough technicians, a yearly GDP and a price. The Digital age brings Engineers and
   glass towers (they want electronics and the data network), rare-earth and uranium deposits,
@@ -73,7 +77,7 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?fog=0`
 turns the fog of war off.
 
-Next: rail, treaties, and polish (graphics, sound, post-game report). See [docs/PLAN.md](docs/PLAN.md).
+Next: rail, and more polish (graphics, post-game report). See [docs/PLAN.md](docs/PLAN.md).
 
 ## Controls
 

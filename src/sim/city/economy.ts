@@ -16,6 +16,7 @@ import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
 import { updateMilitary } from './military.ts';
 import { updateVictory } from './victory.ts';
+import { researchBonus, updateTreaties } from './treaties.ts';
 import { botStep } from '../../ai/cityBot.ts';
 
 const SECOND = 15; // ticks
@@ -155,6 +156,7 @@ function everySecond(world: World): void {
   updateTrade(world);
   updateDiplomacy(world, sec);
   updateMilitary(world);
+  updateTreaties(world);
   roadUpkeep(world, sec);
   for (const pc of city.players) {
     pc.made = sumLog(pc.madeLog);
@@ -448,7 +450,7 @@ function research(world: World, b: Building): void {
   else {
     c.efficiency = staff;
     c.status = staff < 1 ? `Short of staff (${c.workers}/${e.jobs!.count})` : '';
-    pc.research += e.research! * staff;
+    pc.research += e.research! * staff * researchBonus(world, b.owner);
   }
 }
 

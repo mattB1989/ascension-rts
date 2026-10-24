@@ -6,6 +6,7 @@ import { buildingDef, type BuildingTypeId } from '../data/buildings.ts';
 import { AGES } from '../data/ages.ts';
 import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
 import { nextAge } from '../sim/city/ages.ts';
+import { canTrade, opinionOf, peaceProblem, TREATIES, treatyProblem, type TreatyKind } from '../sim/city/treaties.ts';
 import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/victory.ts';
 import type { Sound } from './sound.ts';
 import { UNITS, type UnitTypeId } from '../data/units.ts';
@@ -298,6 +299,13 @@ export class CityHud {
         this.game.issue({ kind: 'makePeace', player: this.game.humanPlayer, target: Number(arg) });
         this.lastPanel = '';
         break;
+      case 'treaty':
+      case 'untreaty': {
+        const [t, k] = arg.split(':');
+        this.game.issue({ kind: a === 'treaty' ? 'proposeTreaty' : 'cancelTreaty', player: this.game.humanPlayer, target: Number(t), treaty: k as TreatyKind });
+        this.lastPanel = '';
+        break;
+      }
       case 'stop':
         this.input.stopSelected();
         break;
@@ -641,7 +649,7 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
     const owner = reg ? this.world.city!.regionOwner[reg]! : -1;
     const dep = map.deposit[i]!;
     const ownerName = owner >= 0 ? this.world.players[owner]?.name ?? 'Claimed' : '';
-    const lines = [`<div class="card-head"><div class="card-title">${esc(r?.name ?? TERRAIN_NAMES[map.terrain[i] as TerrainId])}</div><div class="card-status">${r ? (owner === this.game.humanPlayer ? 'Your region' : owner >= 0 ? `City-state of ${esc(ownerName)}` : 'Unclaimed') : ''}</div></div>`];
+    const lines = [`<div class="card-head"><div class="card-title">${esc(r?.name ?? TERRAIN_NAMES[map.terrain[i] as TerrainId])}</div><div class="card-status">${r ? (owner === this.game.humanPlayer ? 'Your region' : owner >= 0 ? `${this.world.players[owner]?.role === 'cityState' ? 'City-state of' : 'Territory of'} ${esc(ownerName)}` : 'Unclaimed') : ''}</div></div>`];
     lines.push(`<div>${TERRAIN_NAMES[map.terrain[i] as TerrainId]}${dep ? ` · ${DEPOSIT_NAMES[dep as 1]} deposit` : ''}${map.fresh[i] ? ' · fresh water' : ''}</div>`);
     if (r) {
       const offers = [r.fertile ? `🌾 ${r.fertile} fertile` : '', r.forest ? `🌲 ${r.forest} forest` : '', r.ore ? `⛏ ore` : '', r.stone ? `🪨 stone` : '', r.oil ? `🛢 oil` : '', r.rare ? `🧲 rare earths` : '', r.uranium ? `☢ uranium` : '', r.coast ? '🌊 coast' : '', r.river ? '〰 river' : ''].filter(Boolean);
@@ -666,12 +674,40 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
       const army = w.units.filter((u) => u.owner === p.id).length;
       const regions = Array.from(w.city!.regionOwner).filter((o) => o === p.id).length;
       const hall = w.buildings.find((b) => b.owner === p.id && b.type === 'town_hall');
+      const op = Math.round(opinionOf(w, p.id, me));
+      const signed = w.city!.treaties.filter((t) => (t.a === me && t.b === p.id) || (t.b === me && t.a === p.id));
+      const treaties = signed.map((t) => `<div class="state-row">📜 ${esc(TREATIES[t.kind].name)} · ${Math.max(0, (t.until - w.time) / 120).toFixed(1)} years left <button class="mini" data-action="untreaty" data-arg="${p.id}:${t.kind}" title="End it early${t.kind === 'peace' ? ': everyone will trust you less' : ''}">End</button></div>`).join('');
+      const offers = war ? '' : (Object.keys(TREATIES) as TreatyKind[]).filter((k) => !signed.some((t) => t.kind === k)).map((k) => {
+        const why = treatyProblem(w, me, p.id, k);
+        return `<button class="mini wide ${why ? 'disabled' : ''}" data-action="treaty" data-arg="${p.id}:${k}" title="${esc(TREATIES[k].text)}${why ? `
+${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
+      }).join('');
+      const peaceWhy = war ? peaceProblem(w, me, p.id) : null;
+      const trade = canTrade(w, me, p.id);
       return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
-        <span class="muted">👥 ${sumTiers(pc.population)} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'}</span></div>
-        <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>
+        <span class="muted">👥 ${sumTiers(pc.population)} · ⚔ ${army} · ${regions} region${regions === 1 ? '' : 's'} · ${esc(AGE_NAMES[pc.age]!.replace(' Age', ''))}</span></div>
+        <div class="state-row">Opinion of you ${bar(op, -100, 100, op >= 20 ? 'good' : op < 0 ? 'bad' : '')} ${op}</div>
+        <div class="state-row ${war ? 'neg' : 'pos'}">${war ? '⚔ At war with you' : 'At peace'}</div>${treaties}
+        ${offers ? `<div class="state-actions">${offers}</div>` : ''}
         <div class="state-actions">${hall ? `<button class="mini wide" data-action="goto" data-arg="${hall.x},${hall.y}">Show</button>` : ''}
-        ${war ? `<button class="mini wide" data-action="peace" data-arg="${p.id}">Make peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div></div>`;
-    }).join('')}`;
+        ${trade ? `<button class="mini wide ${this.dealsWith === p.id ? 'on' : ''}" data-action="deals" data-arg="${p.id}">Deals</button>` : ''}
+        ${war ? `<button class="mini wide ${peaceWhy ? 'disabled' : ''}" data-action="peace" data-arg="${p.id}" title="${esc(peaceWhy ?? 'They will accept')}">Offer peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}">Declare war</button>`}</div>
+        ${this.dealsWith === p.id && trade ? this.dealsHtml(p.id) : ''}</div>`;
+    }).join('')}<p class="muted">Nations sign treaties when they like you enough: trade with them, sign pacts, and don't break your word.</p>`;
+  }
+
+  /** Per-good deals with a trading partner (city-state, or a nation with a trade agreement). */
+  private dealsHtml(state: number): string {
+    const w = this.world;
+    const pc = w.city!.players[this.game.humanPlayer]!;
+    const rows = GOOD_IDS.map((g) => {
+      const r = pc.deals[state]?.[g] ?? { import: 0, export: -1 };
+      const step = (field: string, d: number, label: string) => `<button class="mini" data-action="deal" data-arg="${state}:${g}:${field}:${d}">${label}</button>`;
+      return `<tr><td>${GOODS[g].icon} ${GOODS[g].name}</td><td class="pos">₡${theyPay(w, state, g).toFixed(1)}</td><td class="neg">₡${theyCharge(w, state, g).toFixed(1)}</td><td>${Math.floor(stateOffers(w, state, g))}</td>
+        <td class="rule">${step('import', -1, '−')}<span>${r.import > 0 ? `up to ${r.import}` : '—'}</span>${step('import', 1, '+')}</td><td class="rule">${step('export', -1, '−')}<span>${r.export >= 0 ? `above ${r.export}` : '—'}</span>${step('export', 1, '+')}</td></tr>`;
+    }).join('');
+    return `<table class="goods trade"><tr><th></th><th>They pay</th><th>They charge</th><th>Spare</th><th>Import</th><th>Export</th></tr>${rows}</table>
+      <p class="muted">Your trucks carry the goods from your Town Hall, warehouses and ports along the roads to their town hall.</p>`;
   }
 
   private diplomacyHtml(): string {
@@ -699,17 +735,7 @@ ${esc(why)}` : ''}"><span class="cmd-name">${esc(UNITS[u].name)}</span><span cla
         `<button class="mini wide ${op >= DIPLO.buyOpinion && pc.credits >= price ? '' : 'disabled'}" data-action="buy" data-arg="${p.id}" title="${op >= DIPLO.buyOpinion ? '' : `They sell only to friends (opinion ${DIPLO.buyOpinion}+)`}">Buy ₡${fmt(price)}</button>`,
         atWar(w, me, p.id) ? `<button class="mini wide" data-action="peace" data-arg="${p.id}">Make peace</button>` : `<button class="mini wide danger" data-action="war" data-arg="${p.id}" title="Take their town hall by force: every city-state will like you less">Declare war</button>`,
       ].join('');
-      let deals = '';
-      if (this.dealsWith === p.id) {
-        const rows = GOOD_IDS.map((g) => {
-          const r = pc.deals[p.id]?.[g] ?? { import: 0, export: -1 };
-          const step = (field: string, d: number, label: string) => `<button class="mini" data-action="deal" data-arg="${p.id}:${g}:${field}:${d}">${label}</button>`;
-          return `<tr><td>${GOODS[g].icon} ${GOODS[g].name}</td><td class="pos">₡${theyPay(w, p.id, g).toFixed(1)}</td><td class="neg">₡${theyCharge(w, p.id, g).toFixed(1)}</td><td>${Math.floor(stateOffers(w, p.id, g))}</td>
-            <td class="rule">${step('import', -1, '−')}<span>${r.import > 0 ? `up to ${r.import}` : '—'}</span>${step('import', 1, '+')}</td><td class="rule">${step('export', -1, '−')}<span>${r.export >= 0 ? `above ${r.export}` : '—'}</span>${step('export', 1, '+')}</td></tr>`;
-        }).join('');
-        deals = `<table class="goods trade"><tr><th></th><th>They pay</th><th>They charge</th><th>Spare</th><th>Import</th><th>Export</th></tr>${rows}</table>
-          <p class="muted">Your trucks carry the goods from your Town Hall, warehouses and ports along the roads to their town hall.</p>`;
-      }
+      const deals = this.dealsWith === p.id ? this.dealsHtml(p.id) : '';
       return `<div class="state"><div class="state-head"><span class="dot" style="background:${color}"></span><b>${esc(p.name)}</b>
         <span class="muted">👥 ${v.population} · ₡${fmt(w.city!.players[p.id]!.credits)}</span></div>
         <div class="state-row">Opinion ${bar(op, -100, 100, op >= 40 ? 'good' : op < 0 ? 'bad' : '')} ${op} · Dependence ${bar(dep, 0, 1, dep >= DIPLO.unionDependence ? 'good' : '')} ${Math.round(dep * 100)}%</div>

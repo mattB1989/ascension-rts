@@ -9,6 +9,7 @@ import type { BotState } from '../../ai/cityBot.ts';
 import type { Command } from '../commands.ts';
 import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
+import type { Treaty } from './treaties.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
 
@@ -184,8 +185,11 @@ export interface CityState {
   /** AI players (city-states, later nations): their planner state, and commands for the next tick. */
   bots: BotState[];
   aiQueue: Command[];
-  /** war[a][b] = 1 while players a and b are at war. */
+  /** war[a][b] = 1 while players a and b are at war, and when that war began (game time). */
   war: number[][];
+  warStart: number[][];
+  /** Treaties in force between nations. */
+  treaties: Treaty[];
   /** Overseas market price multiplier per good (drifts over time). */
   prices: Record<GoodId, number>;
   /** Ways to win: progress and the winner. */
@@ -276,6 +280,8 @@ export function createCityState(width: number, height: number, regions: number, 
     bots: [],
     aiQueue: [],
     war: Array.from({ length: players }, () => new Array(players).fill(0)),
+    warStart: Array.from({ length: players }, () => new Array(players).fill(0)),
+    treaties: [],
     prices: Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>,
     victory: newVictoryState(players),
   };

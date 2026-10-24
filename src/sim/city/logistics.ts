@@ -14,7 +14,8 @@ import type { World } from '../world.ts';
 import { pathTo, searchRoads } from './roads.ts';
 import { add, automatable, get, type Stock, type Truck } from './state.ts';
 import { exportDemand } from './trade.ts';
-import { dealFor, isCityState, marketOf, settle, stateOffers, stateWants, theyCharge, theyPay } from './diplomacy.ts';
+import { dealFor, marketOf, settle, stateOffers, stateWants, theyCharge, theyPay } from './diplomacy.ts';
+import { canTrade } from './treaties.ts';
 
 /** Inputs a factory keeps on hand: this many production cycles. */
 const INPUT_CYCLES = 4;
@@ -119,7 +120,7 @@ function dispatchFrom(world: World, src: Building, idx: Map<number, Building[]>)
       if (b === src || !b.city) continue;
       if (b.owner !== src.owner) {
         // A city-state's town hall: sell what our deal with them says to export.
-        if (b.type !== 'town_hall' || !isCityState(world, b.owner)) continue;
+        if (b.type !== 'town_hall' || !canTrade(world, src.owner, b.owner)) continue;
         for (const g of goods) {
           const deal = dealFor(world, src.owner, b.owner, g);
           if (!deal || deal.export < 0) continue;
@@ -195,7 +196,7 @@ function dispatchImport(world: World, src: Building, idx: Map<number, Building[]
   if (space < TRUCK_LOAD) return;
   for (const state of states) {
     const m = marketOf(world, state);
-    if (!m?.city || m.city.access < 0 || !isCityState(world, state)) continue;
+    if (!m?.city || m.city.access < 0 || !canTrade(world, src.owner, state)) continue;
     for (const g of GOOD_IDS) {
       const deal = pc.deals[state]?.[g];
       if (!deal || deal.import <= 0) continue;

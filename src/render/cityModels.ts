@@ -162,6 +162,25 @@ function warehouse(team: number): THREE.Group {
   return g;
 }
 
+function airport(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(6, 4, mat(0x7a8a6a, { rough: 1 }));
+  // Runway with markings, an apron, a terminal, a control tower and a hangar.
+  g.add(box(5.8, 0.04, 0.9, mat(0x3c3f44), 0, 0.13, -1.3));
+  for (let k = 0; k < 7; k++) g.add(box(0.4, 0.01, 0.06, white(), -2.4 + k * 0.8, 0.16, -1.3));
+  g.add(box(2.6, 0.03, 1.6, concrete(), 1.4, 0.13, 0.9));
+  g.add(box(1.6, 0.6, 0.9, white(), -1.6, 0.42, 1.1));
+  g.add(box(1.62, 0.18, 0.92, mat(0x3a6ab0, { metal: 0.5, rough: 0.2 }), -1.6, 0.55, 1.1));
+  g.add(cyl(0.12, 0.15, 1.5, 8, white(), -0.4, 0.85, 0.5));
+  g.add(cyl(0.3, 0.25, 0.3, 10, glass(), -0.4, 1.7, 0.5));
+  g.add(box(0.62, 0.06, 0.62, t.main, -0.4, 1.88, 0.5));
+  const hangar = mesh(cached('hangar', () => new THREE.CylinderGeometry(0.7, 0.7, 1.3, 12, 1, false, 0, Math.PI)), mat(0x8c939a, { metal: 0.5 }), 1.8, 0.13, 0.9);
+  hangar.rotation.set(0, 0, Math.PI / 2);
+  hangar.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+  g.add(hangar);
+  return g;
+}
+
 function railStation(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(4, 2, paving());
@@ -576,6 +595,18 @@ function pumpingStation(team: number): THREE.Group {
   return g;
 }
 
+function waterWell(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(2, 2, grassMat());
+  // A small pump house with a wellhead and a pipe.
+  g.add(box(0.8, 0.5, 0.7, plaster(), -0.3, 0.37, -0.3));
+  g.add(gable(0.9, 0.8, 0.62, 0.25, roofRed(), -0.3, -0.3));
+  g.add(cyl(0.22, 0.25, 0.3, 10, concrete(), 0.45, 0.25, 0.4));
+  g.add(cyl(0.05, 0.05, 0.5, 6, t.main, 0.45, 0.6, 0.4));
+  g.add(cylX(0.05, 0.6, 6, mat(0x4a7ab0, { metal: 0.4 }), 0.1, 0.2, 0.4));
+  return g;
+}
+
 function waterTower(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2);
@@ -985,6 +1016,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
     case 'rail_station': return railStation(team);
+    case 'airport': return airport(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(HOUSE_MODELS.length - 1, level))]!(team);
     case 'rare_earth_mine': return rareEarthMine(team);
     case 'uranium_mine': return uraniumMine(team);
@@ -1018,6 +1050,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'pumping_station': return pumpingStation(team);
     case 'hydro_plant': return hydroPlant(team);
     case 'water_tower': return waterTower(team);
+    case 'water_well': return waterWell(team);
     case 'market': return market(team);
     case 'police_station': return policeStation(team);
     case 'clinic': return clinic(team);

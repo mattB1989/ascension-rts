@@ -47,6 +47,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 2000, materials: { lumber: 20, concrete: 20, steel: 20 }, upkeep: 160, jobs: { tier: 0, count: 6 }, storage: 300, trucks: 3, trains: 1 },
     description: 'A warehouse on the railway: its train carries 60 units at a time, fast, to other stations on the same line whose surroundings need them. Trucks bring it what the other stations want. Must touch a railway and a road.',
   },
+  airport: {
+    ...digital, id: 'airport', name: 'Cargo Airport', category: 'logistics', requires: [], buildTime: 60, hp: 2500, size: [6, 4],
+    placement: 'land', vision: 10,
+    econ: { credits: 9000, materials: { concrete: 80, steel: 30 }, upkeep: 600, jobs: { tier: 1, count: 10 }, power: 8, storage: 300, trucks: 3, trains: 1 },
+    description: 'Digital age. A warehouse with a cargo plane: it flies 30 units at a time to any of your other airports whose surroundings need them. No track needed.',
+  },
   trade_port: {
     ...common, id: 'trade_port', name: 'Trade Port', category: 'logistics', requires: [], buildTime: 40, hp: 2000, size: [4, 3],
     placement: 'coast', vision: 8,
@@ -219,6 +225,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 500, materials: { concrete: 10, steel: 5 }, upkeep: 50, jobs: { tier: 0, count: 2 }, waterSupply: 600 },
     description: 'Pumps river or lake water for 600 residents. Water Towers spread it to houses.',
   },
+  water_well: {
+    ...common, id: 'water_well', name: 'Water Well', category: 'utility', requires: [], buildTime: 15, hp: 500, size: [2, 2],
+    placement: 'land', vision: 3,
+    econ: { credits: 400, materials: { lumber: 5, concrete: 5 }, upkeep: 40, jobs: { tier: 0, count: 2 }, waterSupply: 200 },
+    description: 'Groundwater for 200 residents, anywhere: for towns far from rivers and lakes. Water Towers spread it to houses.',
+  },
   water_tower: {
     ...common, id: 'water_tower', name: 'Water Tower', category: 'utility', requires: [], buildTime: 15, hp: 600, size: [2, 2],
     placement: 'land', vision: 5,
@@ -295,8 +307,8 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well', 'rare_earth_mine', 'uranium_mine'] },
   { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory', 'electronics_plant', 'pharma_plant', 'nano_fab', 'robotics_plant', 'launch_site'] },
-  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
-  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_tower'] },
+  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'airport', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
+  { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_well', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
   { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret'] },
 ];

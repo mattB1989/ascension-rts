@@ -34,7 +34,9 @@ original **Twin Shores** skirmish.
   Maintenance Depots repair them.
 - **Railways (E4)**: drag track like roads (it crosses roads, and water on road bridges). Rail
   Stations on a line are warehouses with a train: it carries 60 units at a time to stations
-  whose surroundings need them, while trucks bring each station what the others want.
+  whose surroundings need them, while trucks bring each station what the others want. In the
+  Digital age, Cargo Airports do the same by air between any of your airports. Towns far from
+  rivers get their water from Water Wells.
 - **City-states (E5)**: 3–5 neighbours run by the same rules as you (an AI plays them with the
   same commands): they build their own towns in their region. Connect a road to one and set deals
   per good: your trucks sell to them and buy from them at their local prices. Trade raises their

@@ -640,3 +640,44 @@ test('war weariness grows during a war with a nation and fades in peace', () => 
   run(world, 10);
   assert.ok(pc.weariness < w, 'fades in peace');
 });
+
+test('cargo airports fly goods between each other, no track needed', async () => {
+  const { addCityBuilding, stockUp, cityPlacementProblem: problem } = await import('../src/sim/city/place.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const city = world.city!;
+  city.players[0]!.age = 1;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 6;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 40; x <= hall.tx + 40; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  const spot = (x0: number): [number, number] => {
+    for (let d = 0; d < 20; d++) for (const x of [x0 + d, x0 - d]) if (problem(world, 0, 'airport', x, row + 1) === null) return [x, row + 1];
+    throw new Error('no airport spot');
+  };
+  const [ax, ay] = spot(hall.tx - 34);
+  const [bx, by] = spot(hall.tx + 28);
+  const a = addCityBuilding(world, 'airport', 0, ax, ay, true);
+  const b = addCityBuilding(world, 'airport', 0, bx, by, true);
+  // Staff, power, and a sawmill by airport B that needs timber.
+  for (const x of [hall.tx - 24, hall.tx + 16]) {
+    const [hx, hy] = spotOnStreet(world, 'house', x, row);
+    const h = addCityBuilding(world, 'house', 0, hx, hy, true);
+    h.city!.level = 3;
+    h.city!.residents = 40;
+  }
+  const [px, py] = spotOnStreet(world, 'power_plant', hall.tx, row);
+  stockUp(addCityBuilding(world, 'power_plant', 0, px, py, true), { oil: 60 });
+  let mx = bx;
+  while (problem(world, 0, 'sawmill', mx, row - 3) !== null && mx < bx + 12) mx++;
+  addCityBuilding(world, 'sawmill', 0, mx, row - 3, true);
+  stockUp(a, { timber: 100 });
+  let planes = 0;
+  for (let i = 0; i < 40 * 15; i++) {
+    for (const h of world.buildings) if (h.type === 'house') h.city!.downFor = 0;
+    world.step();
+    planes = Math.max(planes, city.trains.filter((t) => t.air).length);
+  }
+  assert.ok(planes > 0, 'a cargo plane flew');
+  assert.ok((a.city!.stock.timber ?? 0) < 100, 'timber left airport A');
+});

@@ -607,6 +607,27 @@ const locoCabGeo = new THREE.BoxGeometry(0.3, 0.18, 0.4).translate(-0.25, 0.6, 0
 const wagonGeo = new THREE.BoxGeometry(0.85, 0.32, 0.4).translate(0, 0.27, 0);
 const loadGeo = new THREE.BoxGeometry(0.75, 0.14, 0.34).translate(0, 0.5, 0);
 const CARS = 3;
+// A cargo plane: fuselage, wings, tail.
+const planeGeo = (() => {
+  const parts = [
+    new THREE.BoxGeometry(1.6, 0.26, 0.26),
+    new THREE.BoxGeometry(0.4, 0.05, 1.8).translate(0.05, 0.02, 0),
+    new THREE.BoxGeometry(0.25, 0.04, 0.7).translate(-0.7, 0.05, 0),
+    new THREE.BoxGeometry(0.25, 0.35, 0.04).translate(-0.7, 0.2, 0),
+  ];
+  const pos: number[] = [];
+  const nor: number[] = [];
+  for (const g of parts) {
+    const ng = g.toNonIndexed();
+    pos.push(...(ng.getAttribute('position').array as Float32Array));
+    nor.push(...(ng.getAttribute('normal').array as Float32Array));
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return geo;
+})();
+const PLANE_ALT = 5;
 
 export class TrainsView {
   readonly group = new THREE.Group();
@@ -616,6 +637,7 @@ export class TrainsView {
   private cab!: THREE.InstancedMesh;
   private wagon!: THREE.InstancedMesh;
   private load!: THREE.InstancedMesh;
+  private plane!: THREE.InstancedMesh;
 
   constructor(world: World) {
     this.world = world;
@@ -623,7 +645,7 @@ export class TrainsView {
   }
 
   private grow(n: number): void {
-    for (const m of [this.loco, this.cab, this.wagon, this.load]) if (m) {
+    for (const m of [this.loco, this.cab, this.wagon, this.load, this.plane]) if (m) {
       this.group.remove(m);
       m.dispose();
     }
@@ -642,6 +664,7 @@ export class TrainsView {
     this.cab = mk(locoCabGeo, 0x2a2e33, n);
     this.wagon = mk(wagonGeo, 0x6a5a4a, n * CARS);
     this.load = mk(loadGeo, 0xffffff, n * CARS);
+    this.plane = mk(planeGeo, 0xe8ecf0, n);
   }
 
   update(alpha: number): void {
@@ -685,8 +708,21 @@ export class TrainsView {
     let n = 0;
     let nw = 0;
     let nl = 0;
+    let np = 0;
     for (const t of trains) {
       const f = t.prevPos + (t.pos - t.prevPos) * alpha;
+      if (t.air) {
+        // Climb out, cruise, descend.
+        place(t.path, f);
+        const lastP = t.path.length - 1;
+        const climb = Math.min(PLANE_ALT, f * 0.9, (lastP - f) * 0.9);
+        v.y += Math.max(0, climb);
+        m.compose(v, q, one);
+        this.plane.setMatrixAt(np, m);
+        this.plane.setColorAt(np, c.setHex(this.world.players[t.owner]?.color ?? 0xe8ecf0).lerp(new THREE.Color(0xffffff), 0.6));
+        np++;
+        continue;
+      }
       place(t.path, f);
       this.loco.setMatrixAt(n, m);
       this.cab.setMatrixAt(n, m);
@@ -706,7 +742,8 @@ export class TrainsView {
     this.loco.count = this.cab.count = n;
     this.wagon.count = nw;
     this.load.count = nl;
-    for (const im of [this.loco, this.cab, this.wagon, this.load]) {
+    this.plane.count = np;
+    for (const im of [this.loco, this.cab, this.wagon, this.load, this.plane]) {
       im.instanceMatrix.needsUpdate = true;
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
     }

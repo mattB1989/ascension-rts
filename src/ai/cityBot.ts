@@ -342,12 +342,17 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('logging_camp'), 'logging_camp'],
     [!has('sawmill') && !bot.noLand.includes('logging_camp'), 'sawmill'],
     [!has('trade_port') && bot.noLand.length > 0, 'trade_port'],
+    // Sites stuck for want of steel or concrete: a port buys them in.
+    [!has('trade_port') && !bot.noLand.includes('trade_port') && world.buildings.some((b) => b.owner === p && !b.complete && /Waiting for .*(steel|concrete)/.test(b.city?.status ?? '')) && stock('steel') < 10, 'trade_port'],
     [credits > 150 && (room < 6 ? freeJobs > 4 || pop < 30 : freeJobs > room * 0.5 + 4), 'house'],
     [!has('farm') && pop >= 12, 'farm'],
     [!has('food_plant') && pop >= 12, 'food_plant'],
     [!has('market') && pop >= 16, 'market'],
     [!has('pumping_station') && pop >= 30, 'pumping_station'],
     [!has('water_tower') && has('pumping_station') > 0, 'water_tower'],
+    // No river or lake: wells.
+    [bot.noLand.includes('pumping_station') && has('water_well') * 180 < pop + 40 && pop >= 30, 'water_well'],
+    [!has('water_tower') && has('water_well') > 0, 'water_tower'],
     [!has('quarry') && pop >= 30, 'quarry'],
     [!has('trade_port') && pop >= 100, 'trade_port'],
     [!has('oil_well') && pop >= 40, 'oil_well'],
@@ -373,7 +378,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 < has('power_plant') + 1 && !bot.noLand.includes('oil_well'), 'oil_well'],
     [pc.powerDemand > pc.powerSupply - 5 && has('power_plant') > 0 && has('oil_well') * 1.5 >= has('power_plant') + 1, 'power_plant'],
     [has('market') * 400 < pop, 'market'],
-    [has('water_tower') * 350 < pop && has('pumping_station') > 0, 'water_tower'],
+    [has('water_tower') * 350 < pop && has('pumping_station') + has('water_well') > 0, 'water_tower'],
     [has('pumping_station') * 550 < pop, 'pumping_station'],
     [has('police_station') * 550 < pop && pop >= 60, 'police_station'],
     [!has('clinic') && pc.population[1] >= 30, 'clinic'],
@@ -410,7 +415,7 @@ export function botStep(world: World, bot: BotState): Command[] {
   if (!busy) {
     const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school' | 'data' | 'university', boolean]> = [
       ['market', 'market', has('market') > 0],
-      ['water_tower', 'water', has('water_tower') > 0 && has('pumping_station') > 0],
+      ['water_tower', 'water', has('water_tower') > 0 && has('pumping_station') + has('water_well') > 0],
       ['police_station', 'police', has('police_station') > 0],
       ['clinic', 'health', has('clinic') > 0],
       ['school', 'school', has('school') > 0],
@@ -431,6 +436,8 @@ export function botStep(world: World, bot: BotState): Command[] {
   }
   for (const [cond, type] of wants) {
     if (!cond) continue;
+    // One of a kind at a time: wait for the last one to be finished.
+    if (type !== 'house' && world.buildings.some((b) => b.owner === p && b.type === type && !b.complete)) continue;
     // Producers of building materials are never held back: everything else waits on them.
     if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port'].includes(type)) continue;
     // City-states keep money in hand to trade with; nations save up to expand when it is time.

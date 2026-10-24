@@ -37,6 +37,8 @@ export interface Train {
   phase: 'out' | 'back';
   good: GoodId | null;
   amount: number;
+  /** A cargo plane between airports (flies straight; no track). */
+  air?: boolean;
 }
 
 /** Why a railway cannot go on this tile (null: it can). */
@@ -122,23 +124,38 @@ export function railAccess(world: World, b: Pick<Building, 'tx' | 'ty' | 'w' | '
   return -1;
 }
 
-function stations(world: World, owner: number): Building[] {
-  return world.buildings.filter((b) => b.type === 'rail_station' && b.owner === owner && b.complete && b.city);
+/** Hubs: rail stations (connected by track) and airports (all of one owner's airports are connected). */
+export const HUBS = new Set(['rail_station', 'airport']);
+export const AIR = { speed: 14, load: 30 } as const;
+
+export function isHub(b: Building): boolean {
+  return HUBS.has(b.type);
 }
 
-/** What the buildings around a station are short of (computed every few seconds). */
+/** Which network a hub is on (0: none): its rail network, or -1 for the air network. */
+function network(world: World, b: Building): number {
+  if (b.type === 'airport') return -1;
+  const r = b.city!.rail;
+  return r === undefined || r < 0 ? 0 : world.city!.railComp[r]!;
+}
+
+function hubs(world: World, owner: number): Building[] {
+  return world.buildings.filter((b) => isHub(b) && b.owner === owner && b.complete && b.city);
+}
+
+/** What the buildings around a hub are short of (computed every few seconds). */
 function updateWants(world: World, idx: Map<number, Building[]>, demand: (b: Building, g: GoodId) => number): void {
   for (const s of world.buildings) {
-    if (s.type !== 'rail_station' || !s.complete || !s.city) continue;
+    if (!isHub(s) || !s.complete || !s.city) continue;
     const c = s.city;
     const wants: Stock = {};
-    c.rail = railAccess(world, s);
+    if (s.type === 'rail_station') c.rail = railAccess(world, s);
     if (c.access >= 0) {
       searchRoads(world, c.access, RAIL.reach, (tile) => {
         const list = idx.get(tile);
         if (!list) return false;
         for (const b of list) {
-          if (b === s || b.owner !== s.owner || !b.city || b.type === 'rail_station' || b.type === 'trade_port') continue;
+          if (b === s || b.owner !== s.owner || !b.city || isHub(b) || b.type === 'trade_port') continue;
           for (const g of GOOD_IDS) {
             const d = demand(b, g);
             if (d > 0) add(wants, g, d);
@@ -151,47 +168,67 @@ function updateWants(world: World, idx: Map<number, Building[]>, demand: (b: Bui
   }
 }
 
-/** Goods this station should collect for others on its line (trucks bring them; see demandFor). */
+/** Goods this hub should collect for others on its network (trucks bring them; see demandFor). */
 export function stationDemand(world: World, s: Building, g: GoodId): number {
   const c = s.city!;
-  if (c.rail === undefined || c.rail < 0) return 0;
-  const comp = world.city!.railComp[c.rail]!;
-  if (!comp) return 0;
+  const net = network(world, s);
+  if (!net) return 0;
   let want = 0;
-  for (const d of stations(world, s.owner)) {
-    if (d === s || d.city!.rail === undefined || d.city!.rail < 0 || world.city!.railComp[d.city!.rail] !== comp) continue;
+  for (const d of hubs(world, s.owner)) {
+    if (d === s || network(world, d) !== net) continue;
     want += Math.max(0, get(d.city!.wants ?? {}, g) - get(d.city!.stock, g) - get(d.city!.incoming, g));
   }
-  return Math.max(0, Math.min(RAIL.load * 2, want) - get(c.stock, g) - get(c.incoming, g));
+  const load = s.type === 'airport' ? AIR.load : RAIL.load;
+  return Math.max(0, Math.min(load * 2, want) - get(c.stock, g) - get(c.incoming, g));
 }
 
-/** A station with an idle train sends it where its goods are wanted most. */
+/** Tiles along a straight line (a flight path). */
+function linePath(world: World, a: Building, b: Building): number[] {
+  const w = world.map.width;
+  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y)));
+  const out: number[] = [];
+  for (let k = 0; k <= n; k++) {
+    const x = Math.floor(a.x + ((b.x - a.x) * k) / n);
+    const y = Math.floor(a.y + ((b.y - a.y) * k) / n);
+    out.push(y * w + x);
+  }
+  return out;
+}
+
+/** A hub with an idle train (or plane) sends it where its goods are wanted most. */
 function dispatchTrain(world: World, s: Building): void {
   const city = world.city!;
   const c = s.city!;
   const e = s.def.econ!;
-  if ((e.trains ?? 0) <= (c.trainsOut ?? 0) || c.rail === undefined || c.rail < 0 || c.workers <= 0) return;
-  const comp = city.railComp[c.rail]!;
+  const air = s.type === 'airport';
+  const net = network(world, s);
+  if ((e.trains ?? 0) <= (c.trainsOut ?? 0) || !net || c.workers <= 0) return;
+  if ((e.power ?? 0) > 0 && !c.powered) return;
+  const load = air ? AIR.load : RAIL.load;
   let best: { d: Building; g: GoodId; n: number } | null = null;
-  for (const d of stations(world, s.owner)) {
-    if (d === s || d.city!.rail === undefined || d.city!.rail < 0 || city.railComp[d.city!.rail] !== comp) continue;
+  for (const d of hubs(world, s.owner)) {
+    if (d === s || network(world, d) !== net) continue;
     for (const g of GOOD_IDS) {
       const spare = get(c.stock, g) - get(c.wants ?? {}, g);
       if (spare < 1) continue;
       const want = get(d.city!.wants ?? {}, g) - get(d.city!.stock, g) - get(d.city!.incoming, g);
-      const n = Math.floor(Math.min(spare, want, RAIL.load));
+      const n = Math.floor(Math.min(spare, want, load));
       if (n >= Math.min(RAIL.minLoad, want) && n >= 1 && (!best || n > best.n)) best = { d, g, n };
     }
   }
   if (!best) return;
-  const goal = best.d.city!.rail!;
-  const end = searchRoads(world, c.rail, 10000, (tile) => tile === goal, city.rail);
-  if (end < 0) return;
-  const path = pathTo(world, end);
+  let path: number[];
+  if (air) path = linePath(world, s, best.d);
+  else {
+    const goal = best.d.city!.rail!;
+    const end = searchRoads(world, c.rail!, 10000, (tile) => tile === goal, city.rail);
+    if (end < 0) return;
+    path = pathTo(world, end);
+  }
   add(c.stock, best.g, -best.n);
   add(best.d.city!.incoming, best.g, best.n);
   c.trainsOut = (c.trainsOut ?? 0) + 1;
-  city.trains.push({ id: city.nextTrainId++, owner: s.owner, home: s.id, to: best.d.id, path, pos: 0, prevPos: 0, phase: 'out', good: best.g, amount: best.n });
+  city.trains.push({ id: city.nextTrainId++, owner: s.owner, home: s.id, to: best.d.id, path, pos: 0, prevPos: 0, phase: 'out', good: best.g, amount: best.n, air });
 }
 
 function finishTrain(world: World, t: Train): void {
@@ -204,17 +241,18 @@ function finishTrain(world: World, t: Train): void {
   }
 }
 
-/** Every tick: trains run; once a second each station may send one; every 5 s stations work out what they need. */
+/** Every tick: trains and planes move; once a second each hub may send one; every 5 s hubs work out what they need. */
 export function updateRail(world: World, idx: Map<number, Building[]>, demand: (b: Building, g: GoodId) => number): void {
   const city = world.city!;
-  if (!city.railCount && !city.trains.length) return;
-  const step = RAIL.speed * DT;
+  const sec = Math.floor(world.tick / 15);
+  if (world.tick % 15 === 7 && sec % 5 === 0 && world.buildings.some((b) => isHub(b) && b.complete)) updateWants(world, idx, demand);
+  if (!city.trains.length && !world.buildings.some((b) => isHub(b) && b.complete)) return;
   for (const t of [...city.trains]) {
     t.prevPos = t.pos;
     const last = t.path.length - 1;
-    const next = Math.min(last, t.pos + step);
+    const next = Math.min(last, t.pos + (t.air ? AIR.speed : RAIL.speed) * DT);
     const k = Math.min(last, Math.ceil(next));
-    if (!city.rail[t.path[k]!]) {
+    if (!t.air && !city.rail[t.path[k]!]) {
       // Track taken up: the train is lost, its cargo goes back to the station.
       if (t.phase === 'out' && t.good) {
         const dest = world.getBuilding(t.to);
@@ -240,10 +278,8 @@ export function updateRail(world: World, idx: Map<number, Building[]>, demand: (
     t.pos = t.prevPos = 0;
     t.phase = 'back';
   }
-  const sec = Math.floor(world.tick / 15);
-  if (world.tick % 15 === 7 && sec % 5 === 0) updateWants(world, idx, demand);
   const slot = world.tick % 15;
-  for (const b of world.buildings) if (b.type === 'rail_station' && b.complete && b.city && b.id % 15 === slot) dispatchTrain(world, b);
+  for (const b of world.buildings) if (isHub(b) && b.complete && b.city && b.id % 15 === slot) dispatchTrain(world, b);
 }
 
 let railOwners: { world: World; version: number; counts: number[] } | null = null;

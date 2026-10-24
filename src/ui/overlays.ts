@@ -45,6 +45,7 @@ export function overlayFor(type: BuildingTypeId | string): OverlayKind | null {
       return 'health';
     case 'water_tower':
     case 'pumping_station':
+    case 'water_well':
       return 'water';
     case 'power_plant':
     case 'nuclear_plant':

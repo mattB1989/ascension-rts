@@ -957,8 +957,15 @@ const CITY_HELP = `
     <li><b>Water</b>: a Pumping Station on a river or lake, and Water Towers near houses, on the same roads.</li>
     <li><b>Stone, steel, oil</b>: Quarry → Cement Works (concrete); Iron Mine → Steel Mill; Oil Well → Power Plant
       (power) or Refinery → fuel and plastics → Goods Factory. Technicians (from terraces) run the heavy industry.</li>
-    <li><b>Grow</b>: a Regional Office in a neighbouring region claims it.</li>
+    <li><b>Grow</b>: a Regional Office in a neighbouring region claims it. A Trade Port trades overseas (🚢);
+      railways and Rail Stations move big loads between distant towns.</li>
+    <li><b>Neighbours</b> (🤝): trade with city-states by road until they ask to join you; sign treaties with rival
+      nations, or defend yourself (⚔ Military) when they come.</li>
+    <li><b>Ages</b> (🔬): a Research Institute and enough technicians, GDP and money take you to the Digital, Nano
+      and Space ages, with new people, goods, power and units.</li>
+    <li><b>Win</b> by the economy, by federation, by the Space Elevator or by conquest (progress in 🔬).</li>
   </ol>
-  <p class="muted">Click a building to see what it needs. 📦 shows goods made and used, ₡ the budget and taxes.
-  <b>Space</b> pauses, <b>1–4</b> set the speed, <b>B</b> bulldozes. Power and water reach buildings along the roads.</p>
+  <p class="muted">Click a building to see what it needs. 📦 shows goods made and used, ₡ the budget, taxes and
+  history. <b>Space</b> pauses, <b>1–4</b> set the speed, <b>B</b> bulldozes. Power and water reach buildings
+  along the roads. Sound and music: ☰.</p>
 `;

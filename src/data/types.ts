@@ -144,6 +144,8 @@ export interface UnitEcon {
   goods: Readonly<Partial<Record<GoodId, number>>>;
   /** Credits per game year while it lives. */
   upkeep: number;
+  /** Where the economy game trains it, when not where the skirmish does. */
+  at?: BuildingId;
 }
 
 export interface UnitDef {

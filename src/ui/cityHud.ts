@@ -4,7 +4,7 @@
 
 import { buildingDef, type BuildingTypeId } from '../data/buildings.ts';
 import { AGES } from '../data/ages.ts';
-import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, UNIT_ECON } from '../data/city.ts';
+import { AGE_STEPS, CAPTURE, CITY_PALETTE, HOUSE_LEVELS, houseLevelAge, OVERSEAS, ROAD, econTrainedAt, UNIT_ECON } from '../data/city.ts';
 import { nextAge } from '../sim/city/ages.ts';
 import { RAIL } from '../sim/city/rail.ts';
 import { PIPE } from '../sim/city/pipes.ts';
@@ -661,7 +661,7 @@ export class CityHud {
       if (e.trucks || e.crews) rows.push(`<div class="muted">${e.trucks ? `🚚 ${c.trucksOut}/${e.trucks} out` : ''}${e.trucks && e.crews ? ' · ' : ''}${e.crews ? `👷 ${c.crewsOut}/${e.crews} crews out` : ''}</div>`);
       if (b.garrison.length) rows.push(`<div>🛡 ${b.garrison.length} garrisoned</div>`);
       if (c.capture > 0) rows.push(`<div class="info-problem">Being taken by ${esc(this.world.players[c.captureBy]?.name ?? 'the enemy')}: ${Math.round(c.capture * 100)}%</div>`);
-      if (own && Object.keys(UNIT_ECON).some((u) => UNITS[u as UnitTypeId].trainedAt === b.type)) rows.push(this.recruitHtml(b));
+      if (own && Object.keys(UNIT_ECON).some((u) => econTrainedAt(u as UnitTypeId) === b.type)) rows.push(this.recruitHtml(b));
     }
     if (!own) title = `${this.world.players[b.owner]?.name ?? 'Foreign'} · ${title}`;
     const head = `<div class="card-head"><div class="card-title">${esc(title)}</div><div class="card-status ${status && status !== '' ? 'warn' : ''}">${esc(status || (b.complete ? 'Working' : ''))}</div></div>`;
@@ -671,7 +671,7 @@ export class CityHud {
 
   private recruitHtml(b: Building): string {
     const me = this.game.humanPlayer;
-    const units = (Object.keys(UNIT_ECON) as UnitTypeId[]).filter((u) => UNITS[u].trainedAt === b.type);
+    const units = (Object.keys(UNIT_ECON) as UnitTypeId[]).filter((u) => econTrainedAt(u) === b.type);
     const army = this.world.units.filter((u) => u.owner === me).reduce((s, u) => s + u.def.pop, 0);
     const btns = units.map((u) => {
       const cost = UNIT_ECON[u]!;

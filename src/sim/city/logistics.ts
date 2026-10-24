@@ -49,7 +49,7 @@ export function demandFor(b: Building, g: GoodId, world?: World): number {
   }
   if (e.recipe) {
     const per = e.recipe.in[g];
-    if (per) return Math.max(0, Math.max(TRUCK_LOAD, per * INPUT_CYCLES) - get(c.stock, g) - incoming);
+    if (per) return Math.max(0, Math.max(TRUCK_LOAD, per * INPUT_CYCLES, e.supplies?.[g] ?? 0) - get(c.stock, g) - incoming);
   }
   if (e.service?.kind === 'market' && (g === 'food' || g === 'goods' || g === 'electronics' || g === 'pharma')) return Math.max(0, MARKET_STOCK - get(c.stock, g) - incoming);
   // Nano age: robots for farms, mines and factories (they then need half the staff).

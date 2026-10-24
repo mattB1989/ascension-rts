@@ -530,6 +530,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [bot.nation && pc.age >= 2 && !has('shield_generator') && pop >= 800, 'shield_generator'],
     [bot.nation && has('barracks') > 0 && !has('supply_depot') && world.players.some((o) => o.id !== p && atWar(world, p, o.id)), 'supply_depot'],
     [bot.nation && pc.age >= 1 && !has('mech_foundry') && pop >= 600 && has('vehicle_factory') > 0, 'mech_foundry'],
+    [bot.nation && pc.age >= 1 && !has('airfield') && pop >= 900 && has('mech_foundry') > 0, 'airfield'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];
   const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school', 'data_exchange', 'hospital', 'university']);
@@ -715,7 +716,8 @@ function expand(world: World, bot: BotState): Command[] {
 }
 
 function armyOf(world: World, player: number): Unit[] {
-  return world.units.filter((u) => u.owner === player && u.def.domain === 'land' && !u.def.builder);
+  // Land troops and gunships (helicopters need no airfield to come back to).
+  return world.units.filter((u) => u.owner === player && !u.def.builder && (u.def.domain === 'land' || (u.def.domain === 'air' && u.def.move === 'heli' && !u.def.cargo && !u.def.fuel)));
 }
 
 function seatsOf(world: World, player: number): Building[] {
@@ -751,7 +753,8 @@ function militaryStep(world: World, bot: BotState): Command[] {
       const types: UnitTypeId[] =
         b.type === 'barracks' ? (digital ? ['exo_trooper', 'rocket_trooper', 'rifleman'] : ['rifleman', 'rocket_trooper', 'rifleman'])
         : b.type === 'vehicle_factory' ? (pc.age >= 2 ? ['disruptor', 'battle_tank', 'rocket_artillery'] : digital ? ['battle_tank', 'rocket_artillery', 'flak_track', 'scout_buggy'] : ['battle_tank', 'scout_buggy', 'flak_track'])
-        : b.type === 'mech_foundry' ? (pc.age >= 2 ? ['juggernaut', 'arclight', 'warden'] : ['warden']) : [];
+        : b.type === 'mech_foundry' ? (pc.age >= 2 ? ['juggernaut', 'arclight', 'warden'] : ['warden'])
+        : b.type === 'airfield' ? ['attack_helicopter'] : [];
       for (const t of types) {
         if (recruitProblem(world, p, b, t) === null) {
           out.push({ kind: 'recruit', player: p, building: b.id, unit: t });

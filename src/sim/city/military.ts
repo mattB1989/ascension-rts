@@ -4,9 +4,11 @@
 // seat (town hall or regional office) with no defenders nearby.
 
 import { AGES } from '../../data/ages.ts';
-import { ARMY, CAPTURE, UNIT_ECON } from '../../data/city.ts';
+import { ARMY, CAPTURE, econTrainedAt, UNIT_ECON } from '../../data/city.ts';
 import { sumTiers, YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
 import { UNITS, type UnitTypeId } from '../../data/units.ts';
+import type { UnitDef } from '../../data/types.ts';
+import { airfieldLoad } from '../transport.ts';
 import { MAX_QUEUE, type Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { exploreRegion } from './economy.ts';
@@ -42,12 +44,18 @@ export function armyCap(world: World, player: number): number {
 export function recruitProblem(world: World, player: number, b: Building, type: UnitTypeId): string | null {
   const cost = UNIT_ECON[type];
   const def = UNITS[type];
-  if (!cost || def.trainedAt !== b.type) return 'Not trained here';
+  if (!cost || econTrainedAt(type) !== b.type) return 'Not trained here';
   if (b.owner !== player || !b.complete || !b.city) return 'Not ready';
   if (AGES[def.age].index > world.city!.players[player]!.age) return `Needs the ${AGES[def.age].name}`;
   if (b.city.workers <= 0) return 'No staff';
   if ((b.def.econ?.power ?? 0) > 0 && !b.city.powered) return 'No power';
   if (b.queue.length >= MAX_QUEUE) return 'Queue full';
+  if ((def as UnitDef).fuel && b.def.dock && airfieldLoad(world, b) >= b.def.dock) return `Airfield full (${b.def.dock} planes)`;
+  const limit = (def as UnitDef).limit;
+  if (limit) {
+    const have = world.units.filter((u) => u.owner === player && u.type === type).length + world.buildings.reduce((s, x) => s + (x.owner === player ? x.queue.filter((q) => q.kind === 'unit' && q.unit === type).length : 0), 0);
+    if (have >= limit) return `At most ${limit}`;
+  }
   const p = world.players[player]!;
   const queued = world.buildings.reduce((s, x) => s + (x.owner === player ? x.queue.filter((q) => q.kind === 'unit').reduce((t, q) => t + (q.kind === 'unit' ? UNITS[q.unit].pop : 0), 0) : 0), 0);
   if (p.popUsed + queued + def.pop > armyCap(world, player)) return `Army limit ${armyCap(world, player)} (grows with population)`;

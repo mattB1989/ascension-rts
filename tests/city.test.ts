@@ -938,3 +938,40 @@ test('embargoes: no trade either way, friendly city-states follow, a cause for w
   world.step([{ kind: 'embargo', player: 0, target: nation, on: false }]);
   assert.equal(hasEmbargo(world, 0, nation), false);
 });
+
+test('later navies, air forces and space craft: where they are built, what they need, and limits', async () => {
+  const { addCityBuilding, stockUp } = await import('../src/sim/city/place.ts');
+  const { recruit, recruitProblem } = await import('../src/sim/city/military.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const pc = world.city!.players[0]!;
+  pc.credits = 200000;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 30; x <= hall.tx + 30; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  pc.age = 3;
+  const ready = (type: string, x: number, goods: Record<string, number>) => {
+    const [bx, by] = spotOnStreet(world, type, x, row);
+    const b = addCityBuilding(world, type, 0, bx, by, true);
+    stockUp(b, goods);
+    b.city!.workers = 5;
+    b.city!.powered = true;
+    return b;
+  };
+  const field = ready('airfield', hall.tx - 24, { steel: 60, fuel: 60, electronics: 60 });
+  const site = ready('launch_site', hall.tx + 6, { electronics: 60, nano: 60, orbital: 30 });
+  const foundry = ready('mech_foundry', hall.tx + 18, { steel: 60, electronics: 60, nano: 60 });
+  pc.population = [1000, 0, 0, 0];
+  pc.age = 0;
+  assert.match(recruitProblem(world, 0, field, 'stealth_bomber') ?? '', /Digital/);
+  pc.age = 3;
+  assert.equal(recruitProblem(world, 0, field, 'stealth_bomber'), null);
+  assert.equal(recruitProblem(world, 0, foundry, 'nano_swarm'), null, 'nano swarms come from the mech foundry');
+  assert.equal(recruitProblem(world, 0, site, 'orbital_fighter'), null, 'space craft from the launch site');
+  assert.match(recruitProblem(world, 0, field, 'orbital_fighter') ?? '', /Not trained here/);
+  assert.equal(recruit(world, 0, site, 'star_lance'), null);
+  assert.match(recruitProblem(world, 0, site, 'star_lance') ?? '', /At most 1/, 'one Star Lance each');
+  site.city!.stock.orbital = 0;
+  assert.match(recruitProblem(world, 0, site, 'drop_ship') ?? '', /orbital/);
+});

@@ -1,7 +1,8 @@
 // Buildings of the economy game, Modern age (DESIGN.md §4-6). Starting values
 // for the balance harness. Time: a game year is 120 s; recipes are per cycle.
 
-import type { BuildingDef, EconDef, UnitEcon } from './types.ts';
+import type { BuildingDef, BuildingId, EconDef, UnitEcon } from './types.ts';
+import { UNITS, type UnitTypeId } from './units.ts';
 
 const NONE = { ore: 0, energy: 0 } as const;
 const common = { age: 'modern', cost: NONE, pop: 0, builtBy: 'engineer', mode: 'city' } as const;
@@ -191,8 +192,8 @@ export const CITY_BUILDINGS = {
   launch_site: {
     ...space, id: 'launch_site', name: 'Launch Site', category: 'industry', requires: [], buildTime: 80, hp: 3000, size: [5, 5],
     placement: 'land', vision: 8,
-    econ: { credits: 25000, materials: { concrete: 150, steel: 100, nano: 20 }, upkeep: 1500, jobs: { tier: 3, count: 10 }, recipe: { in: { fuel: 6, electronics: 2, nano: 1 }, out: { orbital: 3 }, seconds: 30 }, power: 40, trucks: 2, pollution: 0.4 },
-    description: 'Space age. Sends mining craft to the asteroids; they bring back orbital alloys. Burns fuel, electronics and nanomaterials. Needs scientists.',
+    econ: { credits: 25000, materials: { concrete: 150, steel: 100, nano: 20 }, upkeep: 1500, jobs: { tier: 3, count: 10 }, recipe: { in: { fuel: 6, electronics: 2, nano: 1 }, out: { orbital: 3 }, seconds: 30 }, power: 40, trucks: 2, pollution: 0.4, supplies: { electronics: 24, nano: 16 } },
+    description: 'Space age. Sends mining craft to the asteroids; they bring back orbital alloys. Burns fuel, electronics and nanomaterials. Needs scientists. Also builds orbital fighters, drop ships and the Star Lance.',
   },
   pharma_plant: {
     ...digital, id: 'pharma_plant', name: 'Pharmaceutical Plant', category: 'industry', requires: [], buildTime: 40, hp: 1400, size: [3, 3],
@@ -339,8 +340,8 @@ export const MILITARY_ECON: Record<string, EconDef> = {
   watchtower: { credits: 300, materials: { lumber: 10, concrete: 5 }, upkeep: 20 },
   bunker: { credits: 500, materials: { concrete: 30 }, upkeep: 30 },
   gun_turret: { credits: 600, materials: { concrete: 10, steel: 10 }, upkeep: 40 },
-  shipyard: { credits: 3000, materials: { concrete: 30, steel: 30 }, upkeep: 250, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 40, fuel: 20 } },
-  airfield: { credits: 4000, materials: { concrete: 60, steel: 20 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 6, supplies: { steel: 20, fuel: 30 } },
+  shipyard: { credits: 3000, materials: { concrete: 30, steel: 30 }, upkeep: 250, jobs: { tier: 0, count: 10 }, power: 6, supplies: { steel: 40, fuel: 20, electronics: 12, uranium: 4 } },
+  airfield: { credits: 4000, materials: { concrete: 60, steel: 20 }, upkeep: 300, jobs: { tier: 1, count: 8 }, power: 6, supplies: { steel: 20, fuel: 30, electronics: 12 } },
   shield_generator: { credits: 6000, materials: { concrete: 40, steel: 30, nano: 10 }, upkeep: 400, jobs: { tier: 2, count: 4 }, power: 40 },
 };
 
@@ -365,11 +366,25 @@ export const UNIT_ECON: Record<string, UnitEcon> = {
   exo_trooper: { credits: 320, goods: { steel: 2, electronics: 1 }, upkeep: 30 },
   rocket_artillery: { credits: 1200, goods: { steel: 12, fuel: 4, electronics: 3 }, upkeep: 90 },
   warden: { credits: 2000, goods: { steel: 20, electronics: 6 }, upkeep: 140 },
+  nuclear_submarine: { credits: 2600, goods: { steel: 24, fuel: 6, electronics: 6, uranium: 2 }, upkeep: 180 },
+  aegis_cruiser: { credits: 2400, goods: { steel: 26, fuel: 8, electronics: 8 }, upkeep: 170 },
+  aircraft_carrier: { credits: 5000, goods: { steel: 60, fuel: 20, electronics: 10 }, upkeep: 380 },
+  stealth_bomber: { credits: 2400, goods: { steel: 10, fuel: 12, electronics: 8 }, upkeep: 170 },
   // Nano age
   disruptor: { credits: 1400, goods: { steel: 8, electronics: 4, nano: 2 }, upkeep: 100 },
   juggernaut: { credits: 4500, goods: { steel: 40, electronics: 10, nano: 8 }, upkeep: 300 },
   arclight: { credits: 4000, goods: { steel: 30, electronics: 12, nano: 6 }, upkeep: 260 },
+  nano_swarm: { credits: 900, goods: { electronics: 2, nano: 3 }, upkeep: 60, at: 'mech_foundry' },
+  // Space age: from the Launch Site
+  orbital_fighter: { credits: 3000, goods: { electronics: 6, nano: 4, orbital: 3 }, upkeep: 200, at: 'launch_site' },
+  drop_ship: { credits: 3500, goods: { electronics: 6, nano: 4, orbital: 4 }, upkeep: 220, at: 'launch_site' },
+  star_lance: { credits: 20000, goods: { electronics: 20, nano: 15, orbital: 10 }, upkeep: 1200, at: 'launch_site' },
 };
+
+/** Where the economy game trains a unit. */
+export function econTrainedAt(type: UnitTypeId): BuildingId {
+  return UNIT_ECON[type]?.at ?? UNITS[type].trainedAt;
+}
 
 /** Army size: this many units, plus one per this many residents. */
 export const ARMY = { base: 6, perResidents: 20 } as const;

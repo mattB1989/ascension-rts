@@ -67,15 +67,17 @@ original **Twin Shores** skirmish.
   Institutes, enough technicians, a yearly GDP and a price. The Digital age brings Engineers and
   glass towers (they want electronics and the data network), rare-earth and uranium deposits,
   electronics and pharmaceutical plants, hospitals, data exchanges, nuclear power, and
-  exo-troopers, rocket artillery and the Warden mech (Mech Foundry). Rival nations research and
-  advance too.
+  exo-troopers, rocket artillery and the Warden mech (Mech Foundry), nuclear submarines, Aegis
+  cruisers and aircraft carriers (Shipyard), stealth bombers (Airfield). Rival nations research,
+  advance and field gunships too.
 - **The Nano age (E8)**: Scientists and spires (they want pharmaceuticals and a university),
   universities (research and higher education), nano fabs, robotics plants, fusion power, and
-  the Disruptor (its EMP stuns vehicles and mechs), Juggernaut and Arclight, and shield
+  the Disruptor (its EMP stuns vehicles and mechs), Juggernaut, Arclight and repair nano swarms, and shield
   generators, and maglev track for faster trains. Robots in stock halve the staff a farm, mine
   or factory needs.
 - **The Space age and ways to win (E9)**: launch sites bring orbital alloys down from the
-  asteroids; orbital solar relays; the Space Elevator. Win by the economy (half the world's GDP
+  asteroids and build orbital fighters, drop ships and one Star Lance; orbital solar relays;
+  the Space Elevator. Win by the economy (half the world's GDP
   for 10 years), federation (half the regions, at least half of them joined peacefully), space
   (keep the Space Elevator running for 5 years) or conquest (every rival nation defeated).
   🔬 shows your progress. Or choose Sandbox in the menu and play forever.

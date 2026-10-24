@@ -16,6 +16,7 @@ import type { Building, Unit } from '../sim/types.ts';
 import type { UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { hasTreaty, opinionOf } from '../sim/city/treaties.ts';
+import { DIPLO, marketOf, purchasePrice, relationsOf } from '../sim/city/diplomacy.ts';
 import { roadsByOwner } from '../sim/city/economy.ts';
 import type { World } from '../sim/world.ts';
 
@@ -35,6 +36,9 @@ export interface BotState {
   expandAt?: number;
   /** Game time of the next check for streets cut off from the town hall. */
   linkAt?: number;
+  /** Nations: game time of the next look at city-states (deals, unions, roads), and those out of road reach. */
+  dealAt?: number;
+  noRoadTo?: number[];
   difficulty: Difficulty;
   /** Game time of the next military decision, and of the earliest war it may start. */
   warAt: number;
@@ -110,7 +114,7 @@ function growGrid(world: World, bot: BotState): Command | null {
       tiles.push([cx + k * BLOCK * 2 - 1, cy + t]);
     }
   }
-  const ok = tiles.filter(([x, y]) => roadProblem(world, bot.player, x, y) === null);
+  const ok = tiles.filter(([x, y]) => ownRoadOk(world, bot.player, x, y));
   if (!ok.length) return null;
   bot.log.push(`grid ring ${r}: ${ok.length} tiles`);
   return { kind: 'road', player: bot.player, tiles: ok };
@@ -143,6 +147,13 @@ function rawSpot(world: World, player: number, type: BuildingTypeId): { spot: [n
   return road ? { spot: best, road } : null;
 }
 
+/** A road the bot may lay for its own town: allowed, and on its own or unclaimed land (not through city-states). */
+function ownRoadOk(world: World, player: number, x: number, y: number): boolean {
+  if (roadProblem(world, player, x, y) !== null) return false;
+  const owner = world.city!.regionOwner[world.map.nearRegion[y * world.map.width + x]!] ?? -1;
+  return owner === player || owner === -1;
+}
+
 /** Breadth-first search for a road from just below a footprint to the nearest existing road. */
 function roadTo(world: World, player: number, sx: number, sy: number, spot: [number, number], size: readonly [number, number]): Array<[number, number]> | null {
   const map = world.map;
@@ -150,7 +161,7 @@ function roadTo(world: World, player: number, sx: number, sy: number, spot: [num
   const city = world.city!;
   const inFoot = (x: number, y: number) => x >= spot[0] && x < spot[0] + size[0] && y >= spot[1] && y < spot[1] + size[1];
   const start = sy * W + sx;
-  if (!city.road[start] && roadProblem(world, player, sx, sy) !== null) return null;
+  if (!city.road[start] && !ownRoadOk(world, player, sx, sy)) return null;
   // Join our own road network (the one the town hall is on), not a neighbour's.
   const th = hall(world, player);
   const home = th?.city && th.city.access >= 0 ? city.comp[th.city.access]! : -1;
@@ -181,13 +192,73 @@ function roadTo(world: World, player: number, sx: number, sy: number, spot: [num
         for (let m = i; m >= 0; m = s.prev[m]!) path.push([m % W, Math.floor(m / W)]);
         return path.reverse();
       }
-      if (tail < queue.length && (city.road[j] || roadProblem(world, player, nx, ny) === null)) queue[tail++] = j;
+      if (tail < queue.length && (city.road[j] || ownRoadOk(world, player, nx, ny))) queue[tail++] = j;
     }
   }
   return null;
 }
 
 let search: { prev: Int32Array; stamp: Int32Array; queue: Int32Array; run: number } | null = null;
+
+/**
+ * A long road from a road tile (e.g. a city-state's town hall) to our own network, searched
+ * towards (tx, ty) first (best-first on distance travelled plus distance left).
+ */
+export function longRoad(world: World, player: number, start: number, tx: number, ty: number, limit = 120000, block?: [number, number, number, number]): Array<[number, number]> | null {
+  const map = world.map;
+  const W = map.width;
+  const city = world.city!;
+  const th = hall(world, player);
+  const home = th?.city && th.city.access >= 0 ? city.comp[th.city.access]! : -1;
+  if (home < 0) return null;
+  const n = W * map.height;
+  if (!search || search.prev.length !== n) search = { prev: new Int32Array(n), stamp: new Int32Array(n), queue: new Int32Array(40001), run: 0 };
+  const s = search;
+  s.run++;
+  // Bucket queue on f = steps + manhattan distance left.
+  const buckets: number[][] = [];
+  const g = new Map<number, number>();
+  const h = (i: number) => Math.abs((i % W) - tx) + Math.abs(Math.floor(i / W) - ty);
+  const push = (i: number, cost: number) => {
+    const f = cost + h(i);
+    (buckets[f] ??= []).push(i);
+  };
+  s.stamp[start] = s.run;
+  s.prev[start] = -1;
+  g.set(start, 0);
+  push(start, 0);
+  let expanded = 0;
+  for (let f = 0; f < buckets.length && expanded < limit; f++) {
+    const b = buckets[f];
+    if (!b) continue;
+    while (b.length && expanded < limit) {
+      const i = b.pop()!;
+      expanded++;
+      const cost = g.get(i)!;
+      const x = i % W;
+      const y = (i - x) / W;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0);
+        const ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= map.height) continue;
+        const j = ny * W + nx;
+        if (s.stamp[j] === s.run) continue;
+        if (block && nx >= block[0] && nx < block[0] + block[2] && ny >= block[1] && ny < block[1] + block[3]) continue;
+        if (!city.road[j] && roadProblem(world, player, nx, ny) !== null) continue;
+        s.stamp[j] = s.run;
+        s.prev[j] = i;
+        if (city.road[j] && city.comp[j] === home) {
+          const path: Array<[number, number]> = [];
+          for (let m = i; m >= 0; m = s.prev[m]!) path.push([m % W, Math.floor(m / W)]);
+          return path.reverse();
+        }
+        g.set(j, cost + 1);
+        push(j, cost + 1);
+      }
+    }
+  }
+  return null;
+}
 
 /** Footprints promised by commands not yet executed (several houses in one decision). */
 let reserved: Array<[number, number, number, number]> = [];
@@ -281,6 +352,12 @@ export function botStep(world: World, bot: BotState): Command[] {
   const made = (g: GoodId) => get(pc.made, g);
   const used = (g: GoodId) => get(pc.used, g);
   const stock = (g: GoodId) => world.buildings.filter((b) => b.owner === p && b.city).reduce((s, b) => s + get(b.city!.stock, g), 0);
+
+  // Nations court city-states: trade with them by road, accept their requests to join, buy friends.
+  if (bot.nation) {
+    const d = nationDiplomacy(world, bot, stock);
+    if (d.length) return d;
+  }
 
   // A new age as soon as it is ready (nations and the scripted player; city-states stay as they are).
   if (bot.maxPop === Infinity && nextAge(world, p)?.ready) return [{ kind: 'advanceAge', player: p }];
@@ -458,6 +535,70 @@ export function botStep(world: World, bot: BotState): Command[] {
 
 
 // ---------------------------------------------------------------------------
+// Nations and city-states
+
+function nationDiplomacy(world: World, bot: BotState, stock: (g: GoodId) => number): Command[] {
+  const p = bot.player;
+  if (world.time < (bot.dealAt ?? 0)) return [];
+  bot.dealAt = world.time + 30;
+  const pc = world.city!.players[p]!;
+  const states = world.players.filter((o) => o.role === 'cityState' && !o.defeated && !atWar(world, p, o.id));
+  for (const o of states) {
+    if (relationsOf(world, o.id)?.offer === p) {
+      bot.log.push(`union with ${o.name}`);
+      return [{ kind: 'acceptUnion', player: p, state: o.id }];
+    }
+    if ((relationsOf(world, o.id)?.opinion[p] ?? 0) >= DIPLO.buyOpinion && pc.credits > purchasePrice(world, o.id) * 1.5 + 8000) {
+      bot.log.push(`buy ${o.name}`);
+      return [{ kind: 'buyState', player: p, state: o.id }];
+    }
+  }
+  const th = hall(world, p);
+  if (!th?.city || th.city.access < 0) return [];
+  const home = world.city!.comp[th.city.access]!;
+  // The two nearest city-states.
+  const near = states
+    .map((o) => ({ o, m: marketOf(world, o.id) }))
+    .filter((x) => x.m?.city && x.m.city.access >= 0)
+    .sort((a, b) => Math.hypot(a.m!.x - th.x, a.m!.y - th.y) - Math.hypot(b.m!.x - th.x, b.m!.y - th.y))
+    .slice(0, 2);
+  for (const { o, m } of near) {
+    const a = m!.city!.access;
+    if (world.city!.comp[a] !== home) {
+      // Not connected yet: a road from their town hall to ours, if it isn't too long and we can afford it.
+      if (pc.credits < 10000) continue;
+      if (bot.noRoadTo?.includes(o.id)) continue;
+      const road = longRoad(world, p, a, Math.floor(th.x), Math.floor(th.y));
+      if (!road || road.length >= 300) {
+        (bot.noRoadTo ??= []).push(o.id);
+        continue;
+      }
+      if (road.length > 1 && pc.credits > Math.max(10000, road.length * 40)) {
+        bot.log.push(`road to ${o.name} (${road.length})`);
+        return [{ kind: 'road', player: p, tiles: road }];
+      }
+      continue;
+    }
+    // Connected: buy what building sites and factories lack, sell surpluses.
+    const want: Array<[GoodId, number, number]> = [];
+    for (const g of ['steel', 'concrete', 'lumber'] as const) if (stock(g) < 40) want.push([g, 60, -1]);
+    for (const [g, above] of [['food', 200], ['crops', 150], ['timber', 150], ['stone', 150], ['goods', 120]] as const) if (stock(g) > above) want.push([g, 0, above]);
+    const book = pc.deals[o.id] ?? {};
+    const out: Command[] = [];
+    for (const [g, imp, exp] of want) {
+      const r = book[g];
+      if (!r || r.import !== imp || r.export !== exp) out.push({ kind: 'deal', player: p, state: o.id, good: g, import: imp, export: exp });
+    }
+    // Stop trading what we no longer lack or have too much of.
+    for (const g of Object.keys(book) as GoodId[]) {
+      if (!want.some(([x]) => x === g)) out.push({ kind: 'deal', player: p, state: o.id, good: g, import: 0, export: -1 });
+    }
+    if (out.length) return out;
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // Nations: expansion and war
 
 /** Claim an unclaimed neighbouring region with a Regional Office (and a road to it). */
@@ -486,8 +627,12 @@ function expand(world: World, bot: BotState): Command[] {
         if (cityPlacementProblem(world, p, 'regional_office', tx, ty) !== null) continue;
         placed = true;
         tries++;
-        const road = roadTo(world, p, tx + 1, ty + 3, [tx, ty], [3, 3]);
-        if (!road) continue;
+        const W = world.map.width;
+        const road = roadTo(world, p, tx + 1, ty + 3, [tx, ty], [3, 3]) ?? longRoad(world, p, (ty + 3) * W + tx + 1, Math.floor(th.x), Math.floor(th.y), 120000, [tx, ty, 3, 3]);
+        if (!road) {
+          bot.log.push(`no road to ${r.name}`);
+          continue;
+        }
         bot.log.push(`expand into ${r.name}`);
         return [
           { kind: 'road', player: p, tiles: road },

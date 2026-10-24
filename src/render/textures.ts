@@ -7,6 +7,9 @@
 //   walls:  R brick, G roof tiles, B concrete, A timber planks
 //   finish: R plaster, G metal panels, B glass curtain wall, A grass/lawn
 //   nature: R broadleaf foliage, G conifer needles, B bark, A boulder rock
+//   infra:  R asphalt, G gravel ballast, B paving slabs, A grime
+//   wear:   R road repair patches, G cracks/potholes (as wear thresholds), B brushed metal, A wood grain
+//   water:  RGB ripple normal map, A cellular foam pattern
 
 import * as THREE from 'three';
 
@@ -437,6 +440,273 @@ function boulder(): Float32Array {
   return centre(base.map((v, i) => 0.55 * v + 0.25 * fine[i]! + 0.5 * (marks[i]! - 0.5)), 1.3);
 }
 
+// --- Infrastructure (roads, rails, pipes) -------------------------------------
+
+function asphalt(): Float32Array {
+  const fine = fbm(32, 3, 211);
+  const broad = fbm(8, 3, 213);
+  // Aggregate: small light and dark stones pressed into the binder.
+  const stones = strokes((ctx, wrap) => {
+    const r = mulberry(217);
+    for (let i = 0; i < 2600; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const s = 0.7 + r() * 1.6;
+      ctx.fillStyle = grey(r() < 0.55 ? 0.28 + r() * 0.12 : 0.66 + r() * 0.22);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.arc(x, y, s, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  });
+  return centre(fine.map((v, i) => 0.35 * v + 0.25 * broad[i]! + 0.5 * stones[i]!), 1.0);
+}
+
+function gravel(): Float32Array {
+  const base = fbm(16, 3, 221);
+  // Ballast: packed angular stones, each lit on one side.
+  const stones = strokes((ctx, wrap) => {
+    const r = mulberry(223);
+    for (let i = 0; i < 2400; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const s = 2 + r() * 3.2;
+      const g = 0.35 + r() * 0.4;
+      const a = r() * Math.PI;
+      const sides = 5 + Math.floor(r() * 3);
+      const pts: Array<[number, number]> = [];
+      for (let k = 0; k < sides; k++) {
+        const t = a + (k / sides) * Math.PI * 2;
+        const rr = s * (0.7 + r() * 0.4);
+        pts.push([x + Math.cos(t) * rr, y + Math.sin(t) * rr]);
+      }
+      wrap(() => {
+        ctx.fillStyle = grey(g * 0.55);
+        ctx.beginPath();
+        pts.forEach(([px, py], k) => (k ? ctx.lineTo(px + 0.8, py + 0.8) : ctx.moveTo(px + 0.8, py + 0.8)));
+        ctx.fill();
+        ctx.fillStyle = grey(g);
+        ctx.beginPath();
+        pts.forEach(([px, py], k) => (k ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+        ctx.fill();
+        ctx.fillStyle = grey(Math.min(1, g + 0.18));
+        ctx.beginPath();
+        ctx.arc(x - s * 0.25, y - s * 0.25, s * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }, 60);
+  return centre(stones.map((v, i) => v * 0.85 + base[i]! * 0.2), 1.1);
+}
+
+/** Paving slabs for pavements: a grid of slabs, each its own shade, with dark joints. */
+function paving(): Float32Array {
+  const n = fbm(16, 3, 231);
+  const r = mulberry(233);
+  const slab = 32;
+  const per = SIZE / slab;
+  const shade = new Float32Array(per * per).map(() => (r() - 0.5) * 0.16);
+  const out = new Float32Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      const joint = x % slab < 2 || y % slab < 2;
+      out[i] = joint ? 0.3 : 0.55 + shade[Math.floor(y / slab) * per + Math.floor(x / slab)]! + (n[i]! - 0.5) * 0.14;
+    }
+  }
+  return out;
+}
+
+/** Soft, broad stains (dirt, oil, damp) to break up large surfaces. */
+function grime(): Float32Array {
+  const a = fbm(4, 4, 241);
+  const b = fbm(8, 3, 243);
+  return centre(a.map((v, i) => v * 0.7 + b[i]! * 0.3), 1.3);
+}
+
+/**
+ * Repair patches on asphalt: 1 where there is none, else the wear (0..1) at which
+ * the patch shows, so worse roads gather more of them.
+ */
+function roadPatches(): Float32Array {
+  return strokes((ctx, wrap) => {
+    const r = mulberry(251);
+    for (let i = 0; i < 26; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const w = 18 + r() * 46;
+      const h = 14 + r() * 34;
+      const rot = (Math.floor(r() * 4) * Math.PI) / 2 + (r() - 0.5) * 0.12;
+      ctx.fillStyle = grey(0.15 + (i / 26) * 0.6);
+      wrap(() => {
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+      });
+    }
+  }, 255);
+}
+
+/**
+ * Cracks: 1 where there is none, else the wear at which the crack shows. Long
+ * meandering cracks first, then branches, then alligator cracking and potholes.
+ */
+function roadCracks(): Float32Array {
+  return strokes((ctx, wrap) => {
+    const r = mulberry(261);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const crack = (x: number, y: number, a: number, steps: number, len: number, width: number, v: number, depth: number) => {
+      const pts: Array<[number, number]> = [[x, y]];
+      for (let k = 0; k < steps; k++) {
+        a += (r() - 0.5) * 0.9;
+        x += Math.cos(a) * len * (0.6 + r() * 0.8);
+        y += Math.sin(a) * len * (0.6 + r() * 0.8);
+        pts.push([x, y]);
+        if (depth > 0 && r() < 0.18) crack(x, y, a + (r() < 0.5 ? 1 : -1) * (0.8 + r() * 0.7), 3 + Math.floor(r() * 4), len * 0.8, width * 0.75, Math.min(0.95, v + 0.12), depth - 1);
+      }
+      ctx.strokeStyle = grey(v);
+      ctx.lineWidth = width;
+      wrap(() => {
+        ctx.beginPath();
+        ctx.moveTo(pts[0]![0], pts[0]![1]);
+        for (const [px, py] of pts) ctx.lineTo(px, py);
+        ctx.stroke();
+      });
+    };
+    for (let i = 0; i < 14; i++) crack(r() * SIZE, r() * SIZE, r() * Math.PI * 2, 10 + Math.floor(r() * 8), 7, 2.6, 0.32 + r() * 0.2, 2);
+    // Alligator cracking: small polygon cells in a few areas.
+    for (let i = 0; i < 6; i++) {
+      const cx = r() * SIZE;
+      const cy = r() * SIZE;
+      for (let k = 0; k < 18; k++) {
+        const x = cx + (r() - 0.5) * 50;
+        const y = cy + (r() - 0.5) * 50;
+        crack(x, y, r() * Math.PI * 2, 2, 6, 1.8, 0.62 + r() * 0.15, 0);
+      }
+    }
+    // Potholes, only on the worst roads.
+    for (let i = 0; i < 9; i++) {
+      const x = r() * SIZE;
+      const y = r() * SIZE;
+      const s = 4 + r() * 6;
+      ctx.fillStyle = grey(0.8 + r() * 0.12);
+      wrap(() => {
+        ctx.beginPath();
+        ctx.ellipse(x, y, s, s * (0.6 + r() * 0.4), r() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }, 255);
+}
+
+/** Brushed metal: fine streaks along x, faint seams, a little mottling. */
+function metal(): Float32Array {
+  const r = mulberry(271);
+  const mottle = fbm(4, 3, 273);
+  const rows = new Float32Array(SIZE).map(() => (r() - 0.5) * 0.16);
+  const streak = fbm(64, 2, 277);
+  const out = new Float32Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      const seam = x % 128 < 2;
+      const s = streak[y * SIZE + ((x >> 3) % SIZE)]!;
+      out[i] = seam ? 0.3 : 0.5 + rows[y]! + (s - 0.5) * 0.12 + (mottle[i]! - 0.5) * 0.18;
+    }
+  }
+  return out;
+}
+
+/** Weathered wood grain running along x (rail sleepers). */
+function woodGrain(): Float32Array {
+  const warp = fbm(4, 3, 281);
+  const n = fbm(32, 2, 283);
+  const out = new Float32Array(SIZE * SIZE);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      const g = Math.sin((y / SIZE) * Math.PI * 2 * 24 + warp[i]! * 10);
+      out[i] = 0.5 + g * 0.1 + (n[i]! - 0.5) * 0.25;
+    }
+  }
+  return out;
+}
+
+// --- Water --------------------------------------------------------------------
+
+/** Tileable cellular noise: distance to the nearest feature point, 0..1. */
+function worley(cells: number, seed: number): Float32Array {
+  const r = mulberry(seed);
+  const pts = new Float32Array(cells * cells * 2).map(() => r());
+  const out = new Float32Array(SIZE * SIZE);
+  const cs = SIZE / cells;
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const gx = Math.floor(x / cs);
+      const gy = Math.floor(y / cs);
+      let best = 9;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const cx = gx + dx;
+          const cy = gy + dy;
+          const k = (((cy + cells) % cells) * cells + ((cx + cells) % cells)) * 2;
+          const px = (cx + pts[k]!) * cs;
+          const py = (cy + pts[k + 1]!) * cs;
+          const d = Math.hypot(px - x, py - y) / cs;
+          if (d < best) best = d;
+        }
+      }
+      out[y * SIZE + x] = Math.min(1, best);
+    }
+  }
+  return out;
+}
+
+/**
+ * Water ripples: a tileable height field (wind-driven crests plus noise) turned
+ * into a normal map: RGB = normal (x, y in the plane, z up), A = cellular foam pattern.
+ */
+function waterChannels(): Float32Array[] {
+  const n1 = fbm(4, 5, 301);
+  const n2 = fbm(8, 3, 303);
+  const hgt = new Float32Array(SIZE * SIZE);
+  const TAU = Math.PI * 2;
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const u = x / SIZE;
+      const v = y / SIZE;
+      const i = y * SIZE + x;
+      // Integer frequencies keep the crests tileable; noise warps them so they never look regular.
+      const w = n1[i]! * 2.4;
+      const crest = Math.sin(TAU * (5 * u + 3 * v) + w * 3) * 0.35 + Math.sin(TAU * (-4 * u + 7 * v) + w * 2) * 0.25 + Math.sin(TAU * (9 * u - 2 * v) + w * 4) * 0.12;
+      hgt[i] = crest + (n1[i]! - 0.5) * 1.2 + (n2[i]! - 0.5) * 0.5;
+    }
+  }
+  const nx = new Float32Array(SIZE * SIZE);
+  const ny = new Float32Array(SIZE * SIZE);
+  const nz = new Float32Array(SIZE * SIZE);
+  const k = 2.2; // slope scale
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      const hx = hgt[y * SIZE + ((x + 1) % SIZE)]! - hgt[y * SIZE + ((x + SIZE - 1) % SIZE)]!;
+      const hy = hgt[((y + 1) % SIZE) * SIZE + x]! - hgt[((y + SIZE - 1) % SIZE) * SIZE + x]!;
+      const a = -hx * k;
+      const b = -hy * k;
+      const l = Math.hypot(a, b, 1);
+      nx[i] = 0.5 + (0.5 * a) / l;
+      ny[i] = 0.5 + (0.5 * b) / l;
+      nz[i] = 0.5 + 0.5 / l;
+    }
+  }
+  const cellsA = worley(8, 311);
+  const cellsB = worley(16, 313);
+  const foam = cellsA.map((v, i) => Math.min(1, v * 0.6 + cellsB[i]! * 0.5));
+  return [nx, ny, nz, foam];
+}
+
 // --- Packing ------------------------------------------------------------------
 
 function pack(chans: Float32Array[], name: string): THREE.DataTexture {
@@ -468,18 +738,38 @@ export function buildingTextures(): [THREE.DataTexture, THREE.DataTexture] {
   return [walls, finish];
 }
 
-/** Detail texture by index: 0 walls, 1 finish, 2 nature (built on first use). */
-function detailTexture(i: 0 | 1 | 2): THREE.DataTexture {
+let infra: THREE.DataTexture | null = null;
+let wear: THREE.DataTexture | null = null;
+let water: THREE.DataTexture | null = null;
+
+/**
+ * Roads, rails and pipes.
+ *   infra: R asphalt, G gravel ballast, B paving slabs, A grime
+ *   wear:  R repair patches, G cracks (both: wear level at which they show, 1 = none), B brushed metal, A wood grain
+ */
+export function infraTextures(): [THREE.DataTexture, THREE.DataTexture] {
+  infra ??= pack([asphalt(), gravel(), paving(), grime()], 'infra');
+  wear ??= pack([roadPatches(), roadCracks(), metal(), woodGrain()], 'wear');
+  return [infra, wear];
+}
+
+/** Tileable water ripple normals (RGB, z up) and a cellular foam pattern (A). */
+export function waterTexture(): THREE.DataTexture {
+  return (water ??= pack(waterChannels(), 'water'));
+}
+
+/** Detail texture by index: 0 walls, 1 finish, 2 nature, 3 infra, 4 wear (built on first use). */
+function detailTexture(i: number): THREE.DataTexture {
   if (i === 2) return (nature ??= pack([foliage(), needles(), bark(), boulder()], 'nature'));
-  return buildingTextures()[i];
+  return i < 2 ? buildingTextures()[i]! : infraTextures()[i - 3]!;
 }
 
 // --- Materials ----------------------------------------------------------------
 
-export type DetailKind = 'brick' | 'tiles' | 'concrete' | 'planks' | 'plaster' | 'panels' | 'glass' | 'lawn' | 'foliage' | 'needles' | 'bark' | 'rock';
+export type DetailKind = 'brick' | 'tiles' | 'concrete' | 'planks' | 'plaster' | 'panels' | 'glass' | 'lawn' | 'foliage' | 'needles' | 'bark' | 'rock' | 'asphalt' | 'gravel' | 'paving' | 'metal';
 
 /** Which texture and channel, world units per texture repeat, and how strongly it shows. */
-export const KINDS: Record<DetailKind, { tex: 0 | 1 | 2; chan: number; size: number; strength: number }> = {
+export const KINDS: Record<DetailKind, { tex: 0 | 1 | 2 | 3 | 4; chan: number; size: number; strength: number }> = {
   brick: { tex: 0, chan: 0, size: 1.6, strength: 0.85 },
   tiles: { tex: 0, chan: 1, size: 1.4, strength: 0.8 },
   concrete: { tex: 0, chan: 2, size: 2, strength: 0.7 },
@@ -492,6 +782,10 @@ export const KINDS: Record<DetailKind, { tex: 0 | 1 | 2; chan: number; size: num
   needles: { tex: 2, chan: 1, size: 0.8, strength: 0.9 },
   bark: { tex: 2, chan: 2, size: 0.45, strength: 0.8 },
   rock: { tex: 2, chan: 3, size: 1.3, strength: 0.8 },
+  asphalt: { tex: 3, chan: 0, size: 2, strength: 0.6 },
+  gravel: { tex: 3, chan: 1, size: 1, strength: 0.8 },
+  paving: { tex: 3, chan: 2, size: 1, strength: 0.6 },
+  metal: { tex: 4, chan: 2, size: 1, strength: 0.5 },
 };
 
 /** Graphics quality: detail textures on (1) or off (0), shared by every patched material. */

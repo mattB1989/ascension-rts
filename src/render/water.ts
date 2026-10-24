@@ -1,10 +1,12 @@
 // Animated water surface. Colour, transparency and shoreline foam come from a
 // depth texture baked from the map, so no render-to-texture pass is needed
-// (cheap enough for phones).
+// (cheap enough for phones). Ripples are two scrolling layers of a tileable
+// procedural normal map over a slow swell; the sky is reflected with Fresnel.
 
 import * as THREE from 'three';
 import type { GameMap } from '../sim/map.ts';
 import { FOW_GLSL, fowUniforms } from './fog.ts';
+import { waterTexture } from './textures.ts';
 
 const vertex = /* glsl */ `
   varying vec3 vWorld;
@@ -22,20 +24,20 @@ const fragment = /* glsl */ `
   uniform float uTime;
   uniform vec3 uSunDir;
   uniform vec3 uShallow;
+  uniform vec3 uMid;
   uniform vec3 uDeep;
   uniform vec3 uSky;
   uniform vec3 uLight;
   uniform sampler2D uDepth;
+  uniform sampler2D uRipple;
   uniform vec2 uMapSize;
   varying vec3 vWorld;
   #include <fog_pars_fragment>
   ${FOW_GLSL}
 
-  float waveHeight(vec2 p, float t) {
-    return sin(p.x * 0.9 + t * 1.3) * 0.5
-         + sin(p.y * 1.1 - t * 1.1) * 0.5
-         + sin((p.x + p.y) * 0.55 + t * 0.7) * 0.6
-         + sin((p.x - p.y) * 2.3 + t * 2.1) * 0.15;
+  // Ripple normal from the tileable map: x, y in the water plane, z up.
+  vec2 ripple(vec2 uv) {
+    return texture2D(uRipple, uv).rg * 2.0 - 1.0;
   }
 
   void main() {
@@ -43,30 +45,59 @@ const fragment = /* glsl */ `
     vec2 uv = (p + 0.5) / (uMapSize + 1.0);
     float depth = 1.0;
     if (uv.x >= 0.0 && uv.y >= 0.0 && uv.x <= 1.0 && uv.y <= 1.0) depth = texture2D(uDepth, uv).r;
+    float t = uTime;
+    vec3 toEye = cameraPosition - vWorld;
+    float dist = length(toEye);
+    vec3 V = toEye / dist;
 
-    float e = 0.05;
-    float h0 = waveHeight(p, uTime);
-    float hx = waveHeight(p + vec2(e, 0.0), uTime);
-    float hz = waveHeight(p + vec2(0.0, e), uTime);
-    vec3 n = normalize(vec3(-(hx - h0) / e * 0.06, 1.0, -(hz - h0) / e * 0.06));
+    // Two ripple layers drifting across each other, and a slow broad swell under them.
+    vec2 s1 = ripple(p * 0.16 + vec2(t * 0.022, t * 0.012));
+    vec2 s2 = ripple(p * 0.37 + vec2(-t * 0.031, t * 0.021) + 0.37);
+    vec2 s3 = ripple(p * 0.05 + vec2(t * 0.007, -t * 0.01) + 0.71);
+    // Calmer in the shallows, and flattened with distance so it does not shimmer.
+    float calm = mix(0.6, 1.0, smoothstep(0.0, 0.35, depth));
+    float fade = 1.0 - 0.65 * smoothstep(20.0, 140.0, dist);
+    vec2 slope = (s1 * 0.5 + s2 * 0.32 + s3 * 0.45) * calm * fade;
+    vec3 n = normalize(vec3(slope.x, 1.0, slope.y));
 
-    vec3 viewDir = normalize(cameraPosition - vWorld);
-    float fres = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-    vec3 halfV = normalize(uSunDir + viewDir);
-    float spec = pow(max(dot(n, halfV), 0.0), 90.0);
+    // Water colour by depth: clear turquoise shallows, teal, then deep blue.
+    vec3 body = mix(uShallow, uMid, smoothstep(0.0, 0.3, depth));
+    body = mix(body, uDeep, smoothstep(0.25, 1.0, depth));
+    // Light scattered through crests that face the sun.
+    body *= 0.86 + 0.3 * clamp(dot(n, uSunDir), 0.0, 1.0);
 
-    vec3 col = mix(uShallow, uDeep, smoothstep(0.0, 0.55, depth));
-    col = mix(col, uSky, fres * 0.45);
-    col += spec * 0.7;
+    // Sky reflection (Fresnel): a gradient from a bright horizon to a deeper zenith, with soft clouds.
+    float ndv = clamp(dot(n, V), 0.0, 1.0);
+    float fres = 0.05 + 0.95 * pow(1.0 - ndv, 4.0);
+    fres = clamp(fres * 1.35 + 0.05, 0.0, 0.9);
+    vec3 R = reflect(-V, n);
+    float up = clamp(R.y, 0.0, 1.0);
+    vec3 horizon = mix(uSky, vec3(1.0), 0.3);
+    vec3 zenith = uSky * vec3(0.62, 0.78, 1.0);
+    vec3 sky = mix(horizon, zenith, sqrt(up));
+    float cloud = texture2D(uRipple, R.xz / max(R.y, 0.2) * 0.05 + vec2(t * 0.002, t * 0.001)).a;
+    sky = mix(sky, horizon * 1.05, smoothstep(0.45, 0.85, cloud) * 0.45);
+    vec3 col = mix(body, sky, fres);
 
-    // Shoreline foam that laps in and out.
-    float foamBand = smoothstep(0.09, 0.0, depth);
-    float ripple = 0.5 + 0.5 * sin(uTime * 1.8 - depth * 60.0 + h0);
-    float foam = foamBand * (0.45 + 0.55 * ripple);
-    col = mix(col, vec3(0.93, 0.96, 0.97), foam * 0.75);
+    // Sun glints: a tight highlight on the ripples and a broad sheen.
+    vec3 H = normalize(uSunDir + V);
+    float nh = max(dot(n, H), 0.0);
+    col += vec3(1.0, 0.96, 0.88) * (pow(nh, 260.0) * 2.4 + pow(nh, 36.0) * 0.12);
 
-    float alpha = mix(0.5, 0.93, smoothstep(0.0, 0.35, depth));
-    alpha = max(alpha, foam * 0.9);
+    // Shoreline foam: a broken band that laps in and out, and faint crests rolling in.
+    float pat = texture2D(uRipple, p * 0.42 + vec2(t * 0.012, -t * 0.008)).a * 0.6
+              + texture2D(uRipple, p * 0.77 - vec2(t * 0.015, t * 0.007) + 0.5).a * 0.5;
+    pat = clamp(pat - 0.1, 0.0, 1.0);
+    float lap = 0.5 + 0.5 * sin(t * 1.6 - depth * 55.0 + s3.x * 3.0);
+    float band = smoothstep(0.075, 0.0, depth) * (0.3 + 0.5 * lap);
+    float crest = smoothstep(0.32, 0.1, depth) * smoothstep(0.1, 0.16, depth) * smoothstep(0.8, 1.0, 0.5 + 0.5 * sin(t * 0.9 - depth * 32.0 + s3.y * 2.0)) * 0.4;
+    float amt = clamp(band + crest, 0.0, 1.0);
+    float foam = smoothstep(1.0 - amt, 1.0 - amt + 0.25, pat) * (0.5 + 0.5 * amt) * step(0.001, amt);
+    col = mix(col, vec3(0.94, 0.97, 0.98), foam * 0.8);
+
+    float alpha = mix(0.42, 0.94, smoothstep(0.0, 0.4, depth));
+    alpha = max(alpha, fres);
+    alpha = max(alpha, foam * 0.92);
     col *= uLight;
     col = fowApply(col, p);
     gl_FragColor = vec4(col, alpha);
@@ -105,11 +136,13 @@ export class Water {
         {
           uTime: { value: 0 },
           uSunDir: { value: sunDir.clone().normalize() },
-          uShallow: { value: new THREE.Color(0x3fb6b0) },
-          uDeep: { value: new THREE.Color(0x0f3d5c) },
+          uShallow: { value: new THREE.Color(0x4fc4b4) },
+          uMid: { value: new THREE.Color(0x1f8a98) },
+          uDeep: { value: new THREE.Color(0x0e3b5a) },
           uSky: { value: new THREE.Color(0xa9cde8) },
           uLight: { value: new THREE.Color(1, 1, 1) },
           uDepth: { value: tex },
+          uRipple: { value: null },
           uMapSize: { value: new THREE.Vector2(w, h) },
         },
       ]),
@@ -121,6 +154,7 @@ export class Water {
     });
     // UniformsUtils.merge clones textures; point back at the originals / shared fog uniforms.
     this.material.uniforms.uDepth!.value = tex;
+    this.material.uniforms.uRipple!.value = waterTexture();
     this.material.uniforms.uFow = fowUniforms.uFow;
     this.material.uniforms.uFowSize = fowUniforms.uFowSize;
     this.material.uniforms.uFowOn = fowUniforms.uFowOn;

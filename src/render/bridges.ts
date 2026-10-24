@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { bridgeDeckHeight, groundHeight, type BridgeInfo, type GameMap } from '../sim/map.ts';
+import { applyDetail, type DetailKind } from './textures.ts';
 
 const DECK_THICKNESS = 0.25;
 const STEP = 0.5; // tiles between cross-sections along the deck
@@ -112,12 +113,18 @@ export function buildBridges(map: GameMap): THREE.Group {
 
   const g = new THREE.Group();
   g.name = 'bridges';
-  g.add(deck.mesh(new THREE.MeshStandardMaterial({ color: 0x55585c, roughness: 0.85, flatShading: true })));
+  // World-space detail: asphalt on the deck, cast concrete below, brushed metal railings.
+  const mat = (opts: THREE.MeshStandardMaterialParameters, kind: DetailKind) => {
+    const m = new THREE.MeshStandardMaterial(opts);
+    applyDetail(m, kind);
+    return m;
+  };
+  g.add(deck.mesh(mat({ color: 0x5c5f63, roughness: 0.85, flatShading: true }, 'asphalt')));
   const lineMesh = lines.mesh(new THREE.MeshStandardMaterial({ color: 0xe8d36a, roughness: 0.6 }));
   lineMesh.castShadow = false;
   g.add(lineMesh);
-  g.add(sides.mesh(new THREE.MeshStandardMaterial({ color: 0xa8a59d, roughness: 0.9, flatShading: true, side: THREE.DoubleSide })));
-  g.add(rails.mesh(new THREE.MeshStandardMaterial({ color: 0xd8dde2, roughness: 0.5, metalness: 0.4, flatShading: true, side: THREE.DoubleSide })));
-  g.add(pillars.mesh(new THREE.MeshStandardMaterial({ color: 0x9a978f, roughness: 0.9, flatShading: true })));
+  g.add(sides.mesh(mat({ color: 0xa8a59d, roughness: 0.9, flatShading: true, side: THREE.DoubleSide }, 'concrete')));
+  g.add(rails.mesh(mat({ color: 0xd8dde2, roughness: 0.5, metalness: 0.4, flatShading: true, side: THREE.DoubleSide }, 'metal')));
+  g.add(pillars.mesh(mat({ color: 0x9a978f, roughness: 0.9, flatShading: true }, 'concrete')));
   return g;
 }

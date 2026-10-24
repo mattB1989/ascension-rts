@@ -7,6 +7,7 @@ import type { Building, World } from '../sim/world.ts';
 import { buildBuildingModel, buildScaffold } from './buildingModels.ts';
 import { HealthBar } from './healthBar.ts';
 import { box, mat } from './models.ts';
+import { kitMaterial, merge as mergeGeometryParts } from './kit.ts';
 
 interface BuildingObject {
   root: THREE.Group;
@@ -26,7 +27,14 @@ interface BuildingObject {
   level: number;
   /** Owner when created (annexed buildings change colour). */
   owner: number;
+  /** Low-detail kit model, batched with its neighbours when the camera is far away. */
+  far: THREE.Mesh | null;
 }
+
+/** Tiles per side of a batch of far-away buildings (one draw call each). */
+const BATCH = 32;
+/** Camera height above which buildings are drawn in batches (lower on phones). */
+const BATCH_HEIGHT = matchMedia('(pointer: coarse)').matches ? 42 : 70;
 
 /** A few puffs rising from a chimney top while the building works. */
 interface Smoke {
@@ -173,8 +181,10 @@ export class BuildingsView {
       if (ns && !ew) model.rotation.y = Math.PI / 2;
     }
     root.add(model);
-    if (!onWater && !isWallish(b.type)) {
-      // Foundation skirt hides gaps where the ground slopes away.
+    let low = Infinity;
+    for (let y = b.ty; y <= b.ty + b.h; y++) for (let x = b.tx; x <= b.tx + b.w; x++) low = Math.min(low, groundHeight(map, x, y));
+    if (!onWater && !isWallish(b.type) && base - low > 0.04) {
+      // Foundation skirt hides gaps where the ground slopes away (flat lots need none: one draw call less).
       const skirt = box(b.w - 0.1, 1.2, b.h - 0.1, mat(0x7f7d76, { rough: 1 }), 0, -0.58, 0);
       skirt.castShadow = false;
       root.add(skirt);
@@ -214,7 +224,65 @@ export class BuildingsView {
       top: base + height + 0.4,
       level,
       owner: b.owner,
+      far: (() => {
+        let f: THREE.Mesh | null = null;
+        model.traverse((o) => {
+          if (!f && (o as THREE.LOD).isLOD) f = ((o as THREE.LOD).levels[1]?.object as THREE.Mesh | undefined) ?? null;
+        });
+        return f;
+      })(),
     };
+  }
+
+  private readonly batches = new Map<number, { sig: string; mesh: THREE.Mesh | null }>();
+
+  /** Far away, merge each 32x32 block of buildings' low-detail models into one mesh (draw calls, not triangles, are what slow phones down). */
+  private updateBatches(on: boolean): void {
+    if (!on) {
+      for (const b of this.batches.values()) if (b.mesh) b.mesh.visible = false;
+      return;
+    }
+    const groups = new Map<number, Array<[Building, BuildingObject]>>();
+    for (const b of this.world.buildings) {
+      const o = this.objects.get(b.id);
+      if (!o?.far || !b.complete || !o.root.visible) continue;
+      const k = Math.floor(b.ty / BATCH) * 1024 + Math.floor(b.tx / BATCH);
+      let list = groups.get(k);
+      if (!list) groups.set(k, (list = []));
+      list.push([b, o]);
+    }
+    for (const [k, list] of groups) {
+      const sig = list.map(([b, o]) => `${b.id}:${o.level}:${o.owner}`).join(',');
+      let batch = this.batches.get(k);
+      if (!batch || batch.sig !== sig) {
+        if (batch?.mesh) {
+          this.group.remove(batch.mesh);
+          batch.mesh.geometry.dispose();
+        }
+        const parts: THREE.BufferGeometry[] = [];
+        for (const [, o] of list) {
+          o.root.updateMatrixWorld(true);
+          const g = o.far!.geometry.clone();
+          g.applyMatrix4(o.far!.matrixWorld);
+          parts.push(g);
+        }
+        const geo = mergeGeometryParts(parts);
+        for (const p of parts) p.dispose();
+        let mesh: THREE.Mesh | null = null;
+        if (geo) {
+          geo.computeBoundingSphere();
+          mesh = new THREE.Mesh(geo, kitMaterial());
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          this.group.add(mesh);
+        }
+        batch = { sig, mesh };
+        this.batches.set(k, batch);
+      }
+      if (batch.mesh) batch.mesh.visible = true;
+      for (const [, o] of list) o.root.visible = false;
+    }
+    for (const [k, b] of this.batches) if (!groups.has(k) && b.mesh) b.mesh.visible = false;
   }
 
   private viewerId = 0;
@@ -303,6 +371,7 @@ export class BuildingsView {
       }
     }
     if (!rallyShown) this.rally.visible = false;
+    this.updateBatches(!!camera && camera.position.y > BATCH_HEIGHT);
     for (const [id, o] of this.objects) {
       if (seen.has(id)) continue;
       this.group.remove(o.root, o.hb.group);

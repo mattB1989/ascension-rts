@@ -48,6 +48,11 @@ export interface BlockOpts extends PartOpts {
   taper?: number;
 }
 
+/** Parts smaller than this (tiles) are left out of the far model. */
+const FAR_MIN = 0.4;
+/** Camera distance (world units) beyond which the far model is drawn. */
+export const FAR_DISTANCE = 55;
+
 const KIND_ORDER: DetailKind[] = ['brick', 'tiles', 'concrete', 'planks', 'plaster', 'panels', 'glass', 'lawn'];
 const SURFACE: Record<Surface, number> = { matte: 0, metal: 1, glass: 2, gloss: 3 };
 
@@ -136,7 +141,7 @@ export function kitMaterial(): THREE.MeshStandardMaterial {
 const tmpColor = new THREE.Color();
 
 /** Concatenate non-indexed geometries that share the same attributes. */
-function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
+export function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry | null {
   if (!parts.length) return null;
   const names = Object.keys(parts[0]!.attributes);
   const out = new THREE.BufferGeometry();
@@ -221,6 +226,8 @@ export interface KitOptions {
 
 export class Kit {
   private parts: THREE.BufferGeometry[] = [];
+  /** Per part: big enough to keep in the far (low-detail) model. */
+  private major: boolean[] = [];
   private children: Array<{ name: string; at: Vec3; kit: Kit }> = [];
   private anchors: Array<{ name: string; at: Vec3 }> = [];
   private readonly grade: number;
@@ -268,6 +275,10 @@ export class Kit {
     g.setAttribute('kind', new THREE.BufferAttribute(new Float32Array(n).fill(o.tex ? KIND_ORDER.indexOf(o.tex) + 1 : 0), 1));
     g.setAttribute('surf', new THREE.BufferAttribute(new Float32Array(n).fill(SURFACE[o.surface ?? 'matte']), 1));
     this.parts.push(g);
+    g.computeBoundingBox();
+    const bb = g.boundingBox!;
+    const dims = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z].sort((a, b) => b - a);
+    this.major.push(glow <= 0 && dims[0]! >= FAR_MIN && dims[1]! >= FAR_MIN * 0.45);
     return this;
   }
 
@@ -399,14 +410,22 @@ export class Kit {
   /** Merge into meshes: one for the body, one per named part. */
   build(): THREE.Group {
     const g = new THREE.Group();
-    const mesh = this.mesh();
-    if (mesh) g.add(mesh);
+    const { near, far } = this.meshes();
+    // Near the camera: the full body plus its animated parts; far away: one low-detail mesh.
+    const detail = new THREE.Group();
+    if (near) detail.add(near);
     for (const c of this.children) {
       const sub = c.kit.build();
       sub.name = c.name;
       sub.position.set(...c.at);
-      g.add(sub);
+      detail.add(sub);
     }
+    if (far) {
+      const lod = new THREE.LOD();
+      lod.addLevel(detail, 0);
+      lod.addLevel(far, FAR_DISTANCE);
+      g.add(lod);
+    } else g.add(detail);
     for (const a of this.anchors) {
       const o = new THREE.Object3D();
       o.name = a.name;
@@ -416,17 +435,26 @@ export class Kit {
     return g;
   }
 
-  private mesh(): THREE.Mesh | null {
-    if (!this.parts.length) return null;
-    const geo = merge(this.parts);
+  /** The body in full, and (when it saves a good share) a far version of only its big volumes. */
+  private meshes(): { near: THREE.Mesh | null; far: THREE.Mesh | null } {
+    if (!this.parts.length) return { near: null, far: null };
+    const make = (parts: THREE.BufferGeometry[], shadow: boolean) => {
+      const geo = merge(parts);
+      if (!geo) return null;
+      geo.computeVertexNormals();
+      geo.computeBoundingSphere();
+      const m = new THREE.Mesh(geo, kitMaterial());
+      m.castShadow = shadow;
+      m.receiveShadow = true;
+      return m;
+    };
+    const near = make(this.parts, true);
+    const bigParts = this.parts.filter((_, i) => this.major[i]);
+    const far = bigParts.length && bigParts.length < this.parts.length * 0.85 ? make(bigParts, true) : null;
     for (const p of this.parts) p.dispose();
     this.parts = [];
-    if (!geo) return null;
-    geo.computeVertexNormals();
-    geo.computeBoundingSphere();
-    const m = new THREE.Mesh(geo, kitMaterial());
-    m.castShadow = true;
-    m.receiveShadow = true;
-    return m;
+    this.major = [];
+    return { near, far };
   }
+
 }

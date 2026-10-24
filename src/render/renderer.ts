@@ -181,7 +181,7 @@ export class GameRenderer {
     const tz = Math.round(t.y / step) * step;
     this.sun.target.position.set(tx, 0, tz);
     this.sun.position.set(tx + this.sunDir.x * 90, this.sunDir.y * 90, tz + this.sunDir.z * 90);
-    const extent = Math.min(80, 20 + this.rig.distance * 0.75);
+    const extent = Math.min(this.lowPower ? 50 : 80, 20 + this.rig.distance * 0.75);
     const sc = this.sun.shadow.camera;
     if (sc.right !== extent) {
       sc.left = -extent;

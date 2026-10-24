@@ -144,6 +144,7 @@ function everySecond(world: World): void {
   households(world);
   budget(world);
   updateTrade(world);
+  roadUpkeep(world, sec);
   for (const pc of city.players) {
     pc.made = sumLog(pc.madeLog);
     pc.used = sumLog(pc.usedLog);
@@ -532,6 +533,39 @@ function budget(world: World): void {
   if (pc0) {
     pc0.credits -= roads;
     pc0.year.roads += roads;
+  }
+}
+
+/** Roads age; maintenance depots repair the worst roads within their reach. */
+function roadUpkeep(world: World, sec: number): void {
+  const city = world.city!;
+  if (sec % 10 === 0) {
+    for (let i = 0; i < city.road.length; i++) if (city.road[i]) city.condition[i] = Math.max(0, city.condition[i]! - ROAD.ageWear);
+  }
+  for (const d of world.buildings) {
+    if (d.type !== 'maintenance_depot' || !d.complete || !d.city) continue;
+    const c = d.city;
+    const staff = c.workers / (d.def.econ!.jobs?.count ?? 1);
+    if (c.access < 0 || staff <= 0) {
+      c.status = c.access < 0 ? 'No road' : 'No workers';
+      continue;
+    }
+    const tiles: number[] = [];
+    searchRoads(world, c.access, ROAD.depotRadius, (tile) => {
+      if (city.condition[tile]! < 0.98) tiles.push(tile);
+      return false;
+    });
+    tiles.sort((a, b) => city.condition[a]! - city.condition[b]! || a - b);
+    let budget = ROAD.repair * staff;
+    for (const t of tiles) {
+      if (budget <= 0) break;
+      const fix = Math.min(budget, 1 - city.condition[t]!, 0.08);
+      city.condition[t] = city.condition[t]! + fix;
+      budget -= fix;
+    }
+    c.served = tiles.length;
+    c.status = tiles.length ? '' : 'All roads in reach are in good repair';
+    c.efficiency = staff;
   }
 }
 

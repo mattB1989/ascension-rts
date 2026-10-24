@@ -5,6 +5,7 @@
 // and in Node (tests use structuredClone directly). Browser storage: src/ui/saves.ts.
 
 import { BUILDINGS } from '../data/buildings.ts';
+import { GOOD_IDS, type GoodId } from '../data/goods.ts';
 import { UNITS } from '../data/units.ts';
 import { NavGrid } from './nav.ts';
 import { Pathfinder } from './pathfinding.ts';
@@ -41,7 +42,30 @@ export function revive(file: SaveFile): World {
   (w as { pathfinder: Pathfinder }).pathfinder = new Pathfinder(w.nav);
   for (const u of w.units) u.def = UNITS[u.type];
   for (const b of w.buildings) b.def = BUILDINGS[b.type];
+  migrate(w);
   return w;
+}
+
+/** Fill in state added after a save was made (saves from earlier builds keep loading). */
+function migrate(w: World): void {
+  const city = w.city as (NonNullable<World['city']> & Record<string, unknown>) | null;
+  if (!city) return;
+  const n = w.map.width * w.map.height;
+  if (!city.condition) {
+    city.condition = new Float32Array(n);
+    for (let i = 0; i < n; i++) if (city.road[i]) city.condition[i] = 1;
+  }
+  city.ships ??= [];
+  city.nextShipId ??= 1;
+  city.prices ??= Object.fromEntries(GOOD_IDS.map((g) => [g, 1])) as Record<GoodId, number>;
+  for (const pc of city.players) {
+    pc.trade ??= {};
+    pc.stockpile ??= {};
+    pc.year.imports ??= 0;
+    pc.lastYear.imports ??= 0;
+  }
+  if (!w.map.nearRegion) (w.map as { nearRegion: Uint16Array }).nearRegion = new Uint16Array(w.map.region);
+  for (const r of w.map.regions) (r as { ocean?: boolean }).ocean ??= false;
 }
 
 /** Same as saving and loading, in memory (tests, "restart from here"). */

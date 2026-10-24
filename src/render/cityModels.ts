@@ -134,6 +134,19 @@ function constructionOffice(team: number): THREE.Group {
   return g;
 }
 
+function maintenanceDepot(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 2, mat(0x8c8a84, { rough: 1 }));
+  g.add(box(1.5, 0.75, 1.2, mat(0xe0b23a), -0.6, 0.47, -0.2));
+  for (const x of [-0.95, -0.25]) g.add(box(0.5, 0.55, 0.04, darkMetal(), x, 0.38, 0.41));
+  g.add(box(1.54, 0.08, 1.24, t.accent, -0.6, 0.88, -0.2));
+  // Road roller and a pile of gravel.
+  g.add(cylX(0.18, 0.2, 10, darkMetal(), 0.85, 0.3, 0.45).rotateY(Math.PI / 2));
+  g.add(box(0.4, 0.3, 0.3, mat(0xe0b23a), 0.85, 0.42, 0.15));
+  g.add(mesh(cached('gravel', () => new THREE.ConeGeometry(0.4, 0.4, 7)), mat(0x9a9890, { rough: 1 }), 0.8, 0.32, -0.5));
+  return g;
+}
+
 function warehouse(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(4, 3);
@@ -591,6 +604,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'regional_office': return regionalOffice(team);
     case 'construction_office': return constructionOffice(team);
     case 'warehouse': return warehouse(team);
+    case 'maintenance_depot': return maintenanceDepot(team);
     case 'trade_port': return tradePort(team);
     case 'house': return HOUSE_MODELS[Math.max(0, Math.min(3, level))]!(team);
     case 'farm': return farm(team);

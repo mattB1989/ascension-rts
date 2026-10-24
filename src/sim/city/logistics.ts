@@ -222,7 +222,7 @@ function turnBack(t: Truck): void {
 
 export function moveTrucks(world: World): void {
   const city = world.city!;
-  const step = ROAD.speed * DT;
+  const base = ROAD.speed * DT;
   for (const t of [...city.trucks]) {
     t.prevPos = t.pos;
     const home = world.getBuilding(t.home);
@@ -235,6 +235,9 @@ export function moveTrucks(world: World): void {
       continue;
     }
     const last = t.path.length - 1;
+    // Worn roads slow trucks down.
+    const here = t.path[Math.min(last, Math.floor(t.pos))]!;
+    const step = base * (ROAD.worstSpeed + (1 - ROAD.worstSpeed) * city.condition[here]!);
     const next = Math.min(last, t.pos + step);
     // A road taken away under the truck: it gives up and its cargo goes back home.
     const k = Math.min(last, Math.ceil(next));
@@ -245,6 +248,11 @@ export function moveTrucks(world: World): void {
       }
       finish(world, t, home);
       continue;
+    }
+    // Every truck wears the road it drives onto.
+    if (Math.floor(next) !== Math.floor(t.pos)) {
+      const tile = t.path[Math.floor(next)]!;
+      city.condition[tile] = Math.max(0, city.condition[tile]! - ROAD.truckWear);
     }
     t.pos = next;
     if (t.pos < last) continue;

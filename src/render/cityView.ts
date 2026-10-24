@@ -14,6 +14,29 @@ const ROAD_W = 0.36; // half width
 const LIFT = 0.05;
 
 const roadMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+
+/** Road condition per tile (red channel, 255 = new), sampled by the road shader to show wear. */
+const condUniforms = { uRoadCond: { value: null as THREE.DataTexture | null }, uRoadSize: { value: new THREE.Vector2(1, 1) } };
+roadMat.onBeforeCompile = (shader) => {
+  shader.uniforms.uRoadCond = condUniforms.uRoadCond;
+  shader.uniforms.uRoadSize = condUniforms.uRoadSize;
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vRoadXZ;')
+    .replace('#include <project_vertex>', '#include <project_vertex>\nvRoadXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec2 vRoadXZ;\nuniform sampler2D uRoadCond;\nuniform vec2 uRoadSize;')
+    .replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      if (uRoadSize.x > 1.0) {
+        float cond = texture2D(uRoadCond, vRoadXZ / uRoadSize).r;
+        float speck = fract(sin(dot(floor(vRoadXZ * 6.0), vec2(12.9898, 78.233))) * 43758.5453);
+        float worn = clamp((1.0 - cond) * 1.3 - speck * 0.35, 0.0, 1.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.56, 0.5, 0.41), worn * 0.8);
+      }`,
+    );
+};
+roadMat.customProgramCacheKey = () => 'road';
 applyOverlay(roadMat);
 applyFow(roadMat);
 
@@ -78,8 +101,31 @@ export class RoadsView {
     this.last = new Uint8Array(world.map.width * world.map.height);
   }
 
+  private condTex: THREE.DataTexture | null = null;
+  private condAt = -1;
+
+  /** Copy road condition into the texture the road shader reads (once a second of game time). */
+  private updateCondition(): void {
+    const city = this.world.city!;
+    const map = this.world.map;
+    const sec = Math.floor(this.world.tick / 15);
+    if (sec === this.condAt) return;
+    this.condAt = sec;
+    if (!this.condTex) {
+      this.condTex = new THREE.DataTexture(new Uint8Array(map.width * map.height * 4), map.width, map.height, THREE.RGBAFormat);
+      this.condTex.magFilter = THREE.NearestFilter;
+      this.condTex.minFilter = THREE.NearestFilter;
+      condUniforms.uRoadCond.value = this.condTex;
+      condUniforms.uRoadSize.value.set(map.width, map.height);
+    }
+    const data = this.condTex.image.data as Uint8Array;
+    for (let i = 0; i < city.condition.length; i++) data[i * 4] = Math.round(city.condition[i]! * 255);
+    this.condTex.needsUpdate = true;
+  }
+
   update(): void {
     const city = this.world.city;
+    if (city) this.updateCondition();
     if (!city || city.roadVersion === this.version) return;
     this.version = city.roadVersion;
     const map = this.world.map;

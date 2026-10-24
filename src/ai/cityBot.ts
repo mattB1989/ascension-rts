@@ -260,7 +260,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [!has('construction_office') && pop >= 60, 'construction_office'],
     [made('food') < (pop * CONSUMPTION.food * 60) / YEAR_SECONDS * 1.3 && has('farm') < has('food_plant') * 1.3 && pop >= 40, 'farm'],
     [has('farm') >= has('food_plant') * 1.3 && made('food') < used('food') * 1.2, 'food_plant'],
-    [made('lumber') < used('lumber') + 6 && stock('lumber') < 60 && has('logging_camp') < 4, 'logging_camp'],
+    [made('lumber') < used('lumber') + 6 && stock('lumber') < 60 && has('logging_camp') < 5, 'logging_camp'],
     [has('logging_camp') > has('sawmill') * 1.5, 'sawmill'],
     [stock('concrete') < 30 && has('cement_works') > 0 && has('quarry') <= has('cement_works'), 'quarry'],
     [!has('iron_mine') && pop >= 80, 'iron_mine'],
@@ -275,13 +275,37 @@ export function botStep(world: World, bot: BotState): Command[] {
     [has('pumping_station') * 550 < pop, 'pumping_station'],
     [has('police_station') * 550 < pop && pop >= 60, 'police_station'],
     [!has('clinic') && pc.population[1] >= 30, 'clinic'],
+    [has('maintenance_depot') * 300 < world.city!.roadCount && world.city!.roadCount > 150, 'maintenance_depot'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];
   const services = new Set<string>(['market', 'water_tower', 'police_station', 'clinic', 'school']);
   const centre = houseCentre(world, p);
+
+  // Coverage: wherever houses lack a service the town already has, add one among them.
+  if (!busy) {
+    const kinds: Array<[BuildingTypeId, 'market' | 'water' | 'police' | 'health' | 'school', boolean]> = [
+      ['market', 'market', has('market') > 0],
+      ['water_tower', 'water', has('water_tower') > 0 && has('pumping_station') > 0],
+      ['police_station', 'police', has('police_station') > 0],
+      ['clinic', 'health', has('clinic') > 0],
+      ['school', 'school', has('school') > 0],
+    ];
+    for (const [type, kind, active] of kinds) {
+      if (!active) continue;
+      const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : 1) && !h.city!.covered[kind]);
+      if (lacking.length < 4) continue;
+      // Skip if one is already under construction.
+      if (world.buildings.some((b) => b.owner === p && b.type === type && !b.complete)) continue;
+      const cx = lacking.reduce((s, h) => s + h.x, 0) / lacking.length;
+      const cy = lacking.reduce((s, h) => s + h.y, 0) / lacking.length;
+      const cmds = place(world, bot, type, [cx, cy]);
+      if (cmds.length) return cmds;
+    }
+  }
   for (const [cond, type] of wants) {
     if (!cond) continue;
-    if (busy && type !== 'house') continue;
+    // Producers of building materials are never held back: everything else waits on them.
+    if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port'].includes(type)) continue;
     if (type === 'house') {
       const out: Command[] = [];
       for (let i = 0; i < 4; i++) out.push(...place(world, bot, 'house'));

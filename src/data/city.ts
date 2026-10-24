@@ -20,6 +20,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 2500, materials: { lumber: 30, concrete: 20 }, upkeep: 150, jobs: { tier: 0, count: 4 } },
     description: 'Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road.',
   },
+  maintenance_depot: {
+    ...common, id: 'maintenance_depot', name: 'Maintenance Depot', category: 'logistics', requires: [], buildTime: 20, hp: 1000, size: [3, 2],
+    placement: 'land', vision: 5,
+    econ: { credits: 700, materials: { lumber: 10, concrete: 20 }, upkeep: 90, jobs: { tier: 0, count: 6 } },
+    description: 'Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down.',
+  },
   construction_office: {
     ...common, id: 'construction_office', name: 'Construction Office', category: 'logistics', requires: [], buildTime: 25, hp: 1200, size: [3, 3],
     placement: 'land', vision: 5,
@@ -186,7 +192,7 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Housing', icon: '🏠', items: ['house'] },
   { tab: 'Raw', icon: '⛏', items: ['farm', 'fishing_harbour', 'logging_camp', 'quarry', 'iron_mine', 'oil_well'] },
   { tab: 'Industry', icon: '🏭', items: ['food_plant', 'sawmill', 'cement_works', 'steel_mill', 'oil_refinery', 'goods_factory'] },
-  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'construction_office', 'regional_office'] },
+  { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'trade_port', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'pumping_station', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school'] },
 ];
@@ -196,7 +202,21 @@ export const CONSUMPTION = { food: 0.4, goods: 0.2 } as const;
 /** Taxes per resident per game year, by tier, at the default rate. */
 export const TAX_PER_RESIDENT = [10, 22] as const;
 /** Road costs and upkeep (credits). */
-export const ROAD = { cost: 10, bridgeCost: 120, upkeepPerYear: 1, speed: 3 } as const;
+export const ROAD = {
+  cost: 10,
+  bridgeCost: 120,
+  upkeepPerYear: 1,
+  /** Truck speed on a perfect road, tiles per second. */
+  speed: 3,
+  /** Condition lost per truck driving onto a tile, and per tile every 10 seconds of age. */
+  truckWear: 0.002,
+  ageWear: 0.004,
+  /** Speed on a ruined road, as a share of full speed. */
+  worstSpeed: 0.45,
+  /** Repair per second a fully staffed depot spreads over its worst roads, and its reach. */
+  repair: 0.35,
+  depotRadius: 30,
+} as const;
 export const START_CREDITS = 30000;
 export const START_STOCK = { lumber: 180, concrete: 100, steel: 50, food: 60 } as const;
 

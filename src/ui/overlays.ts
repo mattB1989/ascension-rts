@@ -7,10 +7,11 @@ import { searchRoads } from '../sim/city/roads.ts';
 import { Terrain } from '../sim/map.ts';
 import type { World } from '../sim/world.ts';
 
-export type OverlayKind = 'land' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'happiness' | 'pollution';
+export type OverlayKind = 'land' | 'roads' | 'water' | 'power' | 'market' | 'police' | 'health' | 'school' | 'happiness' | 'pollution';
 
 export const OVERLAYS: Array<{ id: OverlayKind; icon: string; name: string; legend: string }> = [
   { id: 'land', icon: '🌾', name: 'Land', legend: 'Green: fertile farmland. Brown: ore, grey: stone, black: oil deposits.' },
+  { id: 'roads', icon: '🛣', name: 'Roads', legend: 'Road condition: green good, red worn (slow trucks). Maintenance depots repair within 30 tiles.' },
   { id: 'water', icon: '💧', name: 'Water', legend: 'Blue: reached by a water tower. Houses: blue with water, red without.' },
   { id: 'power', icon: '⚡', name: 'Power', legend: 'Yellow: powered. Red: needs power and has none.' },
   { id: 'market', icon: '🛒', name: 'Market', legend: 'Orange: within a market\'s reach. Houses: green fed, red not.' },
@@ -49,6 +50,8 @@ export function overlayFor(type: BuildingTypeId | string): OverlayKind | null {
     case 'oil_refinery':
     case 'cement_works':
       return 'pollution';
+    case 'maintenance_depot':
+      return 'roads';
     default:
       return null;
   }
@@ -118,6 +121,23 @@ export function computeOverlay(world: World, kind: OverlayKind, viewer: number):
       else if (t === Terrain.Grass) put(i, 160, 200, 80, 90);
       else if (t === Terrain.Forest) put(i, 30, 110, 40, 160);
     }
+    return { tiles: out, marks };
+  }
+
+  if (kind === 'roads') {
+    const city = world.city!;
+    for (let i = 0; i < n; i++) {
+      if (!city.road[i]) continue;
+      const c = city.condition[i]!;
+      const tx = i % map.width;
+      const ty = (i - tx) / map.width;
+      for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
+        if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+        const j = y * map.width + x;
+        if (out[j * 4 + 3]! === 0 || city.road[j]) put(j, Math.round(255 * (1 - c)), Math.round(210 * c), 50, city.road[j] ? 230 : 120);
+      }
+    }
+    for (const d of mine) if (d.type === 'maintenance_depot') paintBuilding(d.tx, d.ty, d.w, d.h, 80, 160, 255);
     return { tiles: out, marks };
   }
 

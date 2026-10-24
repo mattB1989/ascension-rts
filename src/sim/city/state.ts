@@ -145,6 +145,8 @@ export interface PlayerCity {
 export interface CityState {
   /** Road per tile: 0 none, 1 road, 2 bridge. */
   road: Uint8Array;
+  /** Road condition per tile, 1 new to 0 ruined. */
+  condition: Float32Array;
   roadCount: number;
   /** Road network id per road tile (0: none). Recomputed when roads change. */
   comp: Int32Array;
@@ -227,6 +229,7 @@ export function newCityBuilding(): CityBuildingState {
 export function createCityState(width: number, height: number, regions: number, players: number, credits: number): CityState {
   return {
     road: new Uint8Array(width * height),
+    condition: new Float32Array(width * height),
     roadCount: 0,
     comp: new Int32Array(width * height),
     roadVersion: 1,

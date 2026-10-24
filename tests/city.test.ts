@@ -247,3 +247,28 @@ test('a trade port exports surplus and imports what is missing, by ship from the
   assert.ok((port.city!.stock.lumber ?? 0) < 120, 'lumber shipped out');
   assert.notEqual(pc.credits, credits);
 });
+
+test('roads wear with age and traffic, and a maintenance depot repairs them', async () => {
+  const { addCityBuilding } = await import('../src/sim/city/place.ts');
+  const world = newCity();
+  const city = world.city!;
+  const hall = world.buildings[0]!;
+  const row = hall.ty + 5;
+  const street: Array<[number, number]> = [];
+  for (let x = hall.tx - 20; x <= hall.tx + 20; x++) street.push([x, row]);
+  world.step([{ kind: 'road', player: 0, tiles: street }]);
+  const i0 = row * world.map.width + hall.tx - 15;
+  assert.ok(city.condition[i0]! > 0.99, 'new roads are in good shape');
+  run(world, 60);
+  assert.ok(city.condition[i0]! < 1, 'roads age');
+  // Wear the street badly, then staff a depot next to it.
+  for (const [x, y] of street) city.condition[y * world.map.width + x] = 0.2;
+  const [dx, dy] = spotOnStreet(world, 'maintenance_depot', hall.tx - 10, row);
+  addCityBuilding(world, 'maintenance_depot', 0, dx, dy, true);
+  const [hx, hy] = spotOnStreet(world, 'house', hall.tx + 10, row);
+  const house = addCityBuilding(world, 'house', 0, hx, hy, true);
+  house.city!.residents = 16;
+  run(world, 60);
+  const avg = street.reduce((s, [x, y]) => s + city.condition[y * world.map.width + x]!, 0) / street.length;
+  assert.ok(avg > 0.5, `repaired to ${avg.toFixed(2)}`);
+});

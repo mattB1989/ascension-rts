@@ -358,6 +358,7 @@ seconds at normal speed.
 |---|---|---|---|---|---|---|---|---|
 | **Town Hall** | Core | 5×5 | ₡0 | — | 0 | — | stores 500 | Seat of government. Stores goods, sends trucks and runs two construction crews. 2 trucks 2 crews max 1 |
 | **Regional Office** | Core | 3×3 | ₡2500 | 30 lumber + 20 concrete | 150 | 4 workers | — | Claims an unclaimed region next to yours once built. Place it inside that region and connect it by road. |
+| **Maintenance Depot** | Logistics | 3×2 | ₡700 | 10 lumber + 20 concrete | 90 | 6 workers | — | Road crews repair worn roads within 30 road tiles, worst first. Worn roads slow every truck down. |
 | **Construction Office** | Logistics | 3×3 | ₡900 | 20 lumber + 10 concrete | 120 | 6 workers | — | Three more construction crews: build faster, in more places at once. 3 crews |
 | **Warehouse** | Logistics | 4×3 | ₡600 | 30 lumber + 10 concrete | 80 | 6 workers | stores 400 | Takes in what producers make and sends it on to whoever needs it. Three trucks. 3 trucks |
 | **Trade Port** | Logistics | 4×3 | ₡3000 | 50 lumber | 200 | 8 workers | stores 400 | Trade with the overseas market: cargo ships take your surplus and bring what you lack (set it in 🚢 Trade). Must be on a coast that reaches the open sea. 3 trucks |
@@ -392,9 +393,9 @@ seconds at normal speed.
 | 🌾 **Crops** | ₡4 | Farm | Food Plant |
 | 🍞 **Food** | ₡9 | Fishing Harbour, Food Plant | households (markets) |
 | 🪵 **Timber** | ₡3 | Logging Camp | Sawmill |
-| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
+| 🪚 **Lumber** | ₡8 | Sawmill | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Trade Port (construction), Farm (construction), Fishing Harbour (construction), Quarry (construction), Iron Mine (construction), Food Plant (construction), Sawmill (construction), Cement Works (construction), Steel Mill (construction), Oil Power Plant (construction), Market (construction), Police Station (construction), School (construction) |
 | 🪨 **Stone** | ₡3 | Quarry | Cement Works |
-| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
+| 🧱 **Concrete** | ₡10 | Cement Works | Regional Office (construction), Maintenance Depot (construction), Construction Office (construction), Warehouse (construction), Iron Mine (construction), Oil Well (construction), Food Plant (construction), Steel Mill (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Police Station (construction), Clinic (construction), School (construction) |
 | ⛏ **Iron ore** | ₡5 | Iron Mine | Steel Mill |
 | 🔩 **Steel** | ₡22 | Steel Mill | Goods Factory, Oil Well (construction), Cement Works (construction), Oil Refinery (construction), Goods Factory (construction), Oil Power Plant (construction), Hydro Plant (construction), Pumping Station (construction), Water Tower (construction), Clinic (construction) |
 | 🛢 **Crude oil** | ₡6 | Oil Well | Oil Refinery, Oil Power Plant |

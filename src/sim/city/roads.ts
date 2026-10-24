@@ -97,6 +97,7 @@ export function setRoad(world: World, tx: number, ty: number, on: boolean): void
       city.road[i] = 1;
     }
     city.roadCount++;
+    city.condition[i] = 1;
   } else {
     if (!city.road[i]) return;
     if (city.road[i] === 2) {
@@ -104,6 +105,7 @@ export function setRoad(world: World, tx: number, ty: number, on: boolean): void
       map.deck[i] = 0;
     }
     city.road[i] = 0;
+    city.condition[i] = 0;
     city.roadCount--;
   }
   refreshSurface(map, tx, ty);

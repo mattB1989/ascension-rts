@@ -388,7 +388,7 @@ function production(world: World): void {
     if (!c || !e) continue;
     if (!b.complete) {
       c.efficiency = 0;
-      c.status = constructionStatus(b);
+      c.status = constructionStatus(b, world);
       continue;
     }
     if (e.research) {
@@ -471,9 +471,10 @@ function research(world: World, b: Building): void {
   }
 }
 
-function constructionStatus(b: Building): string {
+function constructionStatus(b: Building, world: World): string {
   const c = b.city!;
   if (c.access < 0) return 'No road: connect it to your roads';
+  if (b.type !== 'house' && !world.buildings.some((s) => s.owner === b.owner && s.complete && s.city && s.city.comp === c.comp && (s.def.econ?.crews || s.def.econ?.storage))) return 'Cut off: no road links it to your Town Hall or a warehouse, so no materials or crews can come';
   if (b.type === 'house') return 'Settlers are building';
   const mats = b.def.econ?.materials ?? {};
   const missing: string[] = [];

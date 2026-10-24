@@ -484,6 +484,7 @@ export function botStep(world: World, bot: BotState): Command[] {
     [pc.age >= 3 && pc.powerDemand > pc.powerSupply - 50 && !has('orbital_relay') && has('launch_site') > 0, 'orbital_relay'],
     [pc.age >= 3 && !has('space_elevator') && has('launch_site') > 0 && credits > 160000, 'space_elevator'],
     [bot.nation && pc.age >= 2 && !has('shield_generator') && pop >= 800, 'shield_generator'],
+    [bot.nation && has('barracks') > 0 && !has('supply_depot') && world.players.some((o) => o.id !== p && atWar(world, p, o.id)), 'supply_depot'],
     [bot.nation && pc.age >= 1 && !has('mech_foundry') && pop >= 600 && has('vehicle_factory') > 0, 'mech_foundry'],
     [!has('school') && pc.population[1] >= 30, 'school'],
   ];

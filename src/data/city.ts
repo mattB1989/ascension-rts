@@ -53,6 +53,12 @@ export const CITY_BUILDINGS = {
     econ: { credits: 9000, materials: { concrete: 80, steel: 30 }, upkeep: 600, jobs: { tier: 1, count: 10 }, power: 8, storage: 300, trucks: 3, trains: 1 },
     description: 'Digital age. A warehouse with a cargo plane: it flies 30 units at a time to any of your other airports whose surroundings need them. No track needed.',
   },
+  supply_depot: {
+    ...common, id: 'supply_depot', name: 'Supply Depot', category: 'military', requires: [], buildTime: 25, hp: 1200, size: [3, 3],
+    placement: 'land', vision: 8,
+    econ: { credits: 900, materials: { lumber: 20, concrete: 10 }, upkeep: 90, jobs: { tier: 0, count: 4 } },
+    description: 'Keeps your troops supplied within 30 tiles: they don\'t wear down away from home, and mend when out of combat. Build one near the front.',
+  },
   coast_guard: {
     ...common, id: 'coast_guard', name: 'Coast Guard', category: 'logistics', requires: [], buildTime: 25, hp: 1200, size: [3, 3],
     placement: 'coast', vision: 10,
@@ -316,7 +322,7 @@ export const CITY_PALETTE: Array<{ tab: string; icon: string; items: string[] }>
   { tab: 'Logistics', icon: '🚚', items: ['warehouse', 'rail_station', 'airport', 'trade_port', 'coast_guard', 'maintenance_depot', 'construction_office', 'regional_office'] },
   { tab: 'Utilities', icon: '⚡', items: ['power_plant', 'hydro_plant', 'nuclear_plant', 'fusion_plant', 'orbital_relay', 'pumping_station', 'water_well', 'water_tower'] },
   { tab: 'Services', icon: '🏛', items: ['market', 'police_station', 'clinic', 'school', 'research_institute', 'hospital', 'data_exchange', 'university', 'space_elevator'] },
-  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'watchtower', 'bunker', 'gun_turret', 'shield_generator'] },
+  { tab: 'Military', icon: '⚔', items: ['barracks', 'vehicle_factory', 'mech_foundry', 'supply_depot', 'watchtower', 'bunker', 'gun_turret', 'shield_generator'] },
 ];
 
 /** Economy-game costs for the skirmish's military buildings (DESIGN.md §9: war is paid for by the economy). */

@@ -767,3 +767,24 @@ test('a shield generator takes most of the damage to buildings near it; an EMP k
   hit(world, 1, WEAPONS.disruptor![0]!, 90, mill);
   assert.ok((gen.city!.stun ?? 0) > 0, 'EMP knocked the shield out');
 });
+
+test('supply: troops far from home wear down; near a seat or supply depot they mend', () => {
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1 });
+  const hall = world.buildings[0]!;
+  const home = world.spawnUnit('rifleman', 0, hall.x + 6, hall.y + 6);
+  home.hp = home.maxHp / 2;
+  // Far away in unclaimed land.
+  const map = world.map;
+  let far: [number, number] | null = null;
+  for (let i = 0; i < map.region.length && !far; i += 97) {
+    const x = i % map.width;
+    const y = Math.floor(i / map.width);
+    if (map.region[i] && world.city!.regionOwner[map.region[i]!] === -1 && Math.hypot(x - hall.x, y - hall.y) > 60 && world.nav.passableAt(3, x + 0.5, y + 0.5, 0.4)) far = [x + 0.5, y + 0.5];
+  }
+  assert.ok(far, 'a far spot');
+  const lost = world.spawnUnit('rifleman', 0, far![0], far![1]);
+  const h0 = lost.hp;
+  run(world, 10);
+  assert.ok(home.hp > home.maxHp / 2, 'mends at home');
+  assert.ok(lost.hp < h0, 'wears down far away');
+});

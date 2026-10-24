@@ -73,7 +73,33 @@ export function recruit(world: World, player: number, b: Building, type: UnitTyp
 /** War weariness: grows while at war with a nation (full after WEARINESS.years), fades twice as fast in peace. */
 export const WEARINESS = { max: 0.25, years: 2 } as const;
 
-/** Once a second: unit upkeep, war weariness, and seats being captured. */
+/**
+ * Supply: land units far from their own seats and supply depots, outside their own land,
+ * wear down (attrition); near them, out of combat, they mend.
+ */
+export const SUPPLY = { radius: 30, attrition: 0.004, heal: 0.01 } as const;
+
+function updateSupply(world: World): void {
+  const city = world.city!;
+  const posts = world.buildings.filter((b) => b.complete && (b.type === 'town_hall' || b.type === 'regional_office' || b.type === 'supply_depot'));
+  const r2 = SUPPLY.radius * SUPPLY.radius;
+  const map = world.map;
+  for (const u of world.units) {
+    if (u.def.domain !== 'land' || u.carrier || u.def.builder) continue;
+    const supplied = posts.some((b) => b.owner === u.owner && (b.x - u.x) * (b.x - u.x) + (b.y - u.y) * (b.y - u.y) <= r2);
+    if (supplied) {
+      // Mend when not fighting (no shot for 5 s).
+      if (u.firedAgo > 75 && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * SUPPLY.heal);
+      continue;
+    }
+    const reg = map.region[Math.floor(u.y) * map.width + Math.floor(u.x)] ?? 0;
+    if (city.regionOwner[reg] === u.owner) continue;
+    u.hp -= u.maxHp * SUPPLY.attrition;
+    if (u.hp <= 0) world.removeUnit(u, 'attrition', true);
+  }
+}
+
+/** Once a second: unit upkeep, war weariness, supply, and seats being captured. */
 export function updateMilitary(world: World): void {
   const city = world.city!;
   for (const p of world.players) {
@@ -92,6 +118,7 @@ export function updateMilitary(world: World): void {
     pc.year.military += up;
   }
   for (const b of world.buildings) if (b.city?.stun) b.city.stun = Math.max(0, b.city.stun - 1);
+  updateSupply(world);
   updateCapture(world);
 }
 

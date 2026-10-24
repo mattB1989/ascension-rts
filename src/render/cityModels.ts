@@ -1001,6 +1001,20 @@ function orbitalRelay(team: number): THREE.Group {
   return g;
 }
 
+function supplyDepot(team: number): THREE.Group {
+  const t = teamMats(team);
+  const g = pad(3, 3, mat(0x7a7a5a, { rough: 1 }));
+  // Tents, crates and a fuel bladder behind a sandbag ring.
+  for (const [x, z] of [[-0.8, -0.7], [0.3, -0.8]] as const) {
+    g.add(gable(1.0, 0.8, 0.12, 0.6, mat(0x5a6a3a, { rough: 0.9 }), x, z));
+  }
+  crates(g, -1.1, 0.6, 6, 0x6a5a3a);
+  g.add(cyl(0.35, 0.35, 0.3, 10, mat(0x2a2e33), 0.9, 0.27, 0.7));
+  g.add(cyl(0.02, 0.02, 1.2, 4, darkMetal(), 1.2, 0.72, -1.1));
+  g.add(box(0.4, 0.25, 0.02, t.main, 1.41, 1.15, -1.1));
+  return g;
+}
+
 function shieldGenerator(team: number): THREE.Group {
   const t = teamMats(team);
   const g = pad(2, 2, paving());
@@ -1069,6 +1083,7 @@ export function buildCityModel(type: string, team: number, level = 0): THREE.Gro
     case 'orbital_relay': return orbitalRelay(team);
     case 'space_elevator': return spaceElevator(team);
     case 'shield_generator': return shieldGenerator(team);
+    case 'supply_depot': return supplyDepot(team);
     case 'farm': return farm(team);
     case 'fishing_harbour': return fishingHarbour(team);
     case 'logging_camp': return loggingCamp(team);

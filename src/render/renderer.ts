@@ -16,6 +16,7 @@ import { Water } from './water.ts';
 import { CarsView, StreetLights } from './ambient.ts';
 import { windowMaterial } from './cityModels.ts';
 import { detailUniforms } from './textures.ts';
+import { kitUniforms } from './kit.ts';
 
 const SKY = 0x9cc4e4;
 /** Day and night: real seconds per day (independent of game speed). */
@@ -243,6 +244,7 @@ export class GameRenderer {
     this.hemi.color.copy(C_HEMI).lerp(C_HEMI_NIGHT, night);
     this.hemi.intensity = 1.5 - 0.85 * night;
     windowMaterial().emissiveIntensity = 0.6 + 4 * night;
+    kitUniforms.uGlow.value = 0.45 + 2.6 * night;
     const l = 1 - 0.62 * night;
     this.water.setLight(new THREE.Color(l * (1 - 0.1 * night), l * (1 - 0.05 * night), l).lerp(C_DUSK, dusk * 0.2), sky);
   }

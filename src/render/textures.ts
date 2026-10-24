@@ -332,7 +332,7 @@ export function groundTexture(): THREE.DataTexture {
   return (ground ??= pack([grass(), rock(), sand(), soil()], 'ground'));
 }
 
-function buildingTextures(): [THREE.DataTexture, THREE.DataTexture] {
+export function buildingTextures(): [THREE.DataTexture, THREE.DataTexture] {
   walls ??= pack([brick(), roofTiles(), concrete(), planks()], 'walls');
   finish ??= pack([plaster(), panels(), glassWall(), grass()], 'finish');
   return [walls, finish];
@@ -343,7 +343,7 @@ function buildingTextures(): [THREE.DataTexture, THREE.DataTexture] {
 export type DetailKind = 'brick' | 'tiles' | 'concrete' | 'planks' | 'plaster' | 'panels' | 'glass' | 'lawn';
 
 /** Which texture and channel, world units per texture repeat, and how strongly it shows. */
-const KINDS: Record<DetailKind, { tex: 0 | 1; chan: number; size: number; strength: number }> = {
+export const KINDS: Record<DetailKind, { tex: 0 | 1; chan: number; size: number; strength: number }> = {
   brick: { tex: 0, chan: 0, size: 1.6, strength: 0.85 },
   tiles: { tex: 0, chan: 1, size: 1.4, strength: 0.8 },
   concrete: { tex: 0, chan: 2, size: 2, strength: 0.7 },

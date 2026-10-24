@@ -6,6 +6,10 @@
 import * as THREE from 'three';
 import { box, cached, cyl, cylX, mat as baseMat, mesh, sphere, teamMats } from './models.ts';
 import type { DetailKind } from './textures.ts';
+import type { ModelFn } from './city/common.ts';
+import { HOUSING_MODELS } from './city/housing.ts';
+import { INDUSTRY_MODELS } from './city/industry.ts';
+import { INFRA_MODELS } from './city/infra.ts';
 
 /** Building materials get a surface texture: the one asked for, else plaster grain (or metal panels for metals). */
 function mat(color: number, opts: { metal?: number; rough?: number; emissive?: number; tex?: DetailKind | 'none' } = {}): THREE.MeshStandardMaterial {
@@ -1087,7 +1091,12 @@ function spaceElevator(team: number): THREE.Group {
   return g;
 }
 
+/** Kit-built models (src/render/city/*): by type, or 'type:level' for houses. */
+const KIT_MODELS: Record<string, ModelFn> = { ...HOUSING_MODELS, ...INDUSTRY_MODELS, ...INFRA_MODELS };
+
 export function buildCityModel(type: string, team: number, level = 0, variant = 0): THREE.Group | null {
+  const kit = KIT_MODELS[`${type}:${level}`] ?? KIT_MODELS[type];
+  if (kit) return kit(team, level, variant);
   switch (type) {
     case 'town_hall': return townHall(team);
     case 'regional_office': return regionalOffice(team);

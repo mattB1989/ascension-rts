@@ -84,6 +84,10 @@ async function boot(): Promise<void> {
       ? createCity({ ...scenario.setup, scenario: scenario.id, spectate: params.get('spectate') === '1' })
       : createCity({ seed: Number(params.get('seed')) || 1, size, biome, difficulty, nations: rivals, victory: params.get('victory') !== '0', spectate: params.get('spectate') === '1' });
     l.remove();
+  } else if (mode === 'models') {
+    const { showGallery } = await import('./render/gallery.ts');
+    showGallery(uiRoot, params);
+    return;
   } else if (mode === 'skirmish' || mode === 'sandbox') {
     world = createMatch({ seed: Number(params.get('seed')) || 1337, mode: mode === 'sandbox' ? 'sandbox' : 'standard' });
   } else {

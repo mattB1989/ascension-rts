@@ -24,6 +24,7 @@ const fragment = /* glsl */ `
   uniform vec3 uShallow;
   uniform vec3 uDeep;
   uniform vec3 uSky;
+  uniform vec3 uLight;
   uniform sampler2D uDepth;
   uniform vec2 uMapSize;
   varying vec3 vWorld;
@@ -66,6 +67,7 @@ const fragment = /* glsl */ `
 
     float alpha = mix(0.5, 0.93, smoothstep(0.0, 0.35, depth));
     alpha = max(alpha, foam * 0.9);
+    col *= uLight;
     col = fowApply(col, p);
     gl_FragColor = vec4(col, alpha);
     #include <colorspace_fragment>
@@ -106,6 +108,7 @@ export class Water {
           uShallow: { value: new THREE.Color(0x3fb6b0) },
           uDeep: { value: new THREE.Color(0x0f3d5c) },
           uSky: { value: new THREE.Color(0xa9cde8) },
+          uLight: { value: new THREE.Color(1, 1, 1) },
           uDepth: { value: tex },
           uMapSize: { value: new THREE.Vector2(w, h) },
         },
@@ -130,5 +133,11 @@ export class Water {
 
   update(time: number): void {
     this.material.uniforms.uTime!.value = time;
+  }
+
+  /** Day and night: how much light falls on the water (1 = full day), and the sky it reflects. */
+  setLight(light: THREE.Color, sky: THREE.Color): void {
+    (this.material.uniforms.uLight!.value as THREE.Color).copy(light);
+    (this.material.uniforms.uSky!.value as THREE.Color).copy(sky).lerp(new THREE.Color(0xa9cde8), 0.3);
   }
 }

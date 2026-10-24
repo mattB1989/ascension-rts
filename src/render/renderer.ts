@@ -13,8 +13,32 @@ import { ResourcesView } from './resourcesView.ts';
 import { TerrainView } from './terrain.ts';
 import { UnitsView } from './unitsView.ts';
 import { Water } from './water.ts';
+import { CarsView, StreetLights } from './ambient.ts';
+import { windowMaterial } from './cityModels.ts';
 
 const SKY = 0x9cc4e4;
+/** Day and night: real seconds per day (independent of game speed). */
+const DAY_SECONDS = 360;
+const C_SKY = new THREE.Color(SKY);
+const C_SKY_NIGHT = new THREE.Color(0x141d33);
+const C_DUSK = new THREE.Color(0xe8946a);
+const C_SUN = new THREE.Color(0xfff1d6);
+const C_MOON = new THREE.Color(0x8ea6ff);
+const C_SUN_DUSK = new THREE.Color(0xffa05a);
+const C_HEMI = new THREE.Color(0xdcefff);
+const C_HEMI_NIGHT = new THREE.Color(0x6a7fb8);
+
+/** Night (0 day .. 1 night) and dusk glow (0..1) at a point of the day (0..1, 0 = morning). */
+export function dayPhase(p: number): { night: number; dusk: number } {
+  const ramp = (a: number, b: number) => {
+    const t = Math.min(1, Math.max(0, (p - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const bump = (a: number, b: number) => (p >= a && p <= b ? Math.sin(((p - a) / (b - a)) * Math.PI) : 0);
+  // Day until 0.55, dusk to 0.65, night to 0.88, dawn to 0.98.
+  const night = p < 0.75 ? ramp(0.55, 0.65) : 1 - ramp(0.88, 0.98);
+  return { night, dusk: Math.max(bump(0.53, 0.67), bump(0.86, 0.99)) };
+}
 
 export class GameRenderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -33,6 +57,14 @@ export class GameRenderer {
   readonly pipes: PipesView | null = null;
   readonly trains: TrainsView | null = null;
   readonly ships: ShipsView | null = null;
+  readonly cars: CarsView | null = null;
+  readonly lamps: StreetLights | null = null;
+  private night = 0;
+  /** Day and night cycle on (it can be turned off in the game menu). */
+  dayNight = true;
+  private clock = 0;
+  private lastNight = -1;
+  private readonly hemi: THREE.HemisphereLight;
   readonly borders: RegionBorders | null = null;
   readonly marks: OverlayMarks;
   /** Whose eyes we see the world through (fog of war). */
@@ -65,7 +97,8 @@ export class GameRenderer {
     this.scene.background = new THREE.Color(SKY);
     this.scene.fog = new THREE.Fog(SKY, 80, 250);
 
-    this.scene.add(new THREE.HemisphereLight(0xdcefff, 0x55603f, 1.5));
+    this.hemi = new THREE.HemisphereLight(0xdcefff, 0x55603f, 1.5);
+    this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xfff1d6, 2.6);
     this.sun.castShadow = true;
     const size = this.lowPower ? 1024 : 2048;
@@ -106,6 +139,9 @@ export class GameRenderer {
       this.scene.add(this.rails.group, this.trains.group);
       this.ships = new ShipsView(world);
       this.scene.add(this.roads.group, this.trucks.group, this.ships.group);
+      this.cars = new CarsView(world);
+      this.lamps = new StreetLights(world);
+      this.scene.add(this.cars.group, this.lamps.group);
     }
     this.marks = new OverlayMarks(map);
     this.scene.add(this.marks.group);
@@ -155,6 +191,8 @@ export class GameRenderer {
     const fog = this.scene.fog as THREE.Fog;
     fog.near = this.rig.distance * 1.6;
     fog.far = this.rig.distance * 4.5 + 60;
+    this.clock += frameDt;
+    this.updateDaylight();
 
     if (this.world.tick !== this.lastFogTick) {
       this.lastFogTick = this.world.tick;
@@ -165,6 +203,8 @@ export class GameRenderer {
     this.rails?.update();
     this.pipes?.update();
     this.trucks?.update(alpha);
+    this.cars?.update();
+    this.lamps?.update(this.night);
     this.trains?.update(alpha);
     this.ships?.update(alpha, time);
     this.borders?.update(this.viewer);
@@ -175,6 +215,26 @@ export class GameRenderer {
     this.effects.viewer = this.viewer;
     this.effects.update(frameDt, this.world, alpha);
     this.renderer.render(this.scene, this.rig.camera);
+  }
+
+  /** Light, sky and lit windows for the time of day (economy game only; the skirmish stays in daylight). */
+  private updateDaylight(): void {
+    const on = this.dayNight && !!this.world.city;
+    const { night, dusk } = on ? dayPhase(((this.clock / DAY_SECONDS) % 1 + 1) % 1) : { night: 0, dusk: 0 };
+    this.night = night;
+    const key = Math.round(night * 200) * 1000 + Math.round(dusk * 200);
+    if (key === this.lastNight) return;
+    this.lastNight = key;
+    const sky = C_SKY.clone().lerp(C_SKY_NIGHT, night).lerp(C_DUSK, dusk * 0.55);
+    (this.scene.background as THREE.Color).copy(sky);
+    (this.scene.fog as THREE.Fog).color.copy(sky);
+    this.sun.color.copy(C_SUN).lerp(C_MOON, night).lerp(C_SUN_DUSK, dusk * 0.6);
+    this.sun.intensity = 2.6 - 1.85 * night;
+    this.hemi.color.copy(C_HEMI).lerp(C_HEMI_NIGHT, night);
+    this.hemi.intensity = 1.5 - 0.85 * night;
+    windowMaterial().emissiveIntensity = 0.6 + 4 * night;
+    const l = 1 - 0.62 * night;
+    this.water.setLight(new THREE.Color(l * (1 - 0.1 * night), l * (1 - 0.05 * night), l).lerp(C_DUSK, dusk * 0.2), sky);
   }
 
   /** Ground (or water surface) point under a screen position, in world coords (x, y = map y). */

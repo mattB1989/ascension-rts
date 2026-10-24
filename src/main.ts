@@ -144,6 +144,21 @@ function start(world: World, uiRoot: HTMLElement, params: URLSearchParams, recor
     hud.hasSave = () => !!saveInfo('manual');
     hud.onMarks = (m) => renderer.marks.set(m);
     hud.sound = sound;
+    let dayNight = true;
+    try {
+      dayNight = localStorage.getItem('ascension.daynight') !== '0';
+    } catch {
+      // Settings are a convenience only.
+    }
+    renderer.dayNight = hud.dayNight = dayNight;
+    hud.onDayNight = (on) => {
+      renderer.dayNight = on;
+      try {
+        localStorage.setItem('ascension.daynight', on ? '1' : '0');
+      } catch {
+        // ignore
+      }
+    };
     hud.onAlert = (x, y) => minimap.ping(x, y);
     handleEvents = (ev) => hud.handleEvents(ev);
     updateHud = () => {

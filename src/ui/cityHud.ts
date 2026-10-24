@@ -98,6 +98,9 @@ export class CityHud {
   hasSave: () => boolean = () => false;
   /** Replays: whether this game can be replayed, and how. */
   canReplay: () => boolean = () => false;
+  /** Graphics: the day and night cycle. */
+  dayNight = true;
+  onDayNight: (on: boolean) => void = () => {};
   onReplay: () => void = () => {};
   /** Tint buildings for the current overlay (set by main: renderer.marks.set). */
   onMarks: (marks: OverlayMark[]) => void = () => {};
@@ -353,6 +356,11 @@ export class CityHud {
         break;
       case 'replay':
         this.onReplay();
+        break;
+      case 'daynight':
+        this.dayNight = !this.dayNight;
+        this.onDayNight(this.dayNight);
+        this.lastPanel = '';
         break;
       case 'goto': {
         const [x, y] = arg.split(',').map(Number);
@@ -971,6 +979,7 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
           <button class="btn ${this.sound?.settings.sfx ? 'active' : ''}" data-action="sound" data-arg="sfx">🔊 Sound effects: ${this.sound?.settings.sfx ? 'on' : 'off'}</button>
           <button class="btn ${this.sound?.settings.music ? 'active' : ''}" data-action="sound" data-arg="music">🎵 Music: ${this.sound?.settings.music ? 'on' : 'off'}</button>
           <div class="vol-row">Volume <input type="range" min="0" max="100" value="${Math.round((this.sound?.settings.volume ?? 0.7) * 100)}" data-volume="1"></div></div>
+          <h3>Graphics</h3><div class="menu-col"><button class="btn ${this.dayNight ? 'active' : ''}" data-action="daynight">🌗 Day and night: ${this.dayNight ? 'on' : 'off'}</button></div>
           <p class="muted">The game also saves itself every game year. Saves stay in this browser.</p>`;
       case 'help':
         return `${close}${CITY_HELP}<button class="btn primary" data-action="close">Got it</button>`;

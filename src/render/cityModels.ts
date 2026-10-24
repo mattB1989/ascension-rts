@@ -19,6 +19,8 @@ const metal = () => mat(0x8c939a, { metal: 0.6, rough: 0.45 });
 const darkMetal = () => mat(0x3c4146, { metal: 0.5, rough: 0.5 });
 const glass = () => mat(0x8fd0f0, { metal: 0.6, rough: 0.15 });
 const windowGlow = () => mat(0xffd98a, { emissive: 0xffb84a, rough: 0.4 });
+/** The lit-window material (the renderer brightens it at night). */
+export const windowMaterial = windowGlow;
 const white = () => mat(0xf2f2ee, { rough: 0.7 });
 const grassMat = () => mat(0x6f9a45, { rough: 1 });
 

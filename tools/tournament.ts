@@ -11,6 +11,7 @@
 // Each game runs in its own child process (`jobs` at a time). One game alone:
 //   tools/tournament.ts --game <seed> <size> <years> <difficulty> <biome> <rotation>
 
+import { nextAge } from '../src/sim/city/ages.ts';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { newBot, PERSONALITIES, type Difficulty, type Personality } from '../src/ai/cityBot.ts';
@@ -29,6 +30,10 @@ interface SeatResult {
   share: number;
   population: number;
   age: number;
+  /** Year this seat reached each age (index = age; 0 = start). */
+  ageYears: number[];
+  /** What the next age still lacked at the end ("research 900/1500 …"). */
+  lacking: string;
   regions: number;
   defeated: boolean;
 }
@@ -40,6 +45,8 @@ interface GameResult {
   winner: Personality | null;
   how: string;
   seats: SeatResult[];
+  /** First year any nation reached each age (null: never). */
+  firstAge: Array<number | null>;
 }
 
 function playGame(seed: number, size: number, years: number, difficulty: Difficulty, biome: GenBiome, rotation: number): GameResult {
@@ -53,11 +60,20 @@ function playGame(seed: number, size: number, years: number, difficulty: Difficu
     bot.personality = STRATEGIES[(k + rotation) % STRATEGIES.length];
   });
   let year = 1950;
+  const ageYears = new Map<number, number[]>(seats.map((id) => [id, [1950]]));
   for (let y = 1; y <= years; y++) {
     for (let i = 0; i < 15 * 120; i++) world.step();
     year = 1950 + y;
-    if (city.victory.winner >= 0) break;
+    for (const id of seats) {
+      const list = ageYears.get(id)!;
+      while (list.length <= city.players[id]!.age) list.push(year);
+    }
+    if (city.victory.winner >= 0 && !process.env.PLAY_ON) break;
   }
+  const firstAge: Array<number | null> = [0, 1, 2, 3].map((a) => {
+    const ys = seats.map((id) => ageYears.get(id)![a]).filter((v): v is number => v !== undefined);
+    return ys.length ? Math.min(...ys) : null;
+  });
   const strategyOf = (id: number) => city.bots.find((b) => b.player === id && b.nation)?.personality ?? STRATEGIES[(seats.indexOf(id) + rotation) % STRATEGIES.length]!;
   const out: SeatResult[] = seats.map((id) => {
     const pc = city.players[id]!;
@@ -71,6 +87,8 @@ function playGame(seed: number, size: number, years: number, difficulty: Difficu
       share: world.players[id]!.defeated ? 0 : gdpShare(world, id),
       population: sumTiers(pc.population),
       age: pc.age,
+      ageYears: ageYears.get(id)!,
+      lacking: (nextAge(world, id)?.checks ?? []).filter((c) => !c.ok).map((c) => `${c.label.replace(/^\S+ /, '')} ${c.have}/${c.need}`).join(', '),
       regions,
       defeated: !!world.players[id]!.defeated,
     };
@@ -83,7 +101,7 @@ function playGame(seed: number, size: number, years: number, difficulty: Difficu
     winner.won = true;
     how = winner.how = 'points (GDP share)';
   }
-  return { seed, biome, year, winner: winner.strategy, how, seats: out };
+  return { seed, biome, year, winner: winner.strategy, how, seats: out, firstAge };
 }
 
 function runChild(args: string[]): Promise<GameResult> {
@@ -111,8 +129,17 @@ function report(results: GameResult[]): void {
         `${pct(avg((x) => x.share)).padStart(9)} ${String(Math.round(avg((x) => x.population))).padStart(5)}  ${avg((x) => x.age).toFixed(2)}  ${avg((x) => x.regions).toFixed(1).padStart(7)}  ${String(seats.filter((x) => x.defeated).length).padStart(10)}`,
     );
   }
+  console.log('\nages (first nation to get there, per game):');
+  for (let a = 1; a <= 3; a++) {
+    const ys = results.map((r) => r.firstAge[a]).filter((v): v is number => v !== null && v !== undefined);
+    const seatYs = results.flatMap((r) => r.seats.map((x) => x.ageYears[a])).filter((v): v is number => v !== undefined);
+    const mean = (v: number[]) => (v.length ? Math.round(v.reduce((x, y) => x + y, 0) / v.length) : '—');
+    console.log(`  age ${a}: reached in ${pct(ys.length / Math.max(1, results.length)).trim()} of games (first ~${mean(ys)}), by ${pct(seatYs.length / Math.max(1, results.length * 3)).trim()} of nations (avg ~${mean(seatYs)})`);
+  }
+  console.log('\nstill lacking for the next age at the end:');
+  for (const r of results) for (const x of r.seats) if (x.lacking) console.log(`  seed ${r.seed} ${x.strategy.padEnd(12)} age ${x.age}: ${x.lacking}`);
   console.log('\nper game:');
-  for (const r of results) console.log(`  seed ${r.seed} ${r.biome.padEnd(11)} ${r.year}  ${PERSONALITIES[r.winner!].name} (${r.how})  ` + r.seats.map((x) => `${x.strategy}:${pct(x.share).trim()}${x.defeated ? '✝' : ''}`).join(' '));
+  for (const r of results) console.log(`  seed ${r.seed} ${r.biome.padEnd(11)} ${r.year}  ${PERSONALITIES[r.winner!].name} (${r.how})  ` + r.seats.map((x) => `${x.strategy}:${pct(x.share).trim()}${x.defeated ? '✝' : ''}[${x.ageYears.slice(1).map((y) => String(y).slice(2)).join(',')}]`).join(' '));
 }
 
 const argv = process.argv.slice(2);

@@ -4,11 +4,12 @@
 // turns them to the shore.
 
 import * as THREE from 'three';
-import { Kit } from '../kit.ts';
+import { Kit, type Vec3 } from '../kit.ts';
 import { C, car, chimney, crates, hedge, lamp, lot, pine, tint, tree, type ModelFn } from './common.ts';
 import {
   beam, cones, container, CONTAINER_COLOURS, coolingTower, flag, floodMast, HT, hvac, ladder, lattice, light, OLIVE, prism, pylon, RED_LIGHT,
   panelRow, railing, ribbon, ring, ringRail, sandbags, securityFence, sign, sphereTank, strut, tank, teamOf, transformer, truck, trussX, water,
+  aimRotor, batteryModule, gantry, sheep, solarTable, trackPath, windTurbine,
 } from './infra-parts.ts';
 
 // ---------------------------------------------------------------------------
@@ -247,6 +248,174 @@ function nuclearPlant(team: number): THREE.Group {
   k.windows(1, 0, 0.24, 'x', -1.53, { cx: 1.7 });
   k.box(0.02, 0.02, 0.4, 0xd0402a, -1.65, 0.24, 1.45, { flat: true });
   for (let i = 0; i < 4; i++) car(k, -0.95 + i * 0.28, 1.6, [0xc0392b, 0xecf0f1, 0x34495e, 0x2e86c1][i]!, false);
+  return k.build();
+}
+
+/** Wind farm: three turbines on grazed grass, all facing the wind, gravel tracks to crane pads, a fenced substation. */
+function windFarm(team: number): THREE.Group {
+  const t = teamOf(team);
+  const k = new Kit();
+  lot(k, 3, 3, C.lawn, 'lawn');
+  const gravel = 0xb3a88f;
+  // Mown stripes across the pasture.
+  for (const z of [-0.95, -0.25, 0.45]) k.box(2.8, 0.004, 0.32, C.lawnDark, 0, 0.111, z, { tex: 'lawn', flat: true });
+  // Tracks from the gate on the front edge to each turbine's crane pad and the substation.
+  trackPath(k, [[0.12, 1.44], [0.12, 0.25], [0.02, -0.15], [-0.32, -0.55], [-0.56, -0.74]], 0.12, gravel);
+  trackPath(k, [[0.12, 0.62], [-0.12, 0.78]], 0.12, gravel);
+  trackPath(k, [[0.06, -0.08], [0.44, -0.42]], 0.12, gravel);
+  trackPath(k, [[0.12, 0.98], [0.5, 0.98]], 0.12, gravel);
+  for (const [x, z, a] of [[-0.58, -0.8, 0.6], [0.48, -0.46, -0.7], [-0.14, 0.82, 0.3]] as const) {
+    k.box(0.34, 0.012, 0.24, gravel, x, 0.114, z, { rot: [0, a, 0], flat: true, tex: 'concrete' });
+  }
+  // The turbines (one model, all yawed to the same wind).
+  const yaw = 0.55;
+  const rotors = ([[-0.82, -0.98], [0.68, -0.64], [-0.38, 0.72]] as const).map(([x, z]) => windTurbine(k, x, z, 2.3, 0.82, yaw, t.main));
+  // Substation: a gravel yard behind a fence, a transformer, a busbar gantry, a control house and a pylon taking the line away.
+  const sx = 0.93;
+  const sz = 0.93;
+  k.box(0.88, 0.014, 0.84, 0x8a8478, sx, 0.114, sz, { tex: 'concrete', flat: true });
+  transformer(k, sx + 0.18, sz - 0.2, 0x6f7b72, 0.12);
+  for (const x of [sx - 0.05, sx + 0.38]) k.block(0.03, 0.46, 0.03, 0x8c939a, x, 0.12, sz - 0.2, { surface: 'metal' });
+  k.box(0.46, 0.03, 0.03, 0x8c939a, sx + 0.165, 0.57, sz - 0.2, { surface: 'metal' });
+  for (const x of [sx + 0.05, sx + 0.17, sx + 0.29]) k.cyl(0.01, 0.01, 0.07, 5, 0x6a8a6a, x, 0.52, sz - 0.2, { surface: 'glass' });
+  const hx = sx - 0.2;
+  const hz = sz + 0.2;
+  k.block(0.36, 0.28, 0.28, 0xd8d2c4, hx, 0.12, hz, { tex: 'plaster', bevel: 0.02 });
+  k.box(0.4, 0.04, 0.32, t.main, hx, 0.42, hz, { flat: true });
+  k.box(0.07, 0.15, 0.01, 0x4a5056, hx + 0.09, 0.2, hz + 0.145, { tex: 'panels' });
+  k.windows(1, 0, 0.27, 'z', hz + 0.141, { frame: 0x6a6e72, cx: hx - 0.08, w: 0.12, h: 0.09 });
+  k.windows(1, 0, 0.27, 'x', hx + 0.181, { frame: 0x6a6e72, cx: hz, w: 0.12, h: 0.09 });
+  light(k, hx + 0.09, 0.31, hz + 0.16, 0.025);
+  gantry(k, sx + 0.22, sz + 0.2, 0.3, 0.62, false, 0.12);
+  securityFence(k, sx, sz - 0.43, 0.88, true, 0.2, 0.11, 0.45);
+  securityFence(k, sx, sz + 0.43, 0.88, true, 0.2, 0.11, 0.45);
+  securityFence(k, sx + 0.44, sz, 0.86, false, 0.2, 0.11, 0.45);
+  securityFence(k, sx - 0.44, sz - 0.27, 0.32, false, 0.2, 0.11, 0.45);
+  securityFence(k, sx - 0.44, sz + 0.3, 0.26, false, 0.2, 0.11, 0.45);
+  // Grazing: a hedge along the west side, a few trees by the gate, sheep.
+  hedge(k, -1.36, -0.05, 2.5, false);
+  hedge(k, -0.62, -1.36, 1.4, true);
+  tree(k, -1.1, 1.12, 0.95, 1);
+  tree(k, -0.8, 1.2, 0.8, 2);
+  pine(k, -1.25, 0.88, 0.85);
+  for (const [x, z, a] of [[-0.95, 0.12, 0.4], [-0.78, 0.26, 2.2], [-1.05, -0.3, 1.1], [0.95, 0.12, 3.0], [1.12, -1.18, 0.8], [-0.2, -1.12, 2.6]] as const) sheep(k, x, z, a);
+  const g = k.build();
+  rotors.forEach((at, i) => aimRotor(g, at, yaw, i * 0.75));
+  return g;
+}
+
+/** An inverter cabin: a prefab box along z with louvres on its +x side, a door, a team stripe and a lit status panel. */
+function inverterCabin(k: Kit, x: number, z: number, t: { main: number; light: number }, y0 = 0.11): void {
+  k.block(0.24, 0.03, 0.44, 0x9aa0a6, x, y0, z, { tex: 'concrete', bevel: 0.008 });
+  k.block(0.2, 0.22, 0.4, 0xdfe3e6, x, y0 + 0.03, z, { tex: 'panels', bevel: 0.015 });
+  k.box(0.22, 0.025, 0.42, HT.trim, x, y0 + 0.265, z, { flat: true, surface: 'metal' });
+  k.box(0.202, 0.025, 0.402, t.main, x, y0 + 0.21, z, { flat: true });
+  for (const dz of [-0.11, 0.06]) {
+    k.box(0.006, 0.1, 0.11, 0x3a4048, x + 0.102, y0 + 0.12, z + dz, { flat: true });
+    for (let i = 0; i < 3; i++) k.box(0.01, 0.008, 0.11, 0xb8c0c8, x + 0.105, y0 + 0.09 + i * 0.03, z + dz, { flat: true });
+  }
+  k.box(0.1, 0.17, 0.006, 0x8a939b, x - 0.03, y0 + 0.115, z + 0.202, { flat: true, surface: 'metal' });
+  k.box(0.035, 0.03, 0.006, HT.cyan, x + 0.06, y0 + 0.16, z + 0.203, { glow: 0.9, flat: true });
+  k.block(0.12, 0.04, 0.16, 0xc8ced3, x, y0 + 0.28, z - 0.08, { tex: 'panels' });
+  k.box(0.08, 0.004, 0.12, 0x3a3f44, x, y0 + 0.322, z - 0.08, { flat: true });
+}
+
+/** Solar farm: two blocks of racked photovoltaic rows tilted to the sun, inverter cabins in the aisle, a substation, a weather mast, a fence. */
+function solarFarm(team: number): THREE.Group {
+  const t = teamOf(team);
+  const k = new Kit();
+  lot(k, 4, 3, C.lawnDark, 'lawn');
+  const gravel = 0xb3a88f;
+  // Service track along the front, the aisle between the blocks, and the substation strip.
+  trackPath(k, [[-1.86, 1.12], [1.86, 1.12]], 0.16, gravel);
+  k.box(0.42, 0.012, 2.3, gravel, -0.22, 0.113, -0.1, { tex: 'concrete', flat: true });
+  k.box(0.5, 0.014, 2.34, 0x8a8478, 1.6, 0.114, -0.12, { tex: 'concrete', flat: true });
+  // Panel rows: five rows in each block.
+  for (let r = 0; r < 5; r++) {
+    const z = -1.1 + r * 0.44;
+    solarTable(k, -1.84, -0.48, z, 0.36, 0.5);
+    solarTable(k, 0.04, 1.3, z, 0.36, 0.5);
+  }
+  // Inverter cabins in the aisle.
+  inverterCabin(k, -0.22, -0.76, t);
+  inverterCabin(k, -0.22, 0.28, t);
+  // Substation: transformer, switchgear, the control building with a sign, a pylon line out.
+  transformer(k, 1.6, 0.35, 0x6f7b72, 0.12);
+  k.block(0.3, 0.26, 0.16, 0xc8ced3, 1.6, 0.12, -0.05, { tex: 'panels', bevel: 0.012 });
+  for (let i = 0; i < 3; i++) k.box(0.07, 0.2, 0.006, 0x9aa3ab, 1.5 + i * 0.1, 0.25, 0.033, { flat: true });
+  for (let i = 0; i < 3; i++) k.box(0.02, 0.015, 0.006, i === 2 ? HT.amber : 0x6dff9a, 1.5 + i * 0.1, 0.33, 0.037, { glow: 1, flat: true });
+  techBlock(k, 0.42, 0.34, 0.52, 1.6, -0.62, t, 0.12, 1);
+  sign(k, 1.6, 0.36, -0.355, 0.26, 0.07, t.main);
+  gantry(k, 1.62, 0.8, 0.34, 0.6, true, 0.12);
+  // Weather station: a mast with a pyranometer arm and a cup anemometer that turns.
+  const wx = 1.62;
+  const wz = -1.18;
+  k.cyl(0.012, 0.016, 0.62, 5, 0xc8ccd0, wx, 0.12 + 0.31, wz, { surface: 'metal' });
+  k.box(0.18, 0.012, 0.012, 0xc8ccd0, wx, 0.6, wz, { flat: true });
+  k.box(0.06, 0.012, 0.05, 0x1d3360, wx + 0.08, 0.61, wz, { rot: [0.5, 0, 0], surface: 'glass' });
+  k.box(0.03, 0.03, 0.03, 0xf4f4f0, wx - 0.08, 0.625, wz, { bevel: 0.008 });
+  const s = k.part('spin', [wx, 0.75, wz]);
+  s.cyl(0.006, 0.006, 0.03, 5, 0xc8ccd0, 0, 0, 0);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    s.box(0.06, 0.005, 0.005, 0xc8ccd0, Math.cos(a) * 0.03, 0.01, Math.sin(a) * 0.03, { rot: [0, -a, 0], flat: true });
+    s.box(0.022, 0.022, 0.022, 0xf4f4f0, Math.cos(a) * 0.06, 0.01, Math.sin(a) * 0.06, { rot: [0, -a, 0], flat: true });
+  }
+  // A CCTV pole, a perimeter fence with a gate on the track, a van.
+  k.cyl(0.01, 0.014, 0.5, 5, 0x8c939a, -1.88, 0.12 + 0.25, 1.38, { surface: 'metal' });
+  k.box(0.05, 0.03, 0.03, 0xe8ecef, -1.86, 0.6, 1.38, { bevel: 0.006 });
+  light(k, -1.88, 0.63, 1.38, 0.012, RED_LIGHT);
+  securityFence(k, 0, -1.42, 3.8, true, 0.2, 0.11, 0.55);
+  securityFence(k, -1.92, 0, 2.84, false, 0.2, 0.11, 0.55);
+  securityFence(k, 1.92, 0, 2.84, false, 0.2, 0.11, 0.55);
+  securityFence(k, -1.05, 1.42, 1.74, true, 0.2, 0.11, 0.55);
+  securityFence(k, 1.05, 1.42, 1.74, true, 0.2, 0.11, 0.55);
+  for (const x of [-0.18, 0.18]) k.block(0.04, 0.3, 0.04, 0x8c939a, x, 0.11, 1.42, { surface: 'metal', bevel: 0.008 });
+  car(k, 0.75, 1.14, 0xe8ecef, true);
+  return k.build();
+}
+
+/** Grid battery: two rows of white battery enclosures with glowing status lights, power conversion, a transformer and a fence. */
+function batteryStorage(team: number): THREE.Group {
+  const t = teamOf(team);
+  const k = new Kit();
+  techLot(k, 3, 2, t.light);
+  k.box(2.36, 0.012, 1.12, 0x8f8a80, -0.28, 0.113, -0.2, { tex: 'concrete', flat: true });
+  // Two rows of four enclosures facing the front, a cable trench between them.
+  const lights: Vec3[] = [];
+  for (const z of [-0.5, 0.12]) {
+    for (let i = 0; i < 4; i++) lights.push(batteryModule(k, -1.12 + i * 0.55, z, 0.5, t.light, 0.11, i === 0 ? [-1] : i === 3 ? [1] : []));
+  }
+  k.box(2.1, 0.012, 0.1, 0x6a7178, -0.3, 0.113, -0.22, { tex: 'concrete', flat: true });
+  for (let i = 0; i < 4; i++) k.box(0.004, 0.014, 0.1, 0x4a5056, -1.2 + i * 0.55, 0.114, -0.22, { flat: true });
+  lights.forEach((at) => {
+    const f = k.part('flare', at);
+    for (const dy of [-0.02, 0.02]) f.box(0.03, 0.022, 0.006, dy < 0 ? 0x5dff8a : 0x9dffc0, 0, dy, 0, { glow: 1, flat: true });
+  });
+  // Power conversion skid and transformer on the east side, a pylon carrying the line.
+  const px = 1.12;
+  k.block(0.42, 0.04, 0.36, 0x9aa0a6, px, 0.11, 0.18, { tex: 'concrete', bevel: 0.01 });
+  k.block(0.36, 0.26, 0.28, 0xd6dce1, px, 0.15, 0.18, { tex: 'panels', bevel: 0.018 });
+  for (let i = 0; i < 3; i++) k.box(0.09, 0.18, 0.006, 0xa4adb6, px - 0.11 + i * 0.11, 0.27, 0.323, { flat: true });
+  for (let i = 0; i < 3; i++) k.box(0.022, 0.016, 0.006, i === 1 ? HT.amber : 0x6dff9a, px - 0.11 + i * 0.11, 0.35, 0.327, { glow: 1, flat: true });
+  k.box(0.38, 0.02, 0.3, t.main, px, 0.42, 0.18, { flat: true });
+  hvac(k, px, 0.43, 0.18, 0.2, 0.14, 0xc8ced3);
+  transformer(k, px, -0.5, 0x6f7b72, 0.11);
+  gantry(k, 1.2, -0.12, 0.36, 0.62, true);
+  // Fire-water tank and the control room by the gate (a dish on its roof); the fence with a gate on the front.
+  k.cyl(0.11, 0.11, 0.3, 12, 0xc0402a, -1.3, 0.11 + 0.15 + 0.02, 0.62, { surface: 'gloss', bevel: 0.015 });
+  k.cyl(0.13, 0.13, 0.02, 12, 0x9aa0a6, -1.3, 0.12, 0.62, { flat: true });
+  techBlock(k, 0.5, 0.24, 0.3, -0.78, 0.6, t, 0.11, 1);
+  k.cyl(0.008, 0.008, 0.08, 4, HT.trim, -0.62, 0.45, 0.55);
+  k.add(new THREE.SphereGeometry(0.06, 8, 3, 0, Math.PI * 2, 0, 1.0), HT.panel, -0.62, 0.53, 0.55, { rot: [2.4, 0.6, 0], flat: true, surface: 'gloss' });
+  securityFence(k, 0, -0.94, 2.9, true, 0.2, 0.11, 0.45);
+  securityFence(k, -1.44, 0, 1.86, false, 0.2, 0.11, 0.45);
+  securityFence(k, 1.44, 0, 1.86, false, 0.2, 0.11, 0.45);
+  securityFence(k, -0.95, 0.94, 0.98, true, 0.2, 0.11, 0.45);
+  securityFence(k, 0.85, 0.94, 1.18, true, 0.2, 0.11, 0.45);
+  car(k, 0.0, 0.62, 0xe8ecef, true);
+  for (const x of [-0.24, 0.24]) k.box(0.012, 0.004, 0.24, C.hazard, x, 0.113, 0.62, { flat: true });
+  floodMast(k, 1.32, 0.8, 0.7, 0.11, Math.PI / 4);
   return k.build();
 }
 
@@ -1135,6 +1304,9 @@ export const INFRA_MODELS: Record<string, ModelFn> = {
   power_plant: powerPlant,
   hydro_plant: hydroPlant,
   nuclear_plant: nuclearPlant,
+  wind_farm: windFarm,
+  solar_farm: solarFarm,
+  battery_storage: batteryStorage,
   pumping_station: pumpingStation,
   water_well: waterWell,
   water_tower: waterTower,

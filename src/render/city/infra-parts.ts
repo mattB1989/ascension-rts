@@ -234,8 +234,8 @@ export function transformer(k: Kit, x: number, z: number, hex = 0x6f7b72, y0 = 0
 }
 
 /** A chain-link security fence along x or z: posts, rails and a dark mesh. */
-export function securityFence(k: Kit, x: number, z: number, len: number, alongX = true, h = 0.2, y0 = 0.11): void {
-  const n = Math.max(1, Math.round(len / 0.32));
+export function securityFence(k: Kit, x: number, z: number, len: number, alongX = true, h = 0.2, y0 = 0.11, gap = 0.32): void {
+  const n = Math.max(1, Math.round(len / gap));
   for (let i = 0; i <= n; i++) {
     const t = -len / 2 + (len * i) / n;
     k.box(0.018, h + 0.03, 0.018, 0x8c939a, alongX ? x + t : x, y0 + (h + 0.03) / 2, alongX ? z : z + t, { flat: true, surface: 'metal' });
@@ -388,6 +388,185 @@ export function sandbags(k: Kit, x: number, z: number, len: number, alongX = tru
       k.box(alongX ? 0.095 : 0.07, 0.045, alongX ? 0.07 : 0.095, tint(SAND, 0.92 + ((i + r) % 3) * 0.05), alongX ? x + t : x, 0.135 + r * 0.045, alongX ? z : z + t, { bevel: 0.012, edge: 1.1 });
     }
   }
+}
+
+/** A gravel track on the ground through the points (x, z), with rounded joints. */
+export function trackPath(k: Kit, pts: Array<[number, number]>, w: number, hex = 0xb3a88f, y = 0.113): void {
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [ax, az] = pts[i]!;
+    const [bx, bz] = pts[i + 1]!;
+    const len = Math.hypot(bx - ax, bz - az);
+    k.box(len, 0.012, w, hex, (ax + bx) / 2, y, (az + bz) / 2, { rot: [0, -Math.atan2(bz - az, bx - ax), 0], flat: true, tex: 'concrete' });
+  }
+  for (let i = 1; i + 1 < pts.length; i++) k.cyl(w / 2, w / 2, 0.012, 8, hex, pts[i]![0], y, pts[i]![1], { flat: true, tex: 'concrete' });
+}
+
+const BLADE = 0xfafbf8;
+
+/** An open cylinder (a band round a tower or tank: no caps). */
+export function hoop(k: Kit, r: number, h: number, seg: number, hex: number, x: number, y: number, z: number, o: PartOpts = {}): void {
+  k.add(new THREE.CylinderGeometry(r, r, h, seg, 1, true), hex, x, y, z, { flat: true, ...o });
+}
+
+/** One rotor blade lying in the x-z plane along angle a: tapered, flattened, pitched, with a red tip. */
+function blade(k: Kit, a: number, r0: number, r1: number): void {
+  const piece = (from: number, to: number, w0: number, w1: number, hex: number) => {
+    const g = new THREE.CylinderGeometry(w1, w0, to - from, 4);
+    g.translate(0, (from + to) / 2, 0);
+    g.scale(1, 1, 0.26);
+    g.rotateY(0.32);
+    g.rotateX(Math.PI / 2);
+    g.rotateY(a);
+    k.add(g, hex, 0, 0, 0, { flat: true, surface: 'gloss' });
+  };
+  const len = r1 - r0;
+  const w = (f: number) => 0.07 - 0.052 * f;
+  piece(r0, r0 + len * 0.86, w(0), w(0.86), BLADE);
+  piece(r0 + len * 0.86, r1, w(0.86), w(1), 0xd8442e);
+}
+
+/**
+ * A modern three-bladed wind turbine standing on y0 at (x, z): a footing, a
+ * tapered white tower with a team band and a door, a nacelle facing `yaw` (0:
+ * +z), a red 'flare' beacon and a 'spin' rotor built flat. Returns the rotor's
+ * pivot: after build, `aimRotor` turns it to face `yaw` on a horizontal axis.
+ */
+export function windTurbine(k: Kit, x: number, z: number, hub: number, r: number, yaw: number, band: number, y0 = 0.11): Vec3 {
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  // Footing, tower, flanges, a team band and a door at the base.
+  k.cyl(0.15, 0.17, 0.05, 10, C.concrete, x, y0 + 0.025, z, { tex: 'concrete', bevel: 0.012 });
+  const th = hub - y0 - 0.12;
+  k.add(new THREE.CylinderGeometry(0.042, 0.075, th, 10, 1, true), BLADE, x, y0 + 0.05 + th / 2, z);
+  hoop(k, 0.0755, 0.05, 10, band, x, y0 + 0.1, z);
+  hoop(k, 0.0735, 0.03, 10, tint(band, 1.3), x, y0 + 0.155, z);
+  hoop(k, 0.056, 0.012, 10, 0xc8ccd0, x, y0 + 0.05 + th * 0.55, z);
+  k.box(0.035, 0.07, 0.02, 0x4a5056, x + 0.045, y0 + 0.1, z + 0.058, { flat: true, rot: [0, 0.65, 0] });
+  k.box(0.06, 0.012, 0.05, C.metalDark, x + 0.06, y0 + 0.055, z + 0.075, { flat: true, rot: [0, 0.65, 0] });
+  // Nacelle: a rounded box along the wind, a cooler and wind vane at the back, a yaw bearing.
+  const ny = hub - y0 - 0.12 + y0 + 0.05;
+  k.cyl(0.05, 0.048, 0.04, 10, 0xd0d4d8, x, ny + 0.02, z, { surface: 'metal' });
+  k.box(0.13, 0.12, 0.4, BLADE, x - fx * 0.05, hub, z - fz * 0.05, { rot: [0, yaw, 0], bevel: 0.035, edge: 1.08, surface: 'gloss' });
+  k.box(0.1, 0.012, 0.36, band, x - fx * 0.05, hub - 0.03, z - fz * 0.05, { rot: [0, yaw, 0], flat: true });
+  k.box(0.08, 0.03, 0.08, 0xd0d4d8, x - fx * 0.2, hub + 0.07, z - fz * 0.2, { rot: [0, yaw, 0], bevel: 0.01 });
+  k.box(0.006, 0.07, 0.006, C.metalDark, x - fx * 0.14, hub + 0.09, z - fz * 0.14, { flat: true });
+  k.box(0.03, 0.006, 0.006, C.metalDark, x - fx * 0.14, hub + 0.125, z - fz * 0.14, { flat: true, rot: [0, yaw, 0] });
+  const f = k.part('flare', [x - fx * 0.2, hub + 0.1, z - fz * 0.2]);
+  light(f, 0, 0, 0, 0.04, RED_LIGHT);
+  // Rotor: hub, spinner and three blades about its own y.
+  const at: Vec3 = [x + fx * 0.16, hub, z + fz * 0.16];
+  const s = k.part('spin', at);
+  s.cyl(0.055, 0.062, 0.07, 10, BLADE, 0, 0, 0, { surface: 'gloss', flat: true });
+  s.add(new THREE.ConeGeometry(0.06, 0.1, 10), BLADE, 0, 0.085, 0, { surface: 'gloss', flat: true });
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    s.add(new THREE.CylinderGeometry(0.028, 0.032, 0.05, 6).translate(0, 0.07, 0).rotateX(Math.PI / 2).rotateY(a), 0xdfe2e4, 0, 0, 0, { flat: true, surface: 'gloss' });
+    blade(s, a, 0.05, r);
+  }
+  return at;
+}
+
+/**
+ * Stand a 'spin' part built flat (axis y, pivot at `at`) up on a horizontal axis
+ * facing `yaw` (0: +z), started at `phase`: it goes into a yawed pivot so the
+ * renderer, which turns 'spin' parts about their own y, turns it like a rotor.
+ */
+export function aimRotor(g: THREE.Object3D, at: Vec3, yaw: number, phase = 0): void {
+  const hits: THREE.Object3D[] = [];
+  const p = new THREE.Vector3(...at);
+  g.traverse((o) => {
+    if (o.name === 'spin' && o.position.distanceTo(p) < 1e-4) hits.push(o);
+  });
+  for (const o of hits) {
+    const pivot = new THREE.Group();
+    pivot.position.copy(o.position);
+    pivot.rotation.y = yaw;
+    o.parent!.add(pivot);
+    pivot.add(o);
+    o.position.set(0, 0, 0);
+    o.rotation.set(Math.PI / 2, phase, 0);
+  }
+}
+
+/** A sheep grazing (wind farms keep their grass short). */
+export function sheep(k: Kit, x: number, z: number, a: number): void {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  k.box(0.09, 0.06, 0.055, 0xece8dc, x, 0.15, z, { rot: [0, -a, 0], bevel: 0.02, edge: 1.05 });
+  k.box(0.035, 0.035, 0.032, 0x2a2622, x + c * 0.055, 0.165, z + s * 0.055, { rot: [0, -a, 0], flat: true });
+}
+
+/**
+ * A row of photovoltaic tables along x from x0 to x1 at z: racked modules tilted
+ * up toward +z (dark-blue cells in silver frames) on front and back posts.
+ */
+export function solarTable(k: Kit, x0: number, x1: number, z: number, depth: number, tiltA: number, y0 = 0.11, low = 0.08): void {
+  const len = x1 - x0;
+  const cx = (x0 + x1) / 2;
+  const rise = depth * Math.sin(tiltA);
+  const run = depth * Math.cos(tiltA);
+  const cy = y0 + low + rise / 2;
+  // Posts (front short, back tall) and a rail under each edge.
+  const posts = Math.max(2, Math.round(len / 0.6) + 1);
+  for (let i = 0; i < posts; i++) {
+    const px = x0 + 0.06 + ((len - 0.12) * i) / (posts - 1);
+    k.block(0.018, low + 0.01, 0.018, 0x9aa2a8, px, y0, z + run * 0.36, { flat: true, surface: 'metal' });
+    k.block(0.018, low + rise * 0.86, 0.018, 0x9aa2a8, px, y0, z - run * 0.36, { flat: true, surface: 'metal' });
+  }
+  // The frame (silver), then modules in pairs up the slope with a hairline between them.
+  // A point on the table: u along x, v down the slope (+: toward the low front edge), w off its face.
+  const P = (v: number, w: number): [number, number] => [cy - v * Math.sin(tiltA) + w * Math.cos(tiltA), z + v * Math.cos(tiltA) + w * Math.sin(tiltA)];
+  const [fy, fz] = P(0, -0.006);
+  k.box(len, 0.012, depth, 0xc4cad0, cx, fy, fz, { rot: [tiltA, 0, 0], flat: true, surface: 'metal' });
+  const n = Math.max(1, Math.round(len / 0.34));
+  const mw = len / n - 0.014;
+  const [my, mz] = P(0, 0.003);
+  for (let i = 0; i < n; i++) {
+    const mx = x0 + (len * (i + 0.5)) / n;
+    k.box(mw, 0.008, depth - 0.024, 0x1d3360, mx, my, mz, { rot: [tiltA, 0, 0], flat: true, surface: 'glass', tex: 'glass', glow: 0.04 });
+  }
+  const [ly, lz] = P(0, 0.008);
+  k.box(len - 0.01, 0.004, 0.008, 0xc4cad0, cx, ly, lz, { rot: [tiltA, 0, 0], flat: true, surface: 'metal' });
+}
+
+/**
+ * A grid-battery enclosure along x standing on y0 at (x, z): a white cabinet on a
+ * plinth, door seams and handles on its +z face, louvred ends, roof fans and a
+ * lit band. Returns where its status lights go (on the +z face).
+ */
+export function batteryModule(k: Kit, x: number, z: number, len: number, accent: number, y0 = 0.11, ends: number[] = [-1, 1]): Vec3 {
+  const h = 0.3;
+  const d = 0.26;
+  const yb = y0 + 0.04;
+  k.block(len + 0.05, 0.04, d + 0.06, 0x9aa0a6, x, y0, z, { tex: 'concrete' });
+  k.block(len, h, d, HT.panel, x, yb, z, { tex: 'panels', bevel: 0.022, edge: 1.1 });
+  k.box(len + 0.006, 0.03, d + 0.006, HT.trim, x, yb + 0.015, z, { flat: true, surface: 'metal' });
+  // Doors: seams and handles on the front; a dark panel for the status lights.
+  const doors = Math.max(2, Math.round(len / 0.17));
+  for (let i = 1; i < doors; i++) k.box(0.006, h - 0.07, 0.006, 0xa4adb6, x - len / 2 + (len * i) / doors, yb + 0.03 + (h - 0.07) / 2 + 0.01, z + d / 2 + 0.002, { flat: true });
+  const lx = x + len / 2 - len / doors / 2;
+  k.box(0.045, 0.08, 0.008, 0x1f252b, lx, yb + h * 0.62, z + d / 2 + 0.003, { flat: true, surface: 'gloss' });
+  // Louvred ends (the given sides: -1 west, 1 east).
+  for (const s of ends) {
+    const ex = x + s * (len / 2 + 0.003);
+    k.box(0.006, h * 0.62, d * 0.72, 0x3a4048, ex, yb + h * 0.48, z, { flat: true });
+    for (let i = 0; i < 2; i++) k.box(0.01, 0.01, d * 0.72, 0xb8c0c8, ex + s * 0.003, yb + h * 0.3 + i * h * 0.2, z, { flat: true });
+  }
+  // Roof: two fan units with dark grilles and a lit band along the front edge.
+  for (const s of [-1, 1]) {
+    const fx = x + s * len * 0.24;
+    k.block(len * 0.36, 0.035, d * 0.7, 0xd6dce1, fx, yb + h, z - 0.01, { bevel: 0.008, tex: 'panels' });
+    k.add(new THREE.CircleGeometry(0.05, 10).rotateX(-Math.PI / 2), 0x2a3036, fx, yb + h + 0.037, z - 0.01, { flat: true });
+  }
+  k.box(len * 0.92, 0.02, 0.008, accent, x, yb + h - 0.05, z + d / 2 + 0.004, { glow: 0.95, flat: true });
+  return [lx, yb + h * 0.62, z + d / 2 + 0.008];
+}
+
+/** A line gantry: an H-frame of two posts and a crossbar with hanging insulators, its bar along x (or z). */
+export function gantry(k: Kit, x: number, z: number, w: number, h: number, alongX = true, y0 = 0.11, hex = 0x8c939a): void {
+  for (const s of [-1, 1]) k.block(0.035, h, 0.035, hex, alongX ? x + (s * w) / 2 : x, y0, alongX ? z : z + (s * w) / 2, { surface: 'metal', bevel: 0.006 });
+  k.box(alongX ? w + 0.06 : 0.035, 0.035, alongX ? 0.035 : w + 0.06, hex, x, y0 + h, z, { surface: 'metal' });
+  for (const f of [-0.3, 0, 0.3]) k.cyl(0.01, 0.01, 0.07, 5, 0x6a8a6a, alongX ? x + f * w : x, y0 + h - 0.05, alongX ? z : z + f * w, { surface: 'glass' });
 }
 
 /** Box opts with a bevel, the usual for building blocks. */

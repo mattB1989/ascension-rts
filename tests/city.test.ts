@@ -1122,3 +1122,33 @@ test('gradual unlocks: buildings open up as the town grows, and each is announce
   const open = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
   assert.equal(cityBuildProblem(open, 0, 'iron_mine'), null);
 });
+
+test('war pays: spoils when a seat falls, reparations from the weaker side at peace, domination counts conquests', async () => {
+  const { captureRegion, reparations, setWar } = await import('../src/sim/city/military.ts');
+  const { thresholds, victoryProgress } = await import('../src/sim/city/victory.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 1, nations: 1, difficulty: 'easy' });
+  const nation = world.players.find((p) => p.role === 'nation')!.id;
+  const them = world.city!.players[nation]!;
+  const me = world.city!.players[0]!;
+  them.credits = 20000;
+  const before = me.credits;
+  setWar(world, 0, nation, true);
+  const hall = world.buildings.find((b) => b.owner === nation && b.type === 'town_hall')!;
+  captureRegion(world, hall, 0);
+  assert.ok(me.credits > before, 'spoils from their treasury');
+  assert.ok(world.players[nation]!.defeated, 'their only seat: defeated');
+  assert.equal(them.credits, 0, 'the whole treasury goes to the victor');
+  // Reparations: the side with far fewer troops pays.
+  const w2 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 1, difficulty: 'easy' });
+  const n2 = w2.players.find((p) => p.role === 'nation')!.id;
+  w2.city!.players[n2]!.credits = 10000;
+  for (let k = 0; k < 6; k++) w2.spawnUnit('rifleman', 0, 10 + k, 10);
+  const mine = w2.city!.players[0]!.credits;
+  reparations(w2, 0, n2);
+  assert.ok(w2.city!.players[0]!.credits > mine, 'the weaker side paid');
+  assert.ok(w2.city!.players[n2]!.credits < 10000);
+  // Domination: a higher bar than federation, reached by any means.
+  const th = thresholds(world);
+  assert.ok(th.dominationShare > th.regionShare);
+  assert.ok(victoryProgress(world, 0).some((g) => g.kind === 'domination'));
+});

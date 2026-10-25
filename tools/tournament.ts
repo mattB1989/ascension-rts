@@ -99,7 +99,7 @@ const pct = (x: number) => `${Math.round(x * 100)}%`.padStart(5);
 
 function report(results: GameResult[]): void {
   console.log(`\n${results.length} games\n`);
-  console.log('strategy        wins   win%  economic federation space conquest points   GDP share  pop    age  regions  eliminated');
+  console.log('strategy        wins   win%  economic federation domination space conquest points   GDP share  pop    age  regions  eliminated');
   for (const s of STRATEGIES) {
     const seats = results.flatMap((r) => r.seats.filter((x) => x.strategy === s));
     const wins = seats.filter((x) => x.won);
@@ -107,7 +107,7 @@ function report(results: GameResult[]): void {
     const avg = (f: (x: SeatResult) => number) => seats.reduce((a, x) => a + f(x), 0) / Math.max(1, seats.length);
     console.log(
       `${PERSONALITIES[s].name.padEnd(15)} ${String(wins.length).padStart(4)} ${pct(wins.length / Math.max(1, results.length))}  ` +
-        `${String(by('economic')).padStart(8)} ${String(by('federation')).padStart(10)} ${String(by('space')).padStart(5)} ${String(by('conquest')).padStart(8)} ${String(by('points')).padStart(6)}   ` +
+        `${String(by('economic')).padStart(8)} ${String(by('federation')).padStart(10)} ${String(by('domination')).padStart(10)} ${String(by('space')).padStart(5)} ${String(by('conquest')).padStart(8)} ${String(by('points')).padStart(6)}   ` +
         `${pct(avg((x) => x.share)).padStart(9)} ${String(Math.round(avg((x) => x.population))).padStart(5)}  ${avg((x) => x.age).toFixed(2)}  ${avg((x) => x.regions).toFixed(1).padStart(7)}  ${String(seats.filter((x) => x.defeated).length).padStart(10)}`,
     );
   }

@@ -6,7 +6,7 @@
 import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { World } from '../world.ts';
 import { DIPLO, isCityState, newRelations, relationsOf, type Relations } from './diplomacy.ts';
-import { atWar, setWar } from './military.ts';
+import { atWar, reparations, setWar } from './military.ts';
 import { PERSONALITIES } from '../../ai/cityBot.ts';
 
 export type TreatyKind = 'peace' | 'research' | 'trade';
@@ -197,6 +197,7 @@ export function peaceProblem(world: World, from: number, to: number): string | n
 export function offerPeace(world: World, from: number, to: number): string | null {
   const why = peaceProblem(world, from, to);
   if (why) return why;
+  reparations(world, from, to);
   setWar(world, from, to, false);
   world.emit({ kind: 'notify', player: -1, text: `🕊 ${world.players[from]!.name} and ${world.players[to]!.name} made peace` });
   return null;

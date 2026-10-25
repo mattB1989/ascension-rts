@@ -12,7 +12,7 @@ import { addCityBuilding, demolish, placeCityBuilding, stockUp } from './place.t
 import { placeRoads, removeRoads, setRoad } from './roads.ts';
 import { createCityState } from './state.ts';
 import { annex, DIPLO, isCityState, newRelations, purchasePrice, relationsOf } from './diplomacy.ts';
-import { atWar, recruit, setWar } from './military.ts';
+import { atWar, recruit, reparations, setWar } from './military.ts';
 import { advanceAge } from './ages.ts';
 import { placeRails, removeRails } from './rail.ts';
 import { placePipes, removePipes } from './pipes.ts';
@@ -203,6 +203,7 @@ export function applyCityCommand(world: World, c: CityCommand): void {
         }
         break;
       }
+      reparations(world, c.player, c.target);
       setWar(world, c.player, c.target, false);
       world.emit({ kind: 'notify', player: -1, text: `🕊 ${world.players[c.player]!.name} and ${world.players[c.target]!.name} made peace` });
       break;

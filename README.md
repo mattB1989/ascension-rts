@@ -71,7 +71,10 @@ original **Twin Shores** skirmish.
   with their town hall by truck, as with a city-state). Breaking a pact costs trust, and peace
   must be agreed: a nation talks after a long war or when it is losing, and its own offers of
   peace wait for your answer. Long wars make people weary (less happy) until peace returns.
-  Troops far from your seats and Supply Depots wear down; near them they mend. Shipyards and
+  War pays: taking a seat brings its region with its people and industry plus a share of the
+  loser's treasury (40% for a capital), a defeated nation's whole treasury goes to the victor, and
+  at peace the clearly weaker side pays reparations. Domination victory: hold enough regions,
+  however won. Troops far from your seats and Supply Depots wear down; near them they mend. Shipyards and
   Airfields build a navy and an air force; enemy warships off a trade port blockade it.
   An **embargo** stops all trade with a nation, and city-states that like you (40+) more than
   them stop trading with them too; it ends any trade agreement and is a cause for war. AI

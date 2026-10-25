@@ -7,11 +7,12 @@ import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { World } from '../world.ts';
 import { updateScenario } from './scenarios.ts';
 
-export type VictoryKind = 'economic' | 'federation' | 'space' | 'conquest';
+export type VictoryKind = 'economic' | 'federation' | 'domination' | 'space' | 'conquest';
 
 export const VICTORY_NAMES: Record<VictoryKind, string> = {
   economic: 'Economic victory',
   federation: 'Federation victory',
+  domination: 'Domination victory',
   space: 'Space victory',
   conquest: 'Conquest victory',
 };
@@ -48,12 +49,14 @@ function contenders(world: World): number[] {
  * The bar for each victory, lower when more nations share the map: with four nations,
  * half of world GDP or half of all regions is out of reach in a game's lifetime.
  */
-export function thresholds(world: World): { gdpShare: number; gdpYears: number; regionShare: number } {
+export function thresholds(world: World): { gdpShare: number; gdpYears: number; regionShare: number; dominationShare: number } {
   const nations = world.players.filter((p) => p.role !== 'cityState').length;
   return {
     gdpShare: Math.min(VICTORY.gdpShare, Math.round((1.4 / (nations + 1)) * 100) / 100),
     gdpYears: nations > 2 ? Math.round(VICTORY.gdpYears * 0.8) : VICTORY.gdpYears,
     regionShare: Math.min(VICTORY.regionShare, Math.round((1.6 / (nations + 1)) * 100) / 100),
+    // Holding land by any means: a higher bar than federation, but war counts.
+    dominationShare: Math.min(0.66, Math.round((2.2 / (nations + 1)) * 100) / 100),
   };
 }
 
@@ -89,6 +92,7 @@ export function victoryProgress(world: World, player: number): Array<{ kind: Vic
   return [
     { kind: 'economic', frac: Math.min(1, (share >= th.gdpShare ? v.gdpYears[player]! : 0) / th.gdpYears), text: `${Math.round(share * 100)}% of world GDP (need ${Math.round(th.gdpShare * 100)}% for ${th.gdpYears} years) · ${v.gdpYears[player]} year${v.gdpYears[player] === 1 ? '' : 's'} so far` },
     { kind: 'federation', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.regionShare)), text: `${reg.held} of ${reg.total} regions (need ${Math.ceil(reg.total * th.regionShare)}, at least half joined peacefully${reg.conquered ? `; ${reg.conquered} taken by force` : ''})` },
+    { kind: 'domination', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.dominationShare)), text: `${reg.held} of ${reg.total} regions held, however won (need ${Math.ceil(reg.total * th.dominationShare)})` },
     { kind: 'space', frac: Math.min(1, years / VICTORY.elevatorYears), text: `Space Elevator running ${years.toFixed(1)} of ${VICTORY.elevatorYears} years` },
     { kind: 'conquest', frac: rivals.length ? beaten / rivals.length : 0, text: rivals.length ? `${beaten} of ${rivals.length} rival nation${rivals.length > 1 ? 's' : ''} defeated` : 'No rival nations in this game' },
   ];
@@ -122,6 +126,7 @@ export function updateVictory(world: World, sec: number): void {
     if (v.gdpYears[p]! >= th.gdpYears) return win(world, p, 'economic');
     const reg = regionsHeld(world, p);
     if (reg.held >= Math.ceil(reg.total * th.regionShare) && reg.held - reg.conquered >= reg.held * VICTORY.peacefulShare) return win(world, p, 'federation');
+    if (reg.held >= Math.ceil(reg.total * th.dominationShare)) return win(world, p, 'domination');
   }
   // Conquest: one contender left standing, where there were rivals.
   const rivalsEver = world.players.filter((p) => p.role !== 'cityState').length;

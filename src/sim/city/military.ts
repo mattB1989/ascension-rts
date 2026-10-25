@@ -166,6 +166,32 @@ function updateCapture(world: World): void {
   }
 }
 
+/** What winning pays: share of the loser's treasury taken with a region (or its capital), and reparations at peace. */
+export const WAR_SPOILS = { region: 0.2, capital: 0.4, reparations: 0.25, reparationsGdp: 0.5, weakerRatio: 0.7 } as const;
+
+/**
+ * Peace terms: the clearly weaker side (fewer troops, or fewer regions than it started the war
+ * with) pays reparations to the stronger one.
+ */
+export function reparations(world: World, a: number, b: number): void {
+  const city = world.city!;
+  const army = (p: number) => world.units.filter((u) => u.owner === p && !u.def.builder).length;
+  const [ia, ib] = [army(a), army(b)];
+  let payer = -1;
+  if (ia < ib * WAR_SPOILS.weakerRatio) payer = a;
+  else if (ib < ia * WAR_SPOILS.weakerRatio) payer = b;
+  if (payer < 0) return;
+  const to = payer === a ? b : a;
+  const pc = city.players[payer]!;
+  const amount = Math.floor(Math.max(0, Math.min(pc.credits * WAR_SPOILS.reparations, 3000 + pc.lastGdp * WAR_SPOILS.reparationsGdp)));
+  if (amount <= 0) return;
+  pc.credits -= amount;
+  city.players[to]!.credits += amount;
+  city.players[to]!.year.trade += amount;
+  world.emit({ kind: 'notify', player: payer, text: `🕊 Peace terms: you pay ₡${amount.toLocaleString('en')} in reparations to ${world.players[to]!.name}` });
+  world.emit({ kind: 'notify', player: to, text: `🕊 Peace terms: ${world.players[payer]!.name} pays you ₡${amount.toLocaleString('en')} in reparations` });
+}
+
 /** A seat falls: its region, and everything built in it, changes hands. */
 export function captureRegion(world: World, seat: Building, to: number): void {
   const city = world.city!;
@@ -175,6 +201,15 @@ export function captureRegion(world: World, seat: Building, to: number): void {
   if (reg) {
     city.regionOwner[reg] = to;
     city.victory.conquered[to] = (city.victory.conquered[to] ?? 0) + 1;
+  }
+  // Spoils: a share of the loser's treasury (more for a capital).
+  const loser = city.players[from]!;
+  const winner = city.players[to]!;
+  const loot = Math.floor(Math.max(0, loser.credits) * (seat.type === 'town_hall' ? WAR_SPOILS.capital : WAR_SPOILS.region));
+  if (loot > 0) {
+    loser.credits -= loot;
+    winner.credits += loot;
+    winner.year.trade += loot;
   }
   for (const b of world.buildings) {
     const r = map.region[Math.floor(b.y) * map.width + Math.floor(b.x)]!;
@@ -195,12 +230,18 @@ export function captureRegion(world: World, seat: Building, to: number): void {
   }
   exploreRegion(world, to, reg);
   const name = map.regions[reg - 1]?.name ?? 'A region';
-  world.emit({ kind: 'notify', player: to, text: `⚔ ${name} taken`, x: seat.x, y: seat.y });
-  world.emit({ kind: 'notify', player: from, text: `⚔ ${name} has fallen to ${world.players[to]?.name ?? 'the enemy'}`, x: seat.x, y: seat.y });
+  world.emit({ kind: 'notify', player: to, text: `⚔ ${name} taken, with its people and industry${loot ? `, and ₡${loot.toLocaleString('en')} in spoils` : ''}`, x: seat.x, y: seat.y });
+  world.emit({ kind: 'notify', player: from, text: `⚔ ${name} has fallen to ${world.players[to]?.name ?? 'the enemy'}${loot ? ` (₡${loot.toLocaleString('en')} lost)` : ''}`, x: seat.x, y: seat.y });
   // No seat left: that player is out.
   if (!world.buildings.some((b) => b.owner === from && isSeat(b))) {
     world.players[from]!.defeated = true;
     world.emit({ kind: 'defeated', player: from, by: to });
+    // The whole treasury goes to the victor.
+    if (loser.credits > 0) {
+      winner.credits += loser.credits;
+      winner.year.trade += loser.credits;
+      loser.credits = 0;
+    }
     for (const b of world.buildings) if (b.owner === from) b.owner = to;
     for (let r = 0; r < city.regionOwner.length; r++) {
       if (city.regionOwner[r] !== from) continue;

@@ -162,7 +162,7 @@ export const CITY_BUILDINGS = {
   oil_refinery: {
     ...common, id: 'oil_refinery', name: 'Oil Refinery', category: 'industry', requires: [], buildTime: 35, hp: 1600, size: [4, 4],
     placement: 'land', vision: 5,
-    econ: { credits: 1600, materials: { steel: 20, concrete: 20 }, upkeep: 120, jobs: { tier: 0, count: 10 }, recipe: { in: { oil: 2 }, out: { fuel: 1, plastics: 1 }, seconds: 8 }, power: 6, trucks: 2, pollution: 0.8 },
+    econ: { credits: 1600, materials: { steel: 20, concrete: 20 }, upkeep: 120, jobs: { tier: 0, count: 10 }, recipe: { in: { oil: 2 }, out: { fuel: 1, plastics: 2 }, seconds: 8 }, power: 6, trucks: 2, pollution: 0.8 },
     description: 'Splits crude oil into fuel and plastics.',
   },
   goods_factory: {

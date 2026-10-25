@@ -10,7 +10,7 @@ import type { World } from '../world.ts';
 import { add } from './state.ts';
 
 export const EVENTS = {
-  oilShock: { chance: 0.07, from: 8, years: 2, price: 2.3 },
+  oilShock: { chance: 0.05, from: 8, years: 2, price: 2.3 },
   recession: { chance: 0.05, from: 6, years: 1, taxes: 0.8, exports: 0.85 },
   epidemic: { chance: 0.04, poorHealth: 0.08, uncovered: 0.08, covered: 0.02 },
   flood: { chance: 0.04, seconds: 40 },

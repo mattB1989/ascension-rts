@@ -104,7 +104,7 @@ function count(world: World, player: number, type: string): number {
 }
 
 /** Buildings that keep a town growing and its houses moving up a level (taxes come from people): never held back to save money. */
-const ESSENTIAL = new Set<string>(['house', 'farm', 'food_plant', 'fishing_harbour', 'market', 'pumping_station', 'water_well', 'water_tower', 'police_station', 'logging_camp', 'sawmill', 'quarry', 'cement_works', 'oil_well', 'power_plant', 'hydro_plant', 'clinic', 'school']);
+const ESSENTIAL = new Set<string>(['house', 'farm', 'food_plant', 'fishing_harbour', 'market', 'pumping_station', 'water_well', 'water_tower', 'police_station', 'logging_camp', 'sawmill', 'quarry', 'cement_works', 'oil_well', 'power_plant', 'hydro_plant', 'wind_farm', 'clinic', 'school']);
 
 /** A finished building of this kind standing idle: another one would idle too. */
 const IDLE = /^(Needs|No |Short of staff|Storage full)/;
@@ -511,7 +511,8 @@ function townStep(world: World, bot: BotState): Command[] {
     const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber', rare_earth_mine: 'rare', uranium_mine: 'uranium', farm: 'food' };
     // Stockpiling imports only with money to spare: ships buy whatever the rule asks for, down to the last credit.
     const flush = credits > 3000;
-    const rules: Array<[GoodId, number, number]> = [['steel', flush ? 60 : 0, -1], ['concrete', flush ? 40 : 0, -1], ['crops', 0, 150], ['timber', 0, 150], ['stone', 0, 150], ['food', 0, 250], ['lumber', 0, 200]];
+    // Surpluses that only pile up (fuel from refineries, hoarded concrete and ore) are sold too.
+    const rules: Array<[GoodId, number, number]> = [['steel', flush ? 60 : 0, -1], ['concrete', flush ? 40 : 0, 400], ['crops', 0, 150], ['timber', 0, 150], ['stone', 0, 150], ['food', 0, 250], ['lumber', 0, 200], ['fuel', 0, 80], ['ore', 0, 200]];
     // What the town can't do without (power, materials for its sites, what its land lacks) is bought first, even when money is short.
     const critical = new Set<GoodId>();
     for (const t of bot.noLand) {
@@ -593,6 +594,9 @@ function townStep(world: World, bot: BotState): Command[] {
   const foodNeed = (pop * CONSUMPTION.food * 60) / YEAR_SECONDS;
   const projNet = projectedNet(world, p);
   const powerShort = pc.powerDemand > pc.powerSupply - 5;
+  const oilFed = has('oil_well') * 1.5 >= has('power_plant') + 1 || ((has('trade_port') > 0 || pop >= 30) && credits > 5000);
+  const variable = pc.variableShare ?? 0;
+  const hydroLeft = !bot.noLand.includes('hydro_plant');
   const workforce = sumTiers(pc.workforce);
   const jobless = workforce - sumTiers(pc.employed);
   const techJobless = workforce - pc.workforce[0] - (sumTiers(pc.employed) - pc.employed[0]) > 8;
@@ -622,8 +626,13 @@ function townStep(world: World, bot: BotState): Command[] {
     [!has('police_station') && pop >= 60, 'police_station'],
     // Short of power: houses are the last to get it, and without it none grows past a cottage.
     // Each plant burns about two thirds of a well's oil (a port can buy the rest).
-    [powerShort && has('power_plant') > 0 && has('oil_well') * 1.5 < has('power_plant') + 1 && !bot.noLand.includes('oil_well'), 'oil_well'],
-    [powerShort && has('power_plant') > 0 && (has('oil_well') * 1.5 >= has('power_plant') + 1 || has('trade_port') > 0), 'power_plant'],
+    // Firm power first (a dam by a river, oil plants with oil to burn), then wind (backed by dams or batteries).
+    [powerShort && has('power_plant') > 0 && hydroLeft && has('hydro_plant') < 4, 'hydro_plant'],
+    [powerShort && has('power_plant') > 0 && !oilFed && !bot.noLand.includes('oil_well'), 'oil_well'],
+    [powerShort && has('power_plant') > 0 && oilFed && world.time >= (world.city!.oilShockUntil ?? 0), 'power_plant'],
+    [powerShort && has('power_plant') > 0 && (variable < 0.3 || (pc.storeCapacity ?? 0) > 0 || has('hydro_plant') > 0) && has('wind_farm') < 12, 'wind_farm'],
+    [powerShort && pc.age >= 1 && stock('electronics') >= 6 && variable < 0.4, 'solar_farm'],
+    [pc.age >= 1 && variable > 0.25 && has('battery_storage') * 3 < has('wind_farm') + has('solar_farm') && stock('electronics') >= 12, 'battery_storage'],
     // Sites waiting for a construction crew: more crews.
     [crewsShort, 'construction_office'],
     // A rival under arms or at war: a barracks for a home guard.
@@ -634,7 +643,6 @@ function townStep(world: World, bot: BotState): Command[] {
     [!has('oil_well') && pop >= 40, 'oil_well'],
     [!has('power_plant') && (has('oil_well') > 0 || bot.noLand.includes('oil_well')), 'power_plant'],
     [!has('hydro_plant') && pop >= 60 && bot.noLand.includes('oil_well'), 'hydro_plant'],
-    [has('hydro_plant') < 2 && pop >= 200 && pc.powerDemand > pc.powerSupply - 5 && !bot.noLand.includes('hydro_plant'), 'hydro_plant'],
     [!has('cement_works') && has('power_plant') > 0, 'cement_works'],
     [!has('warehouse') && pop >= 50, 'warehouse'],
     [!has('construction_office') && pop >= 60, 'construction_office'],
@@ -650,6 +658,9 @@ function townStep(world: World, bot: BotState): Command[] {
     [stock('concrete') < 30 && waitingFor('concrete') >= 2 && stock('stone') > 60 && has('cement_works') > 0 && has('cement_works') < 3, 'cement_works'],
     [!has('iron_mine') && pop >= 80, 'iron_mine'],
     [!has('steel_mill') && has('iron_mine') > 0, 'steel_mill'],
+    // Ore piling up while steel runs short (goods factories and every site want it): more mills.
+    [stock('steel') < 30 && stock('ore') > 40 && has('steel_mill') > 0 && has('steel_mill') < 3 + regions, 'steel_mill'],
+    [stock('plastics') < 20 && stock('oil') > 40 && has('oil_refinery') > 0 && has('oil_refinery') < 2 + regions, 'oil_refinery'],
     [!has('oil_refinery') && (has('steel_mill') > 0 || bot.noLand.includes('iron_mine')) && pop >= 120 && (pc.population[1] >= 15 || pop >= 250), 'oil_refinery'],
     [!has('goods_factory') && has('oil_refinery') > 0 && pc.population[1] >= 20, 'goods_factory'],
     // Research towards the next age once there are technicians to staff it.
@@ -725,10 +736,10 @@ function townStep(world: World, bot: BotState): Command[] {
       if (!ESSENTIAL.has(type) && credits < buildingDef(type).econ!.credits + 1000) continue;
       const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : kind === 'data' ? 3 : kind === 'university' ? 4 : 1) && !h.city!.covered[kind]);
       if (lacking.length < 4) continue;
-      // Skip if one is already under construction, or the ones there are idle (no staff, no power).
-      if (world.buildings.some((b) => b.owner === p && b.type === type && (!b.complete || (b.city!.status !== '' && b.city!.served === 0)))) continue;
       const cx = lacking.reduce((s, h) => s + h.x, 0) / lacking.length;
       const cy = lacking.reduce((s, h) => s + h.y, 0) / lacking.length;
+      // Skip if one is already under construction, or one nearby stands idle (no staff, no power, nothing to sell).
+      if (world.buildings.some((b) => b.owner === p && b.type === type && (!b.complete || (b.city!.status !== '' && b.city!.served === 0 && (b.x - cx) ** 2 + (b.y - cy) ** 2 < 40 * 40)))) continue;
       // One already stands among them (they are out of its reach by road, or over its capacity): another there would not help.
       if (world.buildings.some((b) => b.owner === p && b.type === type && (b.x - cx) * (b.x - cx) + (b.y - cy) * (b.y - cy) < 12 * 12)) continue;
       // Plenty of them for everyone already.

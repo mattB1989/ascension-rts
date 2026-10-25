@@ -268,13 +268,14 @@ export function dispatch(world: World, idx: Map<number, Building[]>): void {
  * Long-haul freight. A nation's regions can lie far apart: a site or factory that
  * has gone without something for a while, with none on its way, while the nation
  * holds it in storage somewhere out of a truck's reach, gets it by freight from
- * the store with the most — slower and dearer than a local truck, but it comes.
+ * the store (or producer) with the most — slower and dearer than a local truck, but it comes.
  */
-export const FREIGHT = { waitSeconds: 30, perUnit: 3 };
+export const FREIGHT = { waitSeconds: 20, perUnit: 3 };
 
 export function freight(world: World): void {
   const city = world.city!;
-  const stores = world.buildings.filter((b) => b.complete && b.city && b.def.econ?.storage);
+  // Sources: storage, and producers holding their own output (stuck there for want of a truck).
+  const stores = world.buildings.filter((b) => b.complete && b.city && (b.def.econ?.storage || b.def.econ?.recipe));
   for (const b of world.buildings) {
     const c = b.city;
     if (!c || b.type === 'house' || c.access < 0 || world.players[b.owner]?.role === 'cityState') continue;
@@ -308,7 +309,8 @@ export function freight(world: World): void {
     if (world.time - c.starvedSince < FREIGHT.waitSeconds) continue;
     const pc = city.players[b.owner]!;
     let from: Building | null = null;
-    for (const s of stores) if (s.owner === b.owner && s !== b && get(s.city!.stock, short) >= 1 && (!from || get(s.city!.stock, short) > get(from.city!.stock, short))) from = s;
+    const offers = (s: Building) => (s.def.econ!.storage || s.def.econ!.recipe!.out[short!] ? get(s.city!.stock, short!) : 0);
+    for (const s of stores) if (s.owner === b.owner && s !== b && offers(s) >= 1 && (!from || offers(s) > offers(from))) from = s;
     if (!from) continue;
     const n = Math.min(need, Math.floor(get(from.city!.stock, short)), Math.floor(pc.credits / FREIGHT.perUnit));
     if (n < 1) continue;

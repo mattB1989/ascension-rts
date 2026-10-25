@@ -376,7 +376,7 @@ seconds at normal speed.
 | **Sawmill** | Industry | 3×3 | ₡500 | 10 lumber | 40 | 6 workers | 2 timber → 2 lumber every 8s | Saws timber into lumber. 1 truck |
 | **Cement Works** | Industry | 3×3 | ₡800 | 20 lumber + 5 steel | 70 | 8 workers | 2 stone → 2 concrete every 8s | Grinds and fires stone into concrete. Needs power. needs 4 MW 1 truck |
 | **Steel Mill** | Industry | 4×4 | ₡1500 | 20 lumber + 30 concrete | 120 | 12 workers | 2 iron ore → 1 steel every 8s | Smelts iron ore into steel. Needs a lot of power. needs 10 MW 1 truck |
-| **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 1 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
+| **Oil Refinery** | Industry | 4×4 | ₡1600 | 20 steel + 20 concrete | 120 | 10 workers | 2 crude oil → 1 fuel + 2 plastics every 8s | Splits crude oil into fuel and plastics. needs 6 MW 2 trucks |
 | **Goods Factory** | Industry | 3×3 | ₡1400 | 15 steel + 15 concrete | 100 | 10 technicians | 1 steel + 1 plastics → 2 consumer goods every 10s | Makes consumer goods from steel and plastics. Needs technicians. needs 6 MW 1 truck |
 | **Electronics Plant** | Industry | 4×3 | ₡3000 | 30 concrete + 20 steel | 220 | 12 technicians | 2 rare earths + 1 plastics → 2 electronics every 12s | Digital age. Electronics from rare earths and plastics. Needs technicians and power. needs 10 MW 1 truck |
 | **Nano Fab** | Industry | 4×4 | ₡9000 | 60 concrete + 40 steel + 20 electronics | 600 | 8 scientists | 1 rare earths + 1 electronics → 1 nanomaterials every 15s | Nano age. Nanomaterials from rare earths and electronics. Needs scientists and 30 MW. needs 30 MW 1 truck |

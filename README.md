@@ -19,7 +19,9 @@ original **Twin Shores** skirmish.
   stone and oil deposits, and 10–50 named regions. Terrain is drawn in chunks with levels of
   detail so big maps stay smooth.
 - **Roads** (drag to draw; bridges over shallow water), and a **construction** chain: you pay
-  credits, trucks deliver lumber, concrete and steel to the site, a crew builds it.
+  credits, trucks deliver lumber, concrete and steel to the site, a crew builds it. A site or
+  factory that waits 20 s for something held in storage out of a truck's reach (another region)
+  gets it by long-haul freight, at ₡3 a unit; empty markets are restocked the same way.
 - **People**: houses fill with settlers while there is work, and grow from cottage to house,
   terrace and apartment as their needs are met (food, water, power, police, goods, health,
   school). Cottages and houses supply workers, terraces and apartments technicians.
@@ -30,7 +32,8 @@ original **Twin Shores** skirmish.
 - **Regions**: a Regional Office claims a neighbouring region.
 - **Overseas trade (E4)**: a Trade Port on a coast that reaches the open sea; per good, import up
   to an amount and export everything above another; cargo ships sail in from the map edge; world
-  prices drift. A Hydro Plant gives power on rivers without oil. Roads wear with traffic;
+  prices drift. Ports only go where ships can reach. Without a port, the same rules trade
+  overland through the Town Hall, buying at 40% more and selling at 30% less. A Hydro Plant gives power on rivers without oil. Roads wear with traffic;
   Maintenance Depots repair them.
 - **Railways (E4)**: drag track like roads (it crosses roads, and water on road bridges). Rail
   Stations on a line are warehouses with a train: it carries 60 units at a time to stations
@@ -105,8 +108,10 @@ original **Twin Shores** skirmish.
 - **The Space age and ways to win (E9)**: launch sites bring orbital alloys down from the
   asteroids and build orbital fighters, drop ships and one Star Lance; orbital solar relays;
   the Space Elevator. Win by the economy (half the world's GDP
-  for 10 years), federation (half the regions, at least half of them joined peacefully), space
-  (keep the Space Elevator running for 5 years) or conquest (every rival nation defeated).
+  for 10 years), federation (half the regions, at least half of them joined peacefully),
+  domination (most regions, however won) — these three only once you are in the Space Age, so a
+  won game has seen every age — space (keep the Space Elevator running for 5 years) or conquest
+  (every rival nation defeated). With more nations the shares are smaller.
   🔬 shows your progress. Or choose Sandbox in the menu and play forever.
 - **Sound and graphs (E10)**: procedural sound effects (building, roads, battles, alerts) and
   a slow generative music pad, all made in the browser; on/off and volume in ☰. ₡ Budget shows
@@ -139,6 +144,10 @@ URL options: `?mode=city&size=512&biome=temperate&seed=7` starts a nation direct
 `?mode=skirmish` or `?mode=sandbox` (two armies) the RTS; `?load=auto` continues; `?replay=replay` replays; `?mode=city&scenario=boomtown` starts a scenario; `?fog=0`
 turns the fog of war off. `node --experimental-strip-types tools/headless.ts 7 256 temperate normal 30`
 plays an AI-only game in Node and prints how every nation does (the balance harness).
+`tools/tournament.ts [games] [size] [years]` pits the four AI strategies against each other in
+every seat (`SPREAD=1` for a new map each game) and reports wins by type, GDP shares, and the
+year each nation reached each age with what the next one still lacked; `tools/play.ts` lets an
+agent play a nation from the command line.
 
 Next: more polish (graphics, post-game report), barges and pipelines. See [docs/PLAN.md](docs/PLAN.md).
 

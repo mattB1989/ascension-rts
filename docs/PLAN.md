@@ -128,7 +128,14 @@ Same commands as the player, own fog of war, no cheating at any level.
 
 **Harness:** `tools/headless.ts` runs AI-only games in Node and reports GDP curves, game
 length, how regions changed hands (peaceful vs war), and which goods are always short.
-That is how the economy gets balanced.
+That is how the economy gets balanced. `tools/tournament.ts` plays the four strategies in
+every seat and times the ages; the target is the Space Age reached in about three games in
+four (Digital ~1967, Nano ~1985, Space ~2005), and wins other than conquest and the Space
+Elevator need the Space Age. Tuning so far found and fixed: regions cut off from their
+materials (long-haul freight), ports on lakes (sea lanes checked), landlocked nations
+(overland trade), technicians soaked up by farm jobs (jobs by own tier first), oil stuck in
+wells while plants starved (freight from producers), AI power planning (dams, wind, batteries),
+and towers left empty by smoke next door (AI keeps industry and homes apart).
 
 ---
 

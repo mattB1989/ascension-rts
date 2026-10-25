@@ -9,7 +9,7 @@ import type { ServiceKind } from '../../data/types.ts';
 import { DT } from '../time.ts';
 import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
-import { accessIndex, demandFor, dispatch, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
+import { accessIndex, demandFor, dispatch, freight, materialsIn, moveTrucks, OUTPUT_CAP } from './logistics.ts';
 import { RAIL, railsByOwner, updateRail } from './rail.ts';
 import { PIPE, pipesByOwner, updatePipes } from './pipes.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
@@ -150,6 +150,7 @@ function everySecond(world: World): void {
     if (pc.madeLog.length > 60) pc.madeLog.shift();
     if (pc.usedLog.length > 60) pc.usedLog.shift();
   }
+  if (sec % 5 === 0) freight(world);
   updateStockpiles(world);
   labour(world);
   updateWeather(world);

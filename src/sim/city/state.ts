@@ -45,6 +45,8 @@ export interface CityBuildingState {
   outReason?: string;
   /** Storage (reservoirs, batteries): energy held, MW·s. */
   stored?: number;
+  /** Freight: since when it has gone short of something no truck brings (see logistics.freight). */
+  starvedSince?: number;
   powered: boolean;
   /** Power plants: megawatts actually produced last second. */
   powerOut: number;

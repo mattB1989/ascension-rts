@@ -169,11 +169,15 @@ const routeCache = new WeakMap<World, Map<number, number[] | null>>();
 
 /** Sea route from the nearest edge of the map to a port's dock (flat x, y list). */
 export function seaRoute(world: World, port: Building): number[] | null {
+  return seaRouteTo(world, dockTile(world.map, port.tx, port.ty, port.w, port.h));
+}
+
+/** Sea route from the open sea to a dock tile (cached per tile; null: ships cannot get there). */
+export function seaRouteTo(world: World, dock: number): number[] | null {
   let cache = routeCache.get(world);
   if (!cache) routeCache.set(world, (cache = new Map()));
-  if (cache.has(port.id)) return cache.get(port.id)!;
+  if (cache.has(dock)) return cache.get(dock)!;
   const map = world.map;
-  const dock = dockTile(map, port.tx, port.ty, port.w, port.h);
   let route: number[] | null = null;
   if (dock >= 0) {
     const reach = oceanReach(map);
@@ -211,7 +215,7 @@ export function seaRoute(world: World, port: Building): number[] | null {
       }
     }
   }
-  cache.set(port.id, route);
+  cache.set(dock, route);
   return route;
 }
 

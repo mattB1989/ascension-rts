@@ -264,6 +264,63 @@ export function dispatch(world: World, idx: Map<number, Building[]>): void {
   }
 }
 
+/**
+ * Long-haul freight. A nation's regions can lie far apart: a site or factory that
+ * has gone without something for a while, with none on its way, while the nation
+ * holds it in storage somewhere out of a truck's reach, gets it by freight from
+ * the store with the most — slower and dearer than a local truck, but it comes.
+ */
+export const FREIGHT = { waitSeconds: 30, perUnit: 3 };
+
+export function freight(world: World): void {
+  const city = world.city!;
+  const stores = world.buildings.filter((b) => b.complete && b.city && b.def.econ?.storage);
+  for (const b of world.buildings) {
+    const c = b.city;
+    if (!c || b.type === 'house' || c.access < 0 || world.players[b.owner]?.role === 'cityState') continue;
+    const e = b.def.econ;
+    if (!e) continue;
+    let short: GoodId | null = null;
+    let need = 0;
+    if (!b.complete) {
+      for (const [g, n] of Object.entries(e.materials) as Array<[GoodId, number]>) {
+        const left = n - get(c.delivered, g);
+        if (left > 0 && get(c.incoming, g) <= 0) {
+          short = g;
+          need = left;
+          break;
+        }
+      }
+    } else if (e.recipe) {
+      for (const [g, per] of Object.entries(e.recipe.in) as Array<[GoodId, number]>) {
+        if (get(c.stock, g) < per && get(c.incoming, g) <= 0) {
+          short = g;
+          need = Math.max(TRUCK_LOAD, per * 4);
+          break;
+        }
+      }
+    }
+    if (!short) {
+      c.starvedSince = undefined;
+      continue;
+    }
+    c.starvedSince ??= world.time;
+    if (world.time - c.starvedSince < FREIGHT.waitSeconds) continue;
+    const pc = city.players[b.owner]!;
+    let from: Building | null = null;
+    for (const s of stores) if (s.owner === b.owner && s !== b && get(s.city!.stock, short) >= 1 && (!from || get(s.city!.stock, short) > get(from.city!.stock, short))) from = s;
+    if (!from) continue;
+    const n = Math.min(need, Math.floor(get(from.city!.stock, short)), Math.floor(pc.credits / FREIGHT.perUnit));
+    if (n < 1) continue;
+    add(from.city!.stock, short, -n);
+    if (b.complete) add(c.stock, short, n);
+    else add(c.delivered, short, n);
+    pc.credits -= n * FREIGHT.perUnit;
+    pc.year.construction += n * FREIGHT.perUnit;
+    c.starvedSince = world.time;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Driving
 

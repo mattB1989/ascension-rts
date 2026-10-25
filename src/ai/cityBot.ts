@@ -737,32 +737,35 @@ function townStep(world: World, bot: BotState): Command[] {
       if (cmds.length) return cmds;
     }
   }
+  const skip = (type: string, why: string) => {
+    if (botTrace.player === p) botTrace.log.push(`${type}: ${why}`);
+  };
   for (const [cond, type] of wants) {
     if (!cond) continue;
     // One of a kind at a time: wait for the last one to be finished.
-    if (type !== 'house' && world.buildings.some((b) => b.owner === p && b.type === type && !b.complete)) continue;
+    if (type !== 'house' && world.buildings.some((b) => b.owner === p && b.type === type && !b.complete)) { skip(type, 'one under construction'); continue; }
     // Producers of building materials are never held back: everything else waits on them.
-    if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port', 'construction_office'].includes(type)) continue;
+    if (busy && !['house', 'logging_camp', 'sawmill', 'quarry', 'trade_port', 'construction_office'].includes(type)) { skip(type, 'busy'); continue; }
     // City-states keep money in hand to trade with; nations save up to expand when it is time.
     if (bot.maxPop < Infinity && credits < 2500 + buildingDef(type).econ!.credits && type !== 'house') continue;
-    if (saving && !ESSENTIAL.has(type)) continue;
+    if (saving && !ESSENTIAL.has(type)) { skip(type, 'saving'); continue; }
     if (type !== 'house') {
       const econ = buildingDef(type).econ!;
       // Another of a kind whose last one stands idle (no input, no staff, no power) would idle too.
-      if (idleAs(type, IDLE)) continue;
+      if (idleAs(type, IDLE)) { skip(type, 'last one idle'); continue; }
       // Materials: not a site that would wait for ever for what is neither in stock, nor being made, nor to be bought,
       // and (land to claim, and none at home to make them) keep enough for a regional office.
       const mats = Object.entries(econ.materials) as Array<[GoodId, number]>;
-      if (mats.some(([g, n]) => stock(g) < n + (keepForOffice ? (g === 'concrete' ? 25 : g === 'lumber' ? 35 : 0) : 0) && (keepForOffice || (made(g) <= 0 && !has('trade_port'))))) continue;
+      if (mats.some(([g, n]) => stock(g) < n + (keepForOffice ? (g === 'concrete' ? 25 : g === 'lumber' ? 35 : 0) : 0) && (keepForOffice || (made(g) <= 0 && !has('trade_port'))))) { skip(type, 'materials'); continue; }
       if (!ESSENTIAL.has(type) && !(type === 'barracks' && threat > 0) && !(type === 'construction_office' && crewsShort)) {
         // Only what the books can carry: money for it with some to spare, and its upkeep covered by income.
-        if (credits < econ.credits + 1000) continue;
-        if (world.time >= YEAR_SECONDS && credits < 8000 && projNet - (econ.upkeep ?? 0) < 0) continue;
+        if (credits < econ.credits + 1000) { skip(type, 'credits'); continue; }
+        if (world.time >= YEAR_SECONDS && credits < 8000 && projNet - (econ.upkeep ?? 0) < 0) { skip(type, 'upkeep'); continue; }
         // Only what can be staffed: not while jobs already stand empty.
-        if (econ.jobs && freeJobs > 10 + sumTiers(pc.workforce) * 0.15) continue;
+        if (econ.jobs && freeJobs > 10 + sumTiers(pc.workforce) * 0.15) { skip(type, `free jobs ${freeJobs}`); continue; }
         // Only what can be powered: houses get what is left, and without it none grows past a cottage.
-        if ((econ.power ?? 0) > 0 && pc.powerSupply - pc.powerDemand < econ.power!) continue;
-      } else if (world.time >= YEAR_SECONDS && projNet < 0 && credits < econ.credits + 400) continue;
+        if ((econ.power ?? 0) > 0 && pc.powerSupply - pc.powerDemand < econ.power!) { skip(type, 'power'); continue; }
+      } else if (world.time >= YEAR_SECONDS && projNet < 0 && credits < econ.credits + 400) { skip(type, 'essential, no money'); continue; }
     }
     if (type === 'house') {
       if (pop >= bot.maxPop) continue;
@@ -772,10 +775,17 @@ function townStep(world: World, bot: BotState): Command[] {
       continue;
     }
     const cmds = place(world, bot, type, services.has(type) ? centre : undefined);
-    if (cmds.length) return cmds;
+    if (cmds.length) {
+      skip(type, 'BUILT');
+      return cmds;
+    }
+    skip(type, 'no site');
   }
   return [];
 }
+
+/** Debugging aid for tools: set `player` to collect why a nation's wanted buildings were skipped. */
+export const botTrace: { player: number; log: string[] } = { player: -1, log: [] };
 
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@ import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { findAccess } from './roads.ts';
 import { railAccess } from './rail.ts';
-import { dockTile } from './trade.ts';
+import { dockTile, seaRouteTo } from './trade.ts';
 import { add, newCityBuilding } from './state.ts';
 import { unlockProblem } from './unlocks.ts';
 import { buildCostFactor } from './policies.ts';
@@ -139,7 +139,9 @@ export function cityPlacementProblem(world: World, player: number, type: Buildin
     case 'coast':
       if (!touches(map, tx, ty, w, h, (i) => isWaterT(map.terrain[i]!))) return 'Must touch the water';
       if (type === 'trade_port') {
-        if (dockTile(map, tx, ty, w, h) < 0) return 'Must be on water that reaches the open sea';
+        const dock = dockTile(map, tx, ty, w, h);
+        if (dock < 0) return 'Must be on water that reaches the open sea';
+        if (!seaRouteTo(world, dock)) return 'No sea lane: ships could not reach a dock here';
       } else if (type !== 'river_dock' && y < 0.2) return 'Needs open water';
       break;
     case 'freshWater':

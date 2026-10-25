@@ -528,7 +528,7 @@ test('ways to win: the Space Elevator, a share of world GDP, and conquest', asyn
     w2.city!.players[0]!.gdp = 1e6;
     w2.step();
   }
-  assert.equal(v2.winner, -1, 'an economic win needs the Nano age');
+  assert.equal(v2.winner, -1, 'an economic win needs the age VICTORY.minAge');
   w2.city!.players[0]!.age = VICTORY.minAge;
   for (let i = 0; i < (VICTORY.gdpYears + 1) * YEAR_SECONDS * 15 && v2.winner < 0; i++) {
     w2.city!.players[0]!.gdp = 1e6;

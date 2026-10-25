@@ -275,33 +275,29 @@ export const FREIGHT = { waitSeconds: 20, perUnit: 3 };
 export function freight(world: World): void {
   const city = world.city!;
   // Sources: storage, and producers holding their own output (stuck there for want of a truck).
-  const stores = world.buildings.filter((b) => b.complete && b.city && (b.def.econ?.storage || b.def.econ?.recipe));
+  const stores = world.buildings.filter((b) => b.complete && b.city && b.type !== 'house' && (b.def.econ?.storage || b.def.econ?.recipe));
   for (const b of world.buildings) {
     const c = b.city;
     if (!c || b.type === 'house' || c.access < 0 || world.players[b.owner]?.role === 'cityState') continue;
     const e = b.def.econ;
     if (!e) continue;
-    let short: GoodId | null = null;
-    let need = 0;
+    // What it is short of, and how much it would take.
+    const wants: Array<[GoodId, number]> = [];
     if (!b.complete) {
       for (const [g, n] of Object.entries(e.materials) as Array<[GoodId, number]>) {
         const left = n - get(c.delivered, g);
-        if (left > 0 && get(c.incoming, g) <= 0) {
-          short = g;
-          need = left;
-          break;
-        }
+        if (left > 0 && get(c.incoming, g) <= 0) wants.push([g, left]);
       }
     } else if (e.recipe) {
       for (const [g, per] of Object.entries(e.recipe.in) as Array<[GoodId, number]>) {
-        if (get(c.stock, g) < per && get(c.incoming, g) <= 0) {
-          short = g;
-          need = Math.max(TRUCK_LOAD, per * 4);
-          break;
-        }
+        if (get(c.stock, g) < per && get(c.incoming, g) <= 0) wants.push([g, Math.max(TRUCK_LOAD, per * 4)]);
+      }
+    } else if (e.service?.kind === 'market') {
+      for (const g of ['food', 'goods', 'electronics', 'pharma'] as const) {
+        if (get(c.stock, g) < 2 && get(c.incoming, g) <= 0) wants.push([g, MARKET_STOCK / 2]);
       }
     }
-    if (!short) {
+    if (!wants.length) {
       c.starvedSince = undefined;
       continue;
     }
@@ -309,9 +305,18 @@ export function freight(world: World): void {
     if (world.time - c.starvedSince < FREIGHT.waitSeconds) continue;
     const pc = city.players[b.owner]!;
     let from: Building | null = null;
-    const offers = (s: Building) => (s.def.econ!.storage || s.def.econ!.recipe!.out[short!] ? get(s.city!.stock, short!) : 0);
-    for (const s of stores) if (s.owner === b.owner && s !== b && offers(s) >= 1 && (!from || offers(s) > offers(from))) from = s;
-    if (!from) continue;
+    let short: GoodId | null = null;
+    let need = 0;
+    for (const [g, n] of wants) {
+      const offers = (s: Building) => (s.def.econ!.storage || s.def.econ!.recipe?.out[g] ? get(s.city!.stock, g) : 0);
+      for (const s of stores) if (s.owner === b.owner && s !== b && offers(s) >= 1 && (!from || short !== g || offers(s) > offers(from))) {
+        from = s;
+        short = g;
+        need = n;
+      }
+      if (from) break;
+    }
+    if (!from || !short) continue;
     const n = Math.min(need, Math.floor(get(from.city!.stock, short)), Math.floor(pc.credits / FREIGHT.perUnit));
     if (n < 1) continue;
     add(from.city!.stock, short, -n);

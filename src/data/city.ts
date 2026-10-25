@@ -424,8 +424,8 @@ export const TAX_PER_RESIDENT = [10, 22, 40, 70] as const;
 export const AGE_STEPS = [
   null,
   { name: 'Digital Age', research: 300, tier: 1, people: 300, gdp: 3000, credits: 8000, unlocks: 'Engineers and towers, electronics, rare earths and uranium, pharmaceuticals and hospitals, nuclear power, the data network, exo-troopers, rocket artillery and the Warden mech' },
-  { name: 'Nano Age', research: 1500, tier: 2, people: 250, gdp: 10000, credits: 25000, unlocks: 'Scientists and spires, nanomaterials, robotics and automation, fusion power, the Disruptor, the Juggernaut and the Arclight' },
-  { name: 'Space Age', research: 4000, tier: 3, people: 200, gdp: 20000, credits: 60000, unlocks: 'launch sites and orbital alloys, orbital solar relays, and the Space Elevator: run it for 5 years to win' },
+  { name: 'Nano Age', research: 1500, tier: 2, people: 120, gdp: 9000, credits: 20000, unlocks: 'Scientists and spires, nanomaterials, robotics and automation, fusion power, the Disruptor, the Juggernaut and the Arclight' },
+  { name: 'Space Age', research: 3500, tier: 3, people: 60, gdp: 14000, credits: 40000, unlocks: 'launch sites and orbital alloys, orbital solar relays, and the Space Elevator: run it for 5 years to win' },
 ] as const;
 /** Highest age that can be reached. */
 export const MAX_AGE = 3;
@@ -436,7 +436,7 @@ export const MAX_AGE = 3;
  * Federation: a share of all regions, at least half of them gained peacefully.
  * Space: the Space Elevator kept running. Conquest: every rival nation defeated.
  */
-export const VICTORY = { gdpShare: 0.5, gdpYears: 10, regionShare: 0.5, peacefulShare: 0.5, elevatorYears: 5, minAge: 2 } as const;
+export const VICTORY = { gdpShare: 0.5, gdpYears: 10, regionShare: 0.5, peacefulShare: 0.5, elevatorYears: 5, minAge: 3 } as const;
 /** Road costs and upkeep (credits). */
 export const ROAD = {
   cost: 10,

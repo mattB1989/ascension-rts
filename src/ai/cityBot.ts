@@ -736,12 +736,25 @@ function townStep(world: World, bot: BotState): Command[] {
       if (!ESSENTIAL.has(type) && credits < buildingDef(type).econ!.credits + 1000) continue;
       const lacking = houses.filter((h) => h.complete && h.city!.level >= (kind === 'market' || kind === 'water' ? 0 : kind === 'data' ? 3 : kind === 'university' ? 4 : 1) && !h.city!.covered[kind]);
       if (lacking.length < 4) continue;
-      const cx = lacking.reduce((s, h) => s + h.x, 0) / lacking.length;
-      const cy = lacking.reduce((s, h) => s + h.y, 0) / lacking.length;
+      // Aim at the densest cluster of houses without it (an average of two far-apart clusters lands between them).
+      let best = lacking[0]!;
+      let bestN = -1;
+      for (const h of lacking) {
+        let n = 0;
+        for (const o of lacking) if ((o.x - h.x) ** 2 + (o.y - h.y) ** 2 < 15 * 15) n++;
+        if (n > bestN || (n === bestN && h.id < best.id)) {
+          best = h;
+          bestN = n;
+        }
+      }
+      if (bestN < 4) continue;
+      const near = lacking.filter((o) => (o.x - best.x) ** 2 + (o.y - best.y) ** 2 < 15 * 15);
+      const cx = near.reduce((s, h) => s + h.x, 0) / near.length;
+      const cy = near.reduce((s, h) => s + h.y, 0) / near.length;
       // Skip if one is already under construction, or one nearby stands idle (no staff, no power, nothing to sell).
       if (world.buildings.some((b) => b.owner === p && b.type === type && (!b.complete || (b.city!.status !== '' && b.city!.served === 0 && (b.x - cx) ** 2 + (b.y - cy) ** 2 < 40 * 40)))) continue;
       // One already stands among them (they are out of its reach by road, or over its capacity): another there would not help.
-      if (world.buildings.some((b) => b.owner === p && b.type === type && (b.x - cx) * (b.x - cx) + (b.y - cy) * (b.y - cy) < 12 * 12)) continue;
+      if (world.buildings.some((b) => b.owner === p && b.type === type && (b.x - cx) * (b.x - cx) + (b.y - cy) * (b.y - cy) < 8 * 8)) continue;
       // Plenty of them for everyone already.
       if (has(type) * buildingDef(type).econ!.service!.capacity > Math.max(2000, pop * 3)) continue;
       const cmds = place(world, bot, type, [cx, cy]);

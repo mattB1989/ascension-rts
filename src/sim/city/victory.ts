@@ -2,7 +2,7 @@
 // conquest. Checked once a game year (the Space Elevator is timed every second).
 // The first player to meet one wins; the game can go on afterwards.
 
-import { VICTORY } from '../../data/city.ts';
+import { AGE_STEPS, VICTORY } from '../../data/city.ts';
 import { YEAR_SECONDS } from '../../data/goods.ts';
 import type { World } from '../world.ts';
 import { updateScenario } from './scenarios.ts';
@@ -92,9 +92,9 @@ export function victoryProgress(world: World, player: number): Array<{ kind: Vic
   const years = v.elevator[player]! / YEAR_SECONDS;
   const th = thresholds(world);
   return [
-    { kind: 'economic', frac: Math.min(1, (share >= th.gdpShare ? v.gdpYears[player]! : 0) / th.gdpYears), text: `${Math.round(share * 100)}% of world GDP (need ${Math.round(th.gdpShare * 100)}% for ${th.gdpYears} years, in the Digital age or later) · ${v.gdpYears[player]} year${v.gdpYears[player] === 1 ? '' : 's'} so far` },
-    { kind: 'federation', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.regionShare)), text: `${reg.held} of ${reg.total} regions (need ${Math.ceil(reg.total * th.regionShare)} in the Digital age or later, at least half joined peacefully${reg.conquered ? `; ${reg.conquered} taken by force` : ''})` },
-    { kind: 'domination', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.dominationShare)), text: `${reg.held} of ${reg.total} regions held, however won (need ${Math.ceil(reg.total * th.dominationShare)}, in the Digital age or later)` },
+    { kind: 'economic', frac: Math.min(1, (share >= th.gdpShare ? v.gdpYears[player]! : 0) / th.gdpYears), text: `${Math.round(share * 100)}% of world GDP (need ${Math.round(th.gdpShare * 100)}% for ${th.gdpYears} years, in the ${AGE_STEPS[th.minAge]?.name ?? 'Industrial Age'} or later) · ${v.gdpYears[player]} year${v.gdpYears[player] === 1 ? '' : 's'} so far` },
+    { kind: 'federation', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.regionShare)), text: `${reg.held} of ${reg.total} regions (need ${Math.ceil(reg.total * th.regionShare)} in the ${AGE_STEPS[th.minAge]?.name ?? 'Industrial Age'} or later, at least half joined peacefully${reg.conquered ? `; ${reg.conquered} taken by force` : ''})` },
+    { kind: 'domination', frac: Math.min(1, reg.held / Math.ceil(reg.total * th.dominationShare)), text: `${reg.held} of ${reg.total} regions held, however won (need ${Math.ceil(reg.total * th.dominationShare)}, in the ${AGE_STEPS[th.minAge]?.name ?? 'Industrial Age'} or later)` },
     { kind: 'space', frac: Math.min(1, years / VICTORY.elevatorYears), text: `Space Elevator running ${years.toFixed(1)} of ${VICTORY.elevatorYears} years` },
     { kind: 'conquest', frac: rivals.length ? beaten / rivals.length : 0, text: rivals.length ? `${beaten} of ${rivals.length} rival nation${rivals.length > 1 ? 's' : ''} defeated` : 'No rival nations in this game' },
   ];

@@ -116,6 +116,10 @@ export interface EconDef {
   extract?: boolean;
   /** Megawatts used (negative: produced). */
   power?: number;
+  /** Power sources: firm (on demand), variable (wind and sun decide), or storage that evens out the rest. */
+  powerKind?: 'fossil' | 'hydro' | 'nuclear' | 'wind' | 'solar' | 'clean' | 'battery';
+  /** Energy it can store, in MW·seconds (hydro reservoirs, batteries). */
+  powerStore?: number;
   /** Goods it can store (warehouses, town hall). */
   storage?: number;
   /** Delivery trucks. */

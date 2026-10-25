@@ -135,7 +135,10 @@ Elevator need the Space Age. Tuning so far found and fixed: regions cut off from
 materials (long-haul freight), ports on lakes (sea lanes checked), landlocked nations
 (overland trade), technicians soaked up by farm jobs (jobs by own tier first), oil stuck in
 wells while plants starved (freight from producers), AI power planning (dams, wind, batteries),
-and towers left empty by smoke next door (AI keeps industry and homes apart).
+and towers left empty by smoke next door (AI keeps industry and homes apart). Result over 12
+maps × 70 years (normal): Digital first reached ~1966, Nano in every game (~1983), Space in 9
+of 12 (first ~1993, range 1975–2015); the three that miss end in an early conquest or reach
+2020 short of scientists. Next balance item: Expansionists win least (1 in 12), Warlords most (6).
 
 ---
 

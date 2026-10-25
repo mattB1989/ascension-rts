@@ -110,6 +110,9 @@ function updateSupply(world: World): void {
   }
 }
 
+/** Debt at which unpaid units start to desert. */
+export const DESERT_DEBT = -5000;
+
 /** Once a second: unit upkeep, war weariness, supply, and seats being captured. */
 export function updateMilitary(world: World): void {
   const city = world.city!;
@@ -127,6 +130,16 @@ export function updateMilitary(world: World): void {
     const up = cost.upkeep / YEAR_SECONDS;
     pc.credits -= up;
     pc.year.military += up;
+  }
+  // Unpaid soldiers desert: deep in debt, a unit a second walks away (the dearest first).
+  for (const p of world.players) {
+    const pc = city.players[p.id]!;
+    if (pc.credits > DESERT_DEBT) continue;
+    const mine = world.units.filter((u) => u.owner === p.id && UNIT_ECON[u.type]);
+    if (!mine.length) continue;
+    const u = mine.reduce((a, b) => (UNIT_ECON[b.type]!.upkeep > UNIT_ECON[a.type]!.upkeep || (UNIT_ECON[b.type]!.upkeep === UNIT_ECON[a.type]!.upkeep && b.id > a.id) ? b : a));
+    world.removeUnit(u, 'deserted', true);
+    if (world.tick % (15 * 30) < 15) world.emit({ kind: 'notify', player: p.id, text: `💸 Your soldiers go unpaid and desert: the treasury is ₡${Math.round(-pc.credits).toLocaleString('en')} in debt` });
   }
   for (const b of world.buildings) if (b.city?.stun) b.city.stun = Math.max(0, b.city.stun - 1);
   updateSupply(world);

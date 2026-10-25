@@ -505,8 +505,8 @@ function townStep(world: World, bot: BotState): Command[] {
   }
 
 
-  // Trade: once there is a port, buy what the land can't give and sell surpluses.
-  if (has('trade_port') && world.time >= bot.tradeAt) {
+  // Trade: buy what the land can't give and sell surpluses (by ship from a port, else overland at worse prices).
+  if (world.time >= bot.tradeAt && (has('trade_port') || pop >= 30)) {
     bot.tradeAt = world.time + 30;
     const missing: Partial<Record<string, GoodId>> = { oil_well: 'oil', quarry: 'concrete', iron_mine: 'steel', logging_camp: 'lumber', rare_earth_mine: 'rare', uranium_mine: 'uranium', farm: 'food' };
     // Stockpiling imports only with money to spare: ships buy whatever the rule asks for, down to the last credit.

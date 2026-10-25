@@ -436,7 +436,7 @@ export const MAX_AGE = 3;
  * Federation: a share of all regions, at least half of them gained peacefully.
  * Space: the Space Elevator kept running. Conquest: every rival nation defeated.
  */
-export const VICTORY = { gdpShare: 0.5, gdpYears: 10, regionShare: 0.5, peacefulShare: 0.5, elevatorYears: 5, minAge: 1 } as const;
+export const VICTORY = { gdpShare: 0.5, gdpYears: 10, regionShare: 0.5, peacefulShare: 0.5, elevatorYears: 5, minAge: 2 } as const;
 /** Road costs and upkeep (credits). */
 export const ROAD = {
   cost: 10,

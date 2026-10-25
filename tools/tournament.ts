@@ -6,6 +6,7 @@
 // GDP share.
 //
 //   node --experimental-strip-types --no-warnings tools/tournament.ts [games] [size] [years] [difficulty] [biomes] [jobs]
+//   (env SPREAD=1: a new map every game; PLAY_ON=1: keep playing after a win, to time the ages)
 //   e.g. tools/tournament.ts 8 256 30 normal temperate,arid,lakeland 2
 //
 // Each game runs in its own child process (`jobs` at a time). One game alone:
@@ -153,7 +154,12 @@ if (argv[0] === '--game') {
   const difficulty = (argv[3] ?? 'normal') as Difficulty;
   const biomes = (argv[4] ?? 'temperate,arid,lakeland,alpine').split(',') as GenBiome[];
   const jobs = Number(argv[5] ?? 2);
-  const queue = Array.from({ length: games }, (_, i) => [String(100 + Math.floor(i / 4)), String(size), String(years), difficulty, biomes[Math.floor(i / 4) % biomes.length]!, String(i % 4)]);
+  // By default each map is played four times, every strategy in every seat; SPREAD=1 plays a new map each game instead.
+  const spread = !!process.env.SPREAD;
+  const queue = Array.from({ length: games }, (_, i) => {
+    const m = spread ? i : Math.floor(i / 4);
+    return [String(100 + m), String(size), String(years), difficulty, biomes[m % biomes.length]!, String(i % 4)];
+  });
   const results: GameResult[] = [];
   const started = performance.now();
   const worker = async () => {
@@ -164,7 +170,7 @@ if (argv[0] === '--game') {
     }
   };
   await Promise.all(Array.from({ length: jobs }, worker));
-  results.sort((a, b) => a.seed - b.seed || a.biome.localeCompare(b.biome));
+  results.sort((a, b) => a.seed - b.seed || a.biome.localeCompare(b.biome) || a.seats[0]!.strategy.localeCompare(b.seats[0]!.strategy));
   report(results);
   console.log(`\n${((performance.now() - started) / 1000).toFixed(0)} s`);
 }

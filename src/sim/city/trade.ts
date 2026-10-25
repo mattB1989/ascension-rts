@@ -124,9 +124,57 @@ export function buyPrice(world: World, g: GoodId, player = -1): number {
 }
 
 /** Once a second: prices drift, ships set out for ports that have business. */
+/**
+ * Overland trade: a nation without a working sea port still trades, by road through
+ * its Town Hall, but dearer and slower than by ship (a cart-load every few seconds).
+ */
+export const OVERLAND = { buy: 1.4, sell: 0.7, every: 10, load: 20 } as const;
+
+/** Does this player have a staffed trade port that ships can reach? */
+export function hasSeaTrade(world: World, player: number): boolean {
+  return world.buildings.some((b) => b.owner === player && b.type === 'trade_port' && b.complete && b.city && b.city.workers > 0 && seaRoute(world, b) !== null);
+}
+
+function overlandTrade(world: World): void {
+  const city = world.city!;
+  city.players.forEach((pc, id) => {
+    const pl = world.players[id];
+    if (!pl || pl.defeated || pl.role === 'cityState' || hasSeaTrade(world, id)) return;
+    const hall = world.buildings.find((b) => b.owner === id && b.type === 'town_hall' && b.complete && b.city && b.city.access >= 0);
+    if (!hall) return;
+    const c = hall.city!;
+    for (const g of GOOD_IDS) {
+      const rule = pc.trade[g];
+      if (!rule) continue;
+      if (rule.export >= 0) {
+        const n = Math.floor(Math.min(OVERLAND.load, get(pc.stockpile, g) - rule.export, get(c.stock, g)));
+        if (n > 0) {
+          add(c.stock, g, -n);
+          add(pc.stockpile, g, -n);
+          const income = n * sellPrice(world, g, id) * OVERLAND.sell;
+          pc.credits += income;
+          pc.year.trade += income;
+        }
+      }
+      if (rule.import > 0) {
+        const price = buyPrice(world, g, id) * OVERLAND.buy;
+        const space = (hall.def.econ!.storage ?? 0) - stockTotal(c.stock) - stockTotal(c.incoming);
+        const n = Math.floor(Math.min(OVERLAND.load, rule.import - get(pc.stockpile, g), space, Math.max(0, pc.credits) / price));
+        if (n > 0) {
+          add(c.stock, g, n);
+          add(pc.stockpile, g, n);
+          pc.credits -= n * price;
+          pc.year.imports += n * price;
+        }
+      }
+    }
+  });
+}
+
 export function updateTrade(world: World): void {
   const city = world.city!;
   const sec = Math.floor(world.tick / 15);
+  if (sec % OVERLAND.every === 0) overlandTrade(world);
   if (sec % 30 === 0) {
     for (const g of GOOD_IDS) {
       const step = (world.rng.next() * 2 - 1) * OVERSEAS.drift;

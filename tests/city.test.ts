@@ -523,13 +523,13 @@ test('ways to win: the Space Elevator, a share of world GDP, and conquest', asyn
   // Economic: most of the world's GDP for ten years.
   const w2 = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
   const v2 = w2.city!.victory;
-  // Not before the Digital age.
+  // Not before the age victories need (VICTORY.minAge).
   for (let i = 0; i < (VICTORY.gdpYears + 1) * YEAR_SECONDS * 15; i++) {
     w2.city!.players[0]!.gdp = 1e6;
     w2.step();
   }
-  assert.equal(v2.winner, -1, 'an economic win needs the Digital age');
-  w2.city!.players[0]!.age = 1;
+  assert.equal(v2.winner, -1, 'an economic win needs the Nano age');
+  w2.city!.players[0]!.age = VICTORY.minAge;
   for (let i = 0; i < (VICTORY.gdpYears + 1) * YEAR_SECONDS * 15 && v2.winner < 0; i++) {
     w2.city!.players[0]!.gdp = 1e6;
     w2.step();

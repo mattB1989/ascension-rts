@@ -230,23 +230,29 @@ function labour(world: World): void {
   }
   const employers = world.buildings.filter((b) => b.city && b.complete && b.def.econ?.jobs);
   employers.sort((a, b) => jobPriority(a) - jobPriority(b) || a.id - b.id);
-  for (const b of employers) {
-    const c = b.city!;
-    const job = b.def.econ!.jobs!;
-    const count = jobsOf(b);
-    const pc = city.players[b.owner]!;
-    pc.jobs[job.tier] += count;
-    c.workers = 0;
-    if (!c.comp) continue;
-    // Higher tiers can do lower tiers' jobs, not the other way round.
-    for (let t = job.tier; t < TIERS.length && c.workers < count; t++) {
-      const k = key(b.owner, c.comp, t);
-      const free = pool.get(k) ?? 0;
-      const take = Math.min(free, count - c.workers);
-      if (take > 0) {
-        pool.set(k, free - take);
-        c.workers += take;
-        pc.employed[t] += take;
+  // Everyone first takes a job of their own tier; only then do those left over fill
+  // lower tiers' jobs (higher tiers can do lower tiers' work, not the other way round).
+  // Else farms and quarries would soak up the technicians that factories need.
+  for (const pass of [0, 1]) {
+    for (const b of employers) {
+      const c = b.city!;
+      const job = b.def.econ!.jobs!;
+      const count = jobsOf(b);
+      const pc = city.players[b.owner]!;
+      if (pass === 0) {
+        pc.jobs[job.tier] += count;
+        c.workers = 0;
+      }
+      if (!c.comp) continue;
+      for (let t = pass === 0 ? job.tier : job.tier + 1; t < (pass === 0 ? job.tier + 1 : TIERS.length) && c.workers < count; t++) {
+        const k = key(b.owner, c.comp, t);
+        const free = pool.get(k) ?? 0;
+        const take = Math.min(free, count - c.workers);
+        if (take > 0) {
+          pool.set(k, free - take);
+          c.workers += take;
+          pc.employed[t] += take;
+        }
       }
     }
   }

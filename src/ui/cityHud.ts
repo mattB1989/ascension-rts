@@ -1107,7 +1107,7 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         const ships = this.world.city!.ships.filter((s) => s.owner === this.game.humanPlayer).length;
         const portLine = ports.length
           ? `${ports.length} trade port${ports.length > 1 ? 's' : ''} · ${ships} ship${ships === 1 ? '' : 's'} at sea${ports.some((p) => p.city!.status) ? ` · ${esc(ports.find((p) => p.city!.status)!.city!.status)}` : ''}`
-          : '<span class="neg">Build a Trade Port on the coast (Logistics) to trade.</span>';
+          : '<span class="neg">No trade port: trade goes overland through the Town Hall, buying at 40% more and selling at 30% less, a cart-load at a time. A Trade Port on the coast (Logistics) trades by ship.</span>';
         return `${close}<h3>Overseas trade</h3><p class="muted">${portLine}</p>
           <table class="goods trade"><tr><th></th><th>You have</th><th>Sell</th><th>Buy</th><th>Import</th><th>Export</th></tr>${rows}</table>
           <p class="muted">Import tops your stock up to the amount; export ships out everything above it. Ships carry ${OVERSEAS.capacity} each way. World prices drift over time. This year: exports ₡${fmt(pc.year.trade)}, imports ₡${fmt(pc.year.imports)}.</p>`;

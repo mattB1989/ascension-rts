@@ -151,18 +151,38 @@ function touchesRoad(world: World, tx: number, ty: number, w: number, h: number)
 /** Nearest valid spot touching a road, searching outward from (cx, cy). */
 function spotByRoad(world: World, player: number, type: BuildingTypeId, cx: number, cy: number, maxR = 50): [number, number] | null {
   const [w, h] = BUILDINGS[type].size;
-  for (let r = 0; r <= maxR; r++) {
+  // Smoke and homes keep apart (pollution reaches 10 tiles and drives people away): for a polluter
+  // or a house, weigh the first few free spots by what is around them, not just by distance.
+  const dirty = (buildingDef(type).econ?.pollution ?? 0) >= 0.3;
+  const choosy = dirty || type === 'house';
+  const wanted = choosy ? 10 : 1;
+  const found: Array<[number, number, number]> = [];
+  const neighbours = choosy
+    ? world.buildings.filter((b) => b.owner === player && (dirty ? b.type === 'house' : (b.def.econ?.pollution ?? 0) >= 0.3) && Math.abs(b.x - cx) < maxR + 12 && Math.abs(b.y - cy) < maxR + 12)
+    : [];
+  for (let r = 0; r <= maxR && found.length < wanted; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
         const tx = Math.floor(cx) + dx;
         const ty = Math.floor(cy) + dy;
         if (!touchesRoad(world, tx, ty, w, h) || overlapsReserved(tx, ty, w, h)) continue;
-        if (cityPlacementProblem(world, player, type, tx, ty) === null) return [tx, ty];
+        if (cityPlacementProblem(world, player, type, tx, ty) !== null) continue;
+        if (!choosy) return [tx, ty];
+        const mx = tx + w / 2;
+        const my = ty + h / 2;
+        let near = 0;
+        for (const b of neighbours) {
+          const d = Math.hypot(b.x - mx, b.y - my);
+          if (d < 10) near += (1 - d / 10) * (dirty ? 1 : b.def.econ!.pollution! * 4);
+        }
+        found.push([tx, ty, near * 6 + r]);
       }
     }
   }
-  return null;
+  if (!found.length) return null;
+  found.sort((a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0]);
+  return [found[0]![0], found[0]![1]];
 }
 
 /** Lay one more ring of the street grid around the town hall (or, once that has no room left, around a regional office). */
@@ -530,6 +550,27 @@ function townStep(world: World, bot: BotState): Command[] {
       const r = rules.find((x) => x[0] === 'oil');
       if (r) r[1] = Math.max(r[1], 120);
       else rules.push(['oil', 120, -1]);
+    }
+    // Rich: buy in what houses need to grow (and the chains behind it) rather than sit on the money.
+    if (credits > 20000) {
+      const rich: Array<[GoodId, number, boolean]> = [
+        ['oil', 120, true],
+        ['plastics', 60, true],
+        ['steel', 80, true],
+        ['goods', 100, true],
+        ['food', 120, true],
+        ['electronics', 60, pc.age >= 1],
+        ['pharma', 40, pc.age >= 1],
+        ['rare', 60, pc.age >= 1],
+      ];
+      for (const [g, want, ok] of rich) {
+        if (!ok) continue;
+        const r = rules.find((x) => x[0] === g);
+        if (r) {
+          r[1] = Math.max(r[1], want);
+          if (r[2] >= 0 && r[2] < want * 2) r[2] = -1;
+        } else rules.push([g, want, -1]);
+      }
     }
     // Factories idle for want of an input, while there is money: buy it in.
     if (credits > 5000) {

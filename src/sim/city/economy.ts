@@ -629,7 +629,7 @@ function households(world: World): void {
     if (c.access < 0) c.growth -= 0.2;
     else if (c.residents > cap) c.growth -= 0.5;
     else if (happy < 0.25) c.growth -= 0.1;
-    else if (c.residents < cap && happy >= 0.4 && attractive[h.owner]) c.growth += 0.15 + 0.25 * happy;
+    else if (c.residents < cap && happy >= 0.35 && attractive[h.owner]) c.growth += 0.15 + 0.25 * happy;
     if (c.growth >= 1 || c.growth <= -1) {
       const d = Math.trunc(c.growth);
       c.residents = Math.max(0, Math.min(Math.max(cap, c.residents), c.residents + d));

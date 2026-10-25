@@ -294,7 +294,7 @@ export function freight(world: World): void {
       }
     } else if (e.service?.kind === 'market') {
       for (const g of ['food', 'goods', 'electronics', 'pharma'] as const) {
-        if (get(c.stock, g) < 2 && get(c.incoming, g) <= 0) wants.push([g, MARKET_STOCK / 2]);
+        if (get(c.stock, g) < 2 && get(c.incoming, g) < TRUCK_LOAD) wants.push([g, MARKET_STOCK / 2]);
       }
     }
     if (!wants.length) {

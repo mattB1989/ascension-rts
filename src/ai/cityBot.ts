@@ -17,6 +17,7 @@ import type { UnitTypeId } from '../data/units.ts';
 import { armyCap, atWar, recruitProblem } from '../sim/city/military.ts';
 import { hasTreaty, opinionOf } from '../sim/city/treaties.ts';
 import { spyStep } from './spies.ts';
+import { policyStep } from './policyBot.ts';
 import { DIPLO, marketOf, purchasePrice, relationsOf } from '../sim/city/diplomacy.ts';
 import { roadsByOwner } from '../sim/city/economy.ts';
 import { buyPrice } from '../sim/city/trade.ts';
@@ -413,6 +414,8 @@ export function botStep(world: World, bot: BotState): Command[] {
     if (e.length) return e;
     const sp = spyStep(world, bot);
     if (sp.length) return sp;
+    const po = policyStep(world, bot);
+    if (po.length) return po;
     const m = militaryStep(world, bot);
     // Claiming land, or going to war, is a decision of its own; orders to troops, recruits and offers of peace
     // go with the town's business (a war must not stop the economy: an army marching every turn would).
@@ -566,7 +569,7 @@ function townStep(world: World, bot: BotState): Command[] {
       for (const r of order) {
         if (r[1] <= 0 || critical.has(r[0]) !== crit) continue;
         const have = get(pc.stockpile, r[0]);
-        const price = buyPrice(world, r[0]);
+        const price = buyPrice(world, r[0], p);
         const can = Math.floor(Math.max(0, purse - spent) / price);
         const imp = Math.max(0, Math.min(r[1], Math.floor((have + can) / 20) * 20));
         spent += Math.max(0, imp - have) * price;

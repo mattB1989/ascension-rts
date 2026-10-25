@@ -1403,3 +1403,6 @@ table.age-req .bar { width: 100%; }
 .advice .muted { font-size: 11.5px; }
 .advice-head .mini { flex-shrink: 0; white-space: nowrap; }
 .advice-head b { min-width: 0; }
+.advice.policy-on { border-left-color: #4caf7a; background: rgba(76,175,122,0.08); }
+.advice-head { flex-wrap: wrap; }
+.advice-head b { flex: 1 1 60%; }

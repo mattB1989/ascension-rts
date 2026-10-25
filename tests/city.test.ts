@@ -1159,3 +1159,51 @@ test('war pays: spoils when a seat falls, reparations from the weaker side at pe
   assert.ok(th.dominationShare > th.regionShare);
   assert.ok(victoryProgress(world, 0).some((g) => g.kind === 'domination'));
 });
+
+test('energy: wind needs storage or firm power, smog costs lives, policies shift prices, crises move markets', async () => {
+  const { addCityBuilding, buildPrice } = await import('../src/sim/city/place.ts');
+  const { balanceStorage, outputFactor, smogIndex, weather, yearlyEnergyRisks } = await import('../src/sim/city/energy.ts');
+  const { upkeepFactor } = await import('../src/sim/city/policies.ts');
+  const { priceShock, recessionFactor } = await import('../src/sim/city/events.ts');
+  const { buyPrice } = await import('../src/sim/city/trade.ts');
+  const world = createCity({ seed: 7, size: 256, biome: 'temperate', cityStates: 0, nations: 0 });
+  const hall = world.buildings[0]!;
+  const wind = addCityBuilding(world, 'wind_farm', 0, hall.tx + 8, hall.ty, true);
+  // A calm spell: wind output collapses.
+  weather(world).lullUntil = world.time + 60;
+  weather(world).wind = 0.03;
+  assert.ok(outputFactor(world, wind) < 0.1, 'no wind, no power');
+  // Storage charges from surplus and covers a shortfall.
+  const bat = addCityBuilding(world, 'battery_storage', 0, hall.tx + 14, hall.ty, true);
+  assert.equal(balanceStorage([bat], 50), -50, 'charging takes the surplus');
+  assert.equal(bat.city!.stored, 50);
+  assert.equal(balanceStorage([bat], -30), 30, 'and gives it back');
+  assert.equal(balanceStorage([bat], -100), 20, 'only what it holds');
+  // Policies: a renewables push makes wind cheap and oil plants dear to run.
+  const pc = world.city!.players[0]!;
+  pc.credits = 50000;
+  const before = buildPrice(world, 0, 'wind_farm');
+  world.step([{ kind: 'setPolicy', player: 0, area: 'energy', option: 'green' }]);
+  assert.ok(buildPrice(world, 0, 'wind_farm') < before);
+  const oil = addCityBuilding(world, 'power_plant', 0, hall.tx - 8, hall.ty, true);
+  assert.ok(upkeepFactor(world, oil) > 1, 'carbon tax');
+  world.step([{ kind: 'setPolicy', player: 0, area: 'energy', option: 'fossil' }]);
+  assert.equal(pc.policies?.energy, 'green', 'one change a year');
+  // Smog: oil power over few people kills some each year.
+  pc.fossilMW = 120;
+  pc.population = [400, 0, 0, 0];
+  assert.ok(smogIndex(world, 0) > 1);
+  for (let i = 0; i < 6; i++) {
+    const [hx, hy] = [hall.tx - 10 + i * 3, hall.ty + 8];
+    const h = addCityBuilding(world, 'house', 0, hx, hy, true);
+    h.city!.residents = 60;
+  }
+  yearlyEnergyRisks(world);
+  assert.ok((pc.smogDeaths ?? 0) > 0, 'deaths from bad air');
+  // Crises: an oil shock doubles oil prices; a recession cuts taxes.
+  const p0 = buyPrice(world, 'oil');
+  world.city!.oilShockUntil = world.time + 100;
+  assert.ok(buyPrice(world, 'oil') > p0 * 2 && priceShock(world, 'food', false) === 1);
+  world.city!.recessionUntil = world.time + 100;
+  assert.ok(recessionFactor(world) < 1);
+});

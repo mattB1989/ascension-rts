@@ -9,6 +9,7 @@ import { sumTiers, YEAR_SECONDS, type GoodId } from '../../data/goods.ts';
 import { UNITS, type UnitTypeId } from '../../data/units.ts';
 import type { UnitDef } from '../../data/types.ts';
 import { airfieldLoad } from '../transport.ts';
+import { armyFactor } from './policies.ts';
 import { MAX_QUEUE, type Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { exploreRegion } from './economy.ts';
@@ -37,7 +38,7 @@ export function setWar(world: World, a: number, b: number, on: boolean): void {
 /** Army size limit: grows with population. */
 export function armyCap(world: World, player: number): number {
   const pc = world.city!.players[player]!;
-  return ARMY.base + Math.floor(sumTiers(pc.population) / ARMY.perResidents);
+  return Math.floor((ARMY.base + Math.floor(sumTiers(pc.population) / ARMY.perResidents)) * armyFactor(world, player).cap);
 }
 
 /** Why this unit can't be recruited here now, or null. */
@@ -59,7 +60,8 @@ export function recruitProblem(world: World, player: number, b: Building, type: 
   const p = world.players[player]!;
   const queued = world.buildings.reduce((s, x) => s + (x.owner === player ? x.queue.filter((q) => q.kind === 'unit').reduce((t, q) => t + (q.kind === 'unit' ? UNITS[q.unit].pop : 0), 0) : 0), 0);
   if (p.popUsed + queued + def.pop > armyCap(world, player)) return `Army limit ${armyCap(world, player)} (grows with population)`;
-  if (world.city!.players[player]!.credits < cost.credits) return `Needs ₡${cost.credits}`;
+  const price = Math.round(cost.credits * armyFactor(world, player).cost);
+  if (world.city!.players[player]!.credits < price) return `Needs ₡${price}`;
   for (const [g, n] of Object.entries(cost.goods) as Array<[GoodId, number]>) {
     if (get(b.city.stock, g) < n) return `Needs ${n} ${g} here (trucks bring it)`;
   }
@@ -71,8 +73,9 @@ export function recruit(world: World, player: number, b: Building, type: UnitTyp
   if (why) return why;
   const cost = UNIT_ECON[type]!;
   const pc = world.city!.players[player]!;
-  pc.credits -= cost.credits;
-  pc.year.military += cost.credits;
+  const price = Math.round(cost.credits * armyFactor(world, player).cost);
+  pc.credits -= price;
+  pc.year.military += price;
   for (const [g, n] of Object.entries(cost.goods) as Array<[GoodId, number]>) b.city!.stock[g] = get(b.city!.stock, g) - n;
   b.queue.push({ kind: 'unit', unit: type, progress: 0, total: UNITS[type].trainTime });
   return null;

@@ -63,6 +63,20 @@ export function advise(world: World, me: number): Advice[] {
     out.push({ severity: 1, icon: '⚡', text: `Power nearly maxed out (${Math.round(pc.powerDemand)} of ${Math.round(pc.powerSupply)} MW)`, why: 'Add power before the next houses grow.', action: { kind: 'build', type: 'power_plant' }, label: 'Build Power Plant' });
   }
 
+  // Energy mix: wind and sun need storage or firm power; smoke kills.
+  if ((pc.variableShare ?? 0) > 0.35 && (pc.storeCapacity ?? 0) < 400) {
+    out.push({ severity: 2, icon: '🌬', text: `${Math.round((pc.variableShare ?? 0) * 100)}% of your power is wind and sun, with little storage`, why: 'At night and in calm, cloudy spells they give almost nothing: a dam (hydro plant), grid batteries or nuclear keep the lights on.', action: { kind: 'build', type: pc.age >= 1 ? 'battery_storage' : 'hydro_plant' }, label: pc.age >= 1 ? 'Build Battery' : 'Build Hydro' });
+  }
+  if ((pc.smogDeaths ?? 0) >= 5) {
+    out.push({ severity: 2, icon: '🏭', text: `Smog from oil power killed ${pc.smogDeaths} people last year`, why: 'Cleaner power saves lives: hydro, nuclear (Digital age), or wind backed by storage. Clinics and hospitals halve the toll.', action: { kind: 'panel', panel: 'policy' }, label: 'Energy' });
+  }
+  if (world.time < (city.oilShockUntil ?? 0) && mine.some((b) => b.def.econ?.powerKind === 'fossil')) {
+    out.push({ severity: 1, icon: '🛢', text: 'Oil shock: imported oil is dear', why: 'Pump your own (oil wells), or shift power to hydro, wind or nuclear.' });
+  }
+  if (pc.happiness < 0.45 && pop > 100) {
+    out.push({ severity: 2, icon: '✊', text: `People are unhappy (${Math.round(pc.happiness * 100)}%): strikes are likely`, why: 'Lower taxes, more services and goods, cleaner air, or a welfare policy.', action: { kind: 'panel', panel: 'policy' }, label: 'Policies' });
+  }
+
   // Money.
   const ly = pc.lastYear;
   const net = ly.taxes + ly.trade - ly.imports - ly.upkeep - ly.roads - ly.construction - ly.military;

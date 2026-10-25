@@ -13,6 +13,8 @@ import { VICTORY_NAMES, victoryProgress, type VictoryKind } from '../sim/city/vi
 import { scenarioById } from '../sim/city/scenarios.ts';
 import { advise, type Advice } from './advisor.ts';
 import { unlockProblem } from '../sim/city/unlocks.ts';
+import { POLICIES, policyCost, policyOf, policyProblem, type PolicyArea } from '../sim/city/policies.ts';
+import { drought, smogIndex, sunlight, weather } from '../sim/city/energy.ts';
 import { INTEL, latestReport, reportPrice, reportProblem, sabotageProblem, type IntelReport } from '../sim/city/intel.ts';
 import type { Sound } from './sound.ts';
 import { PERSONALITIES } from '../ai/cityBot.ts';
@@ -61,7 +63,7 @@ const TOOL_INFO: Record<string, { name: string; text: string }> = {
   bulldoze: { name: 'Bulldozer', text: 'Drag over roads and railways to remove them, or click a building to demolish it. No refunds.' },
 };
 
-type PanelKind = 'goods' | 'budget' | 'trade' | 'diplomacy' | 'intel' | 'ages' | 'menu' | 'help';
+type PanelKind = 'goods' | 'budget' | 'trade' | 'diplomacy' | 'intel' | 'policy' | 'ages' | 'menu' | 'help';
 
 const fmt = (n: number) => (Math.abs(n) >= 10000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`);
 const sign = (n: number) => (n >= 0 ? `+${fmt(n)}` : `−${fmt(-n)}`);
@@ -142,6 +144,7 @@ export class CityHud {
       this.btn('📦', 'Goods: stock, made and used', () => this.togglePanel('goods')),
       this.btn('🔬', 'Ages, research and ways to win', () => this.togglePanel('ages')),
       this.btn('🤝', 'Diplomacy: city-states, deals, unions', () => this.togglePanel('diplomacy')),
+      this.btn('📜', 'Policies and energy', () => this.togglePanel('policy')),
       this.btn('🕵', 'Intelligence: spy reports and sabotage', () => this.togglePanel('intel')),
       this.btn('🚢', 'Trade with the overseas market', () => this.togglePanel('trade')),
       this.btn('₡', 'Budget and taxes', () => this.togglePanel('budget')),
@@ -380,6 +383,12 @@ export class CityHud {
       case 'panel':
         this.togglePanel(arg as PanelKind);
         break;
+      case 'policy': {
+        const [area, option] = arg.split(':');
+        this.game.issue({ kind: 'setPolicy', player: this.game.humanPlayer, area: area as PolicyArea, option: option! });
+        this.lastPanel = '';
+        break;
+      }
       case 'spy':
         this.game.issue({ kind: 'spyReport', player: this.game.humanPlayer, target: Number(arg) });
         this.lastPanel = '';
@@ -704,6 +713,45 @@ export class CityHud {
       : act.kind === 'panel' ? `<button class="mini" data-action="panel" data-arg="${act.panel}">${esc(a.label ?? 'Open')}</button>`
       : `<button class="mini" data-action="goto" data-arg="${act.x},${act.y}">${esc(a.label ?? 'Show')}</button>`;
     return `<div class="advice sev${a.severity}"><div class="advice-head"><span>${a.icon}</span><b>${esc(a.text)}</b>${btn}</div><div class="muted">${esc(a.why)}</div></div>`;
+  }
+
+  /** Policies by area, and the energy mix that the energy policy shapes. */
+  private policyHtml(): string {
+    const w = this.world;
+    const me = this.game.humanPlayer;
+    const pc = w.city!.players[me]!;
+    const cost = policyCost(w, me);
+    const areas = (Object.keys(POLICIES) as PolicyArea[]).map((area) => {
+      const def = POLICIES[area];
+      const cur = policyOf(w, me, area);
+      const opts = def.options.map((o) => {
+        const why = o.id === cur ? null : policyProblem(w, me, area, o.id);
+        return `<div class="advice ${o.id === cur ? 'sev1 policy-on' : ''}"><div class="advice-head"><b>${esc(o.name)}</b>${o.id === cur ? '<span class="pos">in force</span>' : `<button class="mini ${why ? 'disabled' : ''}" data-action="policy" data-arg="${area}:${o.id}" title="${esc(why ?? `Costs ₡${fmt(cost)}`)}">Adopt</button>`}</div><div class="muted">${esc(o.text)}</div></div>`;
+      }).join('');
+      return `<h3>${def.icon} ${esc(def.name)}</h3>${opts}`;
+    }).join('');
+    // Energy mix.
+    const kinds: Record<string, number> = {};
+    for (const b of w.buildings) {
+      const k = b.def.econ?.powerKind;
+      if (b.owner !== me || !k || !b.complete || !b.city || k === 'battery') continue;
+      kinds[k] = (kinds[k] ?? 0) + b.city.powerOut;
+    }
+    const names: Record<string, string> = { fossil: '🛢 Oil', hydro: '💧 Hydro', nuclear: '☢ Nuclear', wind: '🌬 Wind', solar: '☀ Solar', clean: '✨ Fusion/orbital' };
+    const mix = Object.entries(kinds).map(([k, mw]) => `${names[k] ?? k} ${Math.round(mw)} MW`).join(' · ') || 'No power plants yet';
+    const wx = weather(w);
+    const lull = w.time < wx.lullUntil;
+    const smog = smogIndex(w, me);
+    const crises = [w.time < (w.city!.oilShockUntil ?? 0) ? '🛢 Oil shock: oil, fuel and plastics prices more than doubled' : '', w.time < (w.city!.recessionUntil ?? 0) ? '📉 Recession: taxes −20%, exports −15%' : '', drought(w) ? '☀ Drought: hydro and pumps weaker' : ''].filter(Boolean);
+    return `<h3>📜 Policies</h3><p class="muted">One choice per area. A change costs ₡${fmt(cost)} and can't be repeated in the same area for a year.</p>${areas}
+      <h3>⚡ Energy</h3>
+      <div class="state-row">${mix}</div>
+      <div class="state-row">Demand ${Math.round(pc.powerDemand)} MW of ${Math.round(pc.powerSupply)} MW made${pc.powerDemand > pc.powerSupply + 0.5 ? ' <span class="neg">— shortage</span>' : ''}</div>
+      <div class="state-row">Storage ${pc.storeCapacity ? `${Math.round(((pc.storeLevel ?? 0) / pc.storeCapacity) * 100)}% of ${fmt(pc.storeCapacity)} MW·s` : '<span class="muted">none (dams and grid batteries store surplus)</span>'} · wind and sun ${Math.round((pc.variableShare ?? 0) * 100)}% of capacity</div>
+      <div class="state-row">Weather: wind ${Math.round(wx.wind * 100)}% · sun ${Math.round(sunlight(w) * 100)}%${lull ? ' · <span class="neg">calm, overcast spell</span>' : ''}</div>
+      <div class="state-row ${smog > 0.6 ? 'neg' : ''}">Air: smog ${smog < 0.2 ? 'low' : smog < 0.6 ? 'moderate' : 'bad'}${pc.smogDeaths ? ` · ${pc.smogDeaths} deaths last year` : ''}</div>
+      ${crises.map((c) => `<div class="state-row neg">${c}</div>`).join('')}
+      <p class="muted">Oil plants run whenever needed but their smoke kills; wind and sun are free and clean but come and go (none at night, little in calm, cloudy spells), so they need storage (dams, batteries) or firm power (nuclear) behind them; nuclear is firm and clean but needs uranium and engineers, and an understaffed plant risks an accident.</p>`;
   }
 
   /** Intelligence: buy reports, read them, act on them. */
@@ -1070,6 +1118,8 @@ ${esc(why)}` : ''}">${esc(TREATIES[k].name)}</button>`;
         return close + this.agesHtml();
       case 'intel':
         return close + this.intelHtml();
+      case 'policy':
+        return close + this.policyHtml();
       case 'budget': {
         const y = pc.year;
         const l = pc.lastYear;

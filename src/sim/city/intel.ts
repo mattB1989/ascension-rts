@@ -226,6 +226,7 @@ export function sabotage(world: World, by: number, buildingId: number): string |
   pc.credits -= INTEL.sabotageCost;
   pc.year.military += INTEL.sabotageCost;
   b!.city!.sabotagedUntil = world.time + INTEL.sabotageSeconds;
+  b!.city!.outReason = 'Sabotaged: repairs under way';
   const caught = world.rng.next() < INTEL.caughtChance;
   const victim = world.players[b!.owner]!;
   world.emit({ kind: 'notify', player: b!.owner, text: caught ? `💥 Saboteurs from ${world.players[by]!.name} wrecked your ${b!.def.name}: repairs take half a year` : `💥 An explosion wrecked your ${b!.def.name} (cause unknown): repairs take half a year`, x: b!.x, y: b!.y });

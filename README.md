@@ -58,6 +58,17 @@ original **Twin Shores** skirmish.
   (a logging camp → the sawmill, people → the market, a market → police and warehouses, oil →
   power, and power → iron mines, steel and refineries: better mines need the grid). The build bar
   shows what is open plus the next two to come, and each unlock is announced.
+- **Energy that behaves like energy** (📜): oil plants run on demand but their smoke kills (deaths
+  each year, fewer with clinics); wind farms and (Digital) solar farms are free and clean but come
+  and go with a shared weather — no sun at night, calm overcast spells — so without dams (whose
+  reservoirs store surplus), grid batteries or nuclear behind them, the lights go out; nuclear is
+  firm and clean but needs uranium and engineers, and an understaffed or sabotaged plant may fail.
+- **Policies** (📜): one choice per area, each a trade-off — energy (cheap oil, renewables push,
+  nuclear programme), trade (free trade, protectionism), economy (free market, welfare state),
+  military (conscription). AI nations pick theirs by character.
+- **Events**: oil shocks, recessions, epidemics (clinics and hospitals blunt them), floods (a dam
+  halves the risk), strikes when people are unhappy, droughts, and good fortune (breakthroughs,
+  bumper harvests, tourism booms).
 - **Advisor**: a card with your top three priorities right now (power shortage, food, water,
   jobs, services, money, stalled construction, the next age, threats), each with the reason and a
   button that picks the building to place; the starter checklist comes first. ☰ turns it off.

@@ -15,6 +15,9 @@ import { PIPE, pipesByOwner, updatePipes } from './pipes.ts';
 import { findAccess, searchRoads, updateComponents } from './roads.ts';
 import { add, automated, emptyBudget, get, jobsOf, type PlayerCity, type Stock } from './state.ts';
 import { updateUnlocks } from './unlocks.ts';
+import { balanceStorage, drought, ENERGY, outputFactor, smogIndex, updateWeather, yearlyEnergyRisks } from './energy.ts';
+import { factoryFactor, policyHappiness, taxFactor, upkeepFactor } from './policies.ts';
+import { recessionFactor, updateEvents } from './events.ts';
 import { moveShips, updateStockpiles, updateTrade } from './trade.ts';
 import { updateDiplomacy } from './diplomacy.ts';
 import { updateMilitary } from './military.ts';
@@ -149,6 +152,7 @@ function everySecond(world: World): void {
   }
   updateStockpiles(world);
   labour(world);
+  updateWeather(world);
   power(world);
   updatePipes(world, (b, g) => demandFor(b, g, world));
   if (sec % SERVICE_EVERY === 0) {
@@ -177,7 +181,9 @@ function everySecond(world: World): void {
       pc.gdp = 0;
       pc.history.push({ year: START_YEAR + sec / YEAR_SECONDS - 1, population: sumTiers(pc.population), credits: pc.credits, gdp: pc.lastGdp });
     }
+    yearlyEnergyRisks(world);
   }
+  updateEvents(world, sec);
   updateVictory(world, sec);
   updateUnlocks(world);
 }
@@ -269,6 +275,46 @@ function power(world: World): void {
   // Industry and services first, then houses.
   const users = world.buildings.filter((b) => b.city && b.complete && ((b.def.econ?.power ?? 0) > 0 || (b.type === 'house' && b.city.level >= 1)));
   users.sort((a, b) => (a.type === 'house' ? 1 : 0) - (b.type === 'house' ? 1 : 0) || a.id - b.id);
+  // Storage evens out each grid: reservoirs and batteries charge from surplus, cover shortfalls.
+  const demand = new Map<number, number>();
+  for (const b of users) demand.set(key(b), (demand.get(key(b)) ?? 0) + (b.type === 'house' ? HOUSE_POWER : b.def.econ!.power!));
+  const stores = new Map<number, Building[]>();
+  for (const pc of city.players) {
+    pc.storeCapacity = 0;
+    pc.storeLevel = 0;
+  }
+  for (const b of world.buildings) {
+    const cap = b.def.econ?.powerStore;
+    const c = b.city;
+    if (!cap || !c || !b.complete || !c.comp || (c.sabotagedUntil ?? 0) > world.time) continue;
+    if (b.def.econ!.jobs && c.workers <= 0) continue;
+    let list = stores.get(key(b));
+    if (!list) stores.set(key(b), (list = []));
+    list.push(b);
+    city.players[b.owner]!.storeCapacity! += cap;
+  }
+  for (const [k, list] of stores) {
+    const s = supply.get(k) ?? 0;
+    supply.set(k, s + balanceStorage(list, s - (demand.get(k) ?? 0)));
+    for (const b of list) city.players[b.owner]!.storeLevel! += b.city!.stored ?? 0;
+  }
+  // The mix, for smog and warnings.
+  for (const pc of city.players) {
+    pc.fossilMW = 0;
+    pc.variableShare = 0;
+  }
+  const variable = new Array(city.players.length).fill(0);
+  for (const b of world.buildings) {
+    const kind = b.def.econ?.powerKind;
+    if (!kind || !b.city || !b.complete) continue;
+    const pc = city.players[b.owner]!;
+    if (kind === 'fossil') pc.fossilMW! += b.city.powerOut;
+    if (kind === 'wind' || kind === 'solar') variable[b.owner] += -(b.def.econ!.power ?? 0);
+  }
+  city.players.forEach((pc, i) => {
+    const rated = world.buildings.reduce((s, b) => s + (b.owner === i && b.complete && (b.def.econ?.power ?? 0) < 0 ? -b.def.econ!.power! : 0), 0);
+    pc.variableShare = rated > 0 ? variable[i]! / rated : 0;
+  });
   for (const b of users) {
     const c = b.city!;
     const need = b.type === 'house' ? HOUSE_POWER : b.def.econ!.power!;
@@ -305,7 +351,7 @@ function coverage(world: World): void {
     const sup = b.def.econ?.waterSupply;
     if (!c || !sup || !b.complete || !c.comp) continue;
     const ok = c.workers > 0 && (!(b.def.econ!.power ?? 0) || c.powered) && (c.sabotagedUntil ?? 0) <= world.time;
-    if (ok) waterLeft.set(c.comp * 64 + b.owner, (waterLeft.get(c.comp * 64 + b.owner) ?? 0) + sup * Math.min(1, c.workers / (b.def.econ!.jobs?.count ?? 1)));
+    if (ok) waterLeft.set(c.comp * 64 + b.owner, (waterLeft.get(c.comp * 64 + b.owner) ?? 0) + sup * (drought(world) && b.type === 'pumping_station' ? 0.6 : 1) * Math.min(1, c.workers / (b.def.econ!.jobs?.count ?? 1)));
   }
   const services = world.buildings.filter((b) => b.city && b.complete && b.def.econ?.service);
   for (const s of services) {
@@ -318,7 +364,7 @@ function coverage(world: World): void {
       continue;
     }
     if ((c.sabotagedUntil ?? 0) > world.time) {
-      c.status = 'Sabotaged: repairs under way';
+      c.status = c.outReason ?? 'Out of action';
       continue;
     }
     const staffed = !s.def.econ!.jobs || c.workers > 0;
@@ -400,7 +446,7 @@ function production(world: World): void {
     if (b.type !== 'house' && (c.sabotagedUntil ?? 0) > world.time) {
       c.efficiency = 0;
       c.powerOut = 0;
-      c.status = `Sabotaged: repairs under way (${Math.ceil(((c.sabotagedUntil ?? 0) - world.time) / 12) / 10} years)`;
+      c.status = `${c.outReason ?? 'Out of action'} (${Math.ceil(((c.sabotagedUntil ?? 0) - world.time) / 12) / 10} years)`;
       continue;
     }
     if (e.research) {
@@ -445,7 +491,7 @@ function production(world: World): void {
       }
       c.cycle = 1e-9;
     }
-    const rate = staff * (e.extract ? c.yield : 1);
+    const rate = staff * (e.extract ? c.yield : (e.power ?? 0) < 0 ? 1 : factoryFactor(world, b.owner));
     c.efficiency = rate;
     c.status = staff < 1 ? `Short of staff (${c.workers}/${jobsOf(b)})` : e.extract && c.yield < 0.5 ? 'Poor land' : '';
     // Robots wear out slowly.
@@ -454,7 +500,7 @@ function production(world: World): void {
       add(c.stock, 'robotics', -Math.min(wear, get(c.stock, 'robotics')));
       logUsed(pc, 'robotics', wear);
     }
-    if ((e.power ?? 0) < 0) c.powerOut = -e.power! * staff;
+    if ((e.power ?? 0) < 0) c.powerOut = -e.power! * staff * outputFactor(world, b);
     c.cycle += rate / e.recipe.seconds;
     if (c.cycle >= 1) {
       c.cycle = 0;
@@ -509,11 +555,17 @@ function households(world: World): void {
     const wf = sumTiers(pc.workforce);
     return wf > 0 ? 1 - sumTiers(pc.employed) / wf : 0;
   });
+  const smogNow = city.players.map((_, i) => smogIndex(world, i));
   // Settlers come for work: they move in while there are jobs, or while few are out of work.
   const attractive = city.players.map((pc, i) => sumTiers(pc.jobs) > sumTiers(pc.employed) || unemployment[i]! < 0.12 || sumTiers(pc.population) < 24);
   for (const h of world.buildings) {
     const c = h.city;
     if (!c || h.type !== 'house' || !h.complete) continue;
+    // Closed after a nuclear accident: nobody lives here.
+    if ((c.sabotagedUntil ?? 0) > world.time) {
+      c.residents = 0;
+      continue;
+    }
     const pc = city.players[h.owner]!;
     // Shopping: food and goods from the market that serves this house.
     const market = c.market ? world.getBuilding(c.market) : undefined;
@@ -558,7 +610,8 @@ function households(world: World): void {
     const target = next ?? cur;
     const wanted = target.needs.length ? target.needs : (['food'] as HouseNeed[]);
     const met = wanted.filter((n) => c.needs[n]).length / wanted.length;
-    let happy = 0.4 + 0.45 * met + (curOk ? 0.1 : -0.15) - c.pollution * 0.35 - (pc.taxRate - 1) * 0.6 - unemployment[h.owner]! * 0.25 * Math.min(1, sumTiers(pc.population) / 60) - pc.weariness;
+    let happy = 0.4 + 0.45 * met + (curOk ? 0.1 : -0.15) - c.pollution * 0.35 - (pc.taxRate - 1) * 0.6 - unemployment[h.owner]! * 0.25 * Math.min(1, sumTiers(pc.population) / 60) - pc.weariness
+      - ENERGY.smogUnhappy * Math.min(1, smogNow[h.owner] ?? 0) - ((pc.shakenUntil ?? 0) > world.time ? 0.12 : 0) + policyHappiness(world, h.owner);
     happy = Math.max(0, Math.min(1, happy));
     c.happiness = happy;
     happySum[h.owner] += happy * Math.max(1, c.residents);
@@ -594,14 +647,14 @@ function budget(world: World): void {
     const pc = city.players[b.owner]!;
     if (b.type === 'house' && b.complete) {
       const t = houseTier(b);
-      const tax = (c.residents * TAX_PER_RESIDENT[t] * pc.taxRate * (0.6 + 0.4 * c.happiness)) / YEAR_SECONDS;
+      const tax = (c.residents * TAX_PER_RESIDENT[t] * pc.taxRate * (0.6 + 0.4 * c.happiness) * taxFactor(world, b.owner) * recessionFactor(world)) / YEAR_SECONDS;
       pc.credits += tax;
       pc.year.taxes += tax;
     } else if (b.complete) {
       // Idle buildings cost less to keep: 40% when unstaffed, full price when fully staffed.
       const jobs = b.def.econ?.jobs;
       const staffed = jobs ? Math.min(1, c.workers / jobsOf(b)) : 1;
-      const up = ((b.def.econ?.upkeep ?? 0) * (0.4 + 0.6 * staffed)) / YEAR_SECONDS;
+      const up = ((b.def.econ?.upkeep ?? 0) * (0.4 + 0.6 * staffed) * upkeepFactor(world, b)) / YEAR_SECONDS;
       pc.credits -= up;
       pc.year.upkeep += up;
     }

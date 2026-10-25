@@ -14,6 +14,8 @@ import type { Building } from '../types.ts';
 import type { World } from '../world.ts';
 import { stockTotal } from './logistics.ts';
 import { add, get, type Ship, type Stock } from './state.ts';
+import { tradeFactors } from './policies.ts';
+import { priceShock } from './events.ts';
 
 const isWater = (t: number) => t === Terrain.Deep || t === Terrain.Shallow || t === Terrain.Bridge;
 
@@ -111,12 +113,14 @@ export function exportDemand(world: World, port: Building, g: GoodId): number {
   return Math.max(0, Math.min(space, surplus, 40));
 }
 
-export function sellPrice(world: World, g: GoodId): number {
-  return GOODS[g].price * world.city!.prices[g] * OVERSEAS.sell;
+export function sellPrice(world: World, g: GoodId, player = -1): number {
+  if (player >= 0) return sellPrice(world, g) * tradeFactors(world, player, g).sell;
+  return GOODS[g].price * world.city!.prices[g] * OVERSEAS.sell * priceShock(world, g, true);
 }
 
-export function buyPrice(world: World, g: GoodId): number {
-  return GOODS[g].price * world.city!.prices[g] * OVERSEAS.buy;
+export function buyPrice(world: World, g: GoodId, player = -1): number {
+  if (player >= 0) return buyPrice(world, g) * tradeFactors(world, player, g).buy;
+  return GOODS[g].price * world.city!.prices[g] * OVERSEAS.buy * priceShock(world, g, false);
 }
 
 /** Once a second: prices drift, ships set out for ports that have business. */
@@ -315,7 +319,7 @@ function trade(world: World, ship: Ship, port: Building): void {
     if (n <= 0) continue;
     add(c.stock, g, -n);
     room -= n;
-    const income = n * sellPrice(world, g);
+    const income = n * sellPrice(world, g, port.owner);
     pc.credits += income;
     pc.year.trade += income;
     sold[g] = n;
@@ -326,7 +330,7 @@ function trade(world: World, ship: Ship, port: Building): void {
     const rule = pc.trade[g];
     if (!rule || rule.import <= 0) continue;
     const want = Math.floor(rule.import - get(pc.stockpile, g));
-    const price = buyPrice(world, g);
+    const price = buyPrice(world, g, port.owner);
     const n = Math.min(want, room, Math.floor(space()), Math.floor(Math.max(0, pc.credits) / price));
     if (n <= 0) continue;
     add(c.stock, g, n);

@@ -12,6 +12,7 @@ import type { Relations } from './diplomacy.ts';
 import { newVictoryState, type VictoryState } from './victory.ts';
 import type { Embargo, Treaty } from './treaties.ts';
 import type { IntelReport } from './intel.ts';
+import type { Weather } from './energy.ts';
 import type { Train } from './rail.ts';
 
 export type Stock = Partial<Record<GoodId, number>>;
@@ -38,8 +39,12 @@ export interface CityBuildingState {
   efficiency: number;
   /** Why it isn't working, or '' (UI). */
   status: string;
-  /** Knocked out by enemy saboteurs until this game time. */
+  /** Knocked out by enemy saboteurs (or closed after a nuclear accident) until this game time. */
   sabotagedUntil?: number;
+  /** Why it is out of action (sabotage, flood, strike, accident). */
+  outReason?: string;
+  /** Storage (reservoirs, batteries): energy held, MW·s. */
+  stored?: number;
   powered: boolean;
   /** Power plants: megawatts actually produced last second. */
   powerOut: number;
@@ -159,6 +164,16 @@ export interface PlayerCity {
   /** Gradual unlocks on (see unlocks.ts), and what has opened up so far. */
   gradual?: boolean;
   unlocked?: string[];
+  /** National policies by area (policies.ts), and when each was last changed. */
+  policies?: Partial<Record<string, string>>;
+  policyAt?: Partial<Record<string, number>>;
+  /** Energy mix (energy.ts): fossil MW, share from wind and sun, storage, smog deaths last year, shock after an accident. */
+  fossilMW?: number;
+  variableShare?: number;
+  storeCapacity?: number;
+  storeLevel?: number;
+  smogDeaths?: number;
+  shakenUntil?: number;
   /** Demand above supply at the last check (for the warning). */
   powerShort?: boolean;
   /** Goods made and used in the last 60 game seconds, per good (UI table). */
@@ -234,6 +249,11 @@ export interface CityState {
   prices: Record<GoodId, number>;
   /** Ways to win: progress and the winner. */
   victory: VictoryState;
+  /** World crises (events.ts): oil shock and recession, until these game times. */
+  oilShockUntil?: number;
+  recessionUntil?: number;
+  /** Shared weather: wind, cloud, calm spells, droughts (energy.ts). */
+  weather?: Weather;
   /** Spy reports bought (latest per buyer and target), and the id counter. */
   reports?: IntelReport[];
   nextReportId?: number;

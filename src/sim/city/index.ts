@@ -22,6 +22,7 @@ import { newBot, type Difficulty } from '../../ai/cityBot.ts';
 import { applyScenario, scenarioById } from './scenarios.ts';
 import { commissionReport, sabotage } from './intel.ts';
 import { unlockProblem } from './unlocks.ts';
+import { setPolicy, type PolicyArea } from './policies.ts';
 
 export type CityCommand =
   /** Lay roads along these tiles (as far as credits allow). */
@@ -55,6 +56,8 @@ export type CityCommand =
   | { kind: 'cancelTreaty'; player: number; target: number; treaty: TreatyKind }
   /** Buy a spy report on a nation (or on yourself), or sabotage one of its buildings. */
   | { kind: 'spyReport'; player: number; target: number }
+  /** Change a national policy (policies.ts). */
+  | { kind: 'setPolicy'; player: number; area: PolicyArea; option: string }
   | { kind: 'sabotage'; player: number; building: number }
   /** Place (or lift) an embargo on a nation. */
   | { kind: 'embargo'; player: number; target: number; on: boolean }
@@ -216,6 +219,9 @@ export function applyCityCommand(world: World, c: CityCommand): void {
       break;
     case 'embargo':
       say(setEmbargo(world, c.player, c.target, c.on));
+      break;
+    case 'setPolicy':
+      say(setPolicy(world, c.player, c.area, c.option));
       break;
     case 'spyReport':
       say(commissionReport(world, c.player, c.target));

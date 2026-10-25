@@ -416,6 +416,7 @@ export class World {
       case 'embargo':
       case 'spyReport':
       case 'sabotage':
+      case 'setPolicy':
         applyCityCommand(this, c);
         break;
       case 'move': {

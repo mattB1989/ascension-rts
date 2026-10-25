@@ -12,6 +12,7 @@ import { railAccess } from './rail.ts';
 import { dockTile } from './trade.ts';
 import { add, newCityBuilding } from './state.ts';
 import { unlockProblem } from './unlocks.ts';
+import { buildCostFactor } from './policies.ts';
 
 const FERTILITY: Partial<Record<TerrainId, number>> = {
   [Terrain.Fertile]: 1,
@@ -157,18 +158,24 @@ export function cityBuildProblem(world: World, player: number, type: BuildingTyp
   const locked = unlockProblem(world, player, type);
   if (locked) return locked;
   if (def.limit !== undefined && world.buildings.filter((b) => b.owner === player && b.type === type).length >= def.limit) return `Limit ${def.limit}`;
-  if (world.city!.players[player]!.credits < def.econ.credits) return 'Not enough credits';
+  if (world.city!.players[player]!.credits < buildPrice(world, player, type)) return 'Not enough credits';
   return null;
+}
+
+/** What a building costs this player (policies can make some cheaper). */
+export function buildPrice(world: World, player: number, type: BuildingTypeId): number {
+  const def: BuildingDef = BUILDINGS[type];
+  return Math.round((def.econ?.credits ?? 0) * buildCostFactor(world, player, type, def.econ?.powerKind));
 }
 
 /** Place a building: pay, lay the foundation. Returns the building or a reason. */
 export function placeCityBuilding(world: World, player: number, type: BuildingTypeId, tx: number, ty: number): Building | string {
   const why = cityBuildProblem(world, player, type) ?? cityPlacementProblem(world, player, type, tx, ty);
   if (why) return why;
-  const def: BuildingDef = BUILDINGS[type];
   const pc = world.city!.players[player]!;
-  pc.credits -= def.econ!.credits;
-  pc.year.construction += def.econ!.credits;
+  const price = buildPrice(world, player, type);
+  pc.credits -= price;
+  pc.year.construction += price;
   return addCityBuilding(world, type, player, tx, ty, false);
 }
 

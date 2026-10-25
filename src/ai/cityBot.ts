@@ -82,7 +82,7 @@ export const PERSONALITIES: Record<Personality, { name: string; blurb: string; e
   trader: { name: 'Traders', blurb: 'courts city-states and signs treaties readily', expand: 1.2, war: 1.4, army: 0.8, treaty: -15 },
   builder: { name: 'Builders', blurb: 'grows its cities first, slow to fight', expand: 1.1, war: 1.6, army: 0.7, treaty: -5 },
   expansionist: { name: 'Expansionists', blurb: 'claims land early and often, and guards it', expand: 0.85, war: 1.1, army: 1.25, treaty: 0 },
-  warlike: { name: 'Warlords', blurb: 'arms early and picks fights', expand: 1.0, war: 0.75, army: 1.3, treaty: 15 },
+  warlike: { name: 'Warlords', blurb: 'arms early and picks fights, city-states included', expand: 1.0, war: 0.8, army: 1.15, treaty: 15 },
 };
 
 function traits(bot: BotState) {
@@ -981,11 +981,22 @@ function militaryStep(world: World, bot: BotState): Command[] {
 
   // War: pick a fight with the weakest neighbour when strong enough (not on Easy).
   const year = world.time / 120;
-  const enemies = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && atWar(world, p, o.id));
-  if (!enemies.length && year >= d.warYear && world.time >= bot.warAt) {
+  const warlike = bot.personality === 'warlike';
+  const enemies = world.players.filter((o) => o.id !== p && !o.defeated && (o.role !== 'cityState' || warlike) && atWar(world, p, o.id));
+  const pcw = world.city!.players[p]!;
+  const lyw = pcw.lastYear;
+  const solvent = pcw.credits > 8000 || lyw.taxes + lyw.trade - lyw.imports - lyw.upkeep - lyw.roads - lyw.military > 0;
+  if (!enemies.length && year >= d.warYear && world.time >= bot.warAt && solvent) {
     bot.warAt = world.time + 120;
-    // Not against those it has a pact with, or likes.
-    const rivals = world.players.filter((o) => o.id !== p && !o.defeated && o.role !== 'cityState' && !hasTreaty(world, p, o.id, 'peace') && opinionOf(world, p, o.id) < 40);
+    // Not against those it has a pact with, or likes. Warlords also prey on city-states (land and spoils), nearest first.
+    const home = hall(world, p);
+    const dist = (o: number) => {
+      const s = seatsOf(world, o)[0];
+      return home && s ? Math.hypot(s.x - home.x, s.y - home.y) : 1e9;
+    };
+    const rivals = world.players
+      .filter((o) => o.id !== p && !o.defeated && (o.role !== 'cityState' || warlike) && !hasTreaty(world, p, o.id, 'peace') && opinionOf(world, p, o.id) < 40)
+      .sort((a, b) => dist(a.id) - dist(b.id) || a.id - b.id);
     for (const o of rivals) {
       const theirs = armyOf(world, o.id).length;
       if (army.length >= Math.max(6, theirs * d.warRatio * tr.war)) {
